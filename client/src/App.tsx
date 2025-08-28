@@ -21,6 +21,7 @@ function App() {
             <Route path="/monthly-control" element={<MonthlyControl />} />
             <Route path="/cash-flow" element={<CashFlow />} />
             <Route path="/credit-card" element={<CreditCard />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>

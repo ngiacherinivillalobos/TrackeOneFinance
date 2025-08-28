@@ -289,6 +289,7 @@ export const modernTheme = createTheme({
           '& .MuiOutlinedInput-root': {
             borderRadius: 4,
             backgroundColor: '#ffffff',
+            boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
             '& fieldset': {
               borderColor: colors.gray[300],
               borderWidth: 2,
@@ -309,6 +310,7 @@ export const modernTheme = createTheme({
         root: {
           borderRadius: 4,
           backgroundColor: '#ffffff',
+          boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
         },
       },
     },

@@ -37,6 +37,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { text: 'Visão Geral', icon: <DashboardIcon />, path: '/' },
   { text: 'Controle Mensal', icon: <ListAltIcon />, path: '/monthly-control' },
+  { text: 'Transações', icon: <SwapHorizIcon />, path: '/transactions' },
   { text: 'Fluxo de Caixa', icon: <AccountBalanceWalletIcon />, path: '/cash-flow' },
   { text: 'Cartão de Crédito', icon: <CreditCardIcon />, path: '/credit-card' },
   { text: 'Cadastros', icon: <SettingsIcon />, path: '/settings' },
@@ -44,7 +45,10 @@ const menuItems: MenuItem[] = [
 
 export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : true;
+  });
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,7 +57,9 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const handleSidebarToggle = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
+    const newState = !sidebarCollapsed;
+    setSidebarCollapsed(newState);
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(newState));
   };
 
   const currentDrawerWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
