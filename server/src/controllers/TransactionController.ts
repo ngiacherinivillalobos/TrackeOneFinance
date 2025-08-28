@@ -149,7 +149,7 @@ const list = async (req: Request, res: Response) => {
       LEFT JOIN contacts cont ON t.contact_id = cont.id
       LEFT JOIN cost_centers cc ON t.cost_center_id = cc.id
       ${whereClause}
-      ORDER BY t.transaction_date DESC, t.created_at DESC
+      ORDER BY t.transaction_date ASC, t.created_at DESC
     `;
 
     console.log('Executing query:', query);

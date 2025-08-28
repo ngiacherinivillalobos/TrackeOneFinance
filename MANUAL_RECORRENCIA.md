@@ -36,7 +36,7 @@ useEffect(() => {
 ```
 
 #### **3. Função generateRecurrencePreview() (linhas ~215-275):**
-```typescript
+``typescript
 const generateRecurrencePreview = () => {
   if (!formData.transaction_date || !formData.amount || formData.recurrence_count < 1) {
     setRecurrencePreview([]);
@@ -76,7 +76,7 @@ const generateRecurrencePreview = () => {
                          String(currentDate.getDate()).padStart(2, '0');
 
     previews.push({
-      creation_date: formattedDate,
+      creation_date: new Date().toISOString().split('T')[0],
       due_date: formattedDate,
       description: formData.description || 'Nova transação',
       amount: amount
@@ -206,7 +206,7 @@ const generateRecurrencePreview = () => {
 ```
 
 #### **5. Preview de Recorrências (linhas ~1285-1320):**
-```jsx
+``jsx
 {/* Preview de recorrências */}
 {formData.is_recurring && recurrencePreview.length > 0 && (
   <Box sx={{ mt: 3 }}>
@@ -245,7 +245,7 @@ const generateRecurrencePreview = () => {
 ```
 
 #### **6. Submissão com Dados de Recorrência (linha ~440):**
-```typescript
+``typescript
 const transactionData = {
   // ... outros campos ...
   is_recurring: formData.is_recurring,

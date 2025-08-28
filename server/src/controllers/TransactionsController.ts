@@ -62,7 +62,7 @@ const transactionController = {
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
         LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
         LEFT JOIN contacts cont ON t.contact_id = cont.id
-        ORDER BY t.transaction_date DESC, t.created_at DESC
+        ORDER BY t.transaction_date ASC, t.created_at DESC
       `;
 
       const transactions = await new Promise<any[]>((resolve, reject) => {

@@ -350,7 +350,7 @@ export default function Transactions() {
       }
 
       previews.push({
-        creation_date: resultDate,
+        creation_date: new Date().toISOString().split('T')[0],
         due_date: resultDate,
         description: formData.description || 'Nova transação',
         amount: amount

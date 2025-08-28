@@ -174,7 +174,7 @@ export default function MonthlyControl() {
   
   // Estados para ordenação
   const [orderBy, setOrderBy] = useState<string>('transaction_date');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   
   // Estados para dados dos filtros
   const [categories, setCategories] = useState<Category[]>([]);
@@ -233,6 +233,16 @@ export default function MonthlyControl() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedTransactionForPayment, setSelectedTransactionForPayment] = useState<ServiceTransaction | null>(null);
   const [isBatchMode, setIsBatchMode] = useState(false);
+
+  // Estados para edição em lote
+  const [batchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [batchEditData, setBatchEditData] = useState({
+    amount: '',
+    contact_id: '',
+    category_id: '',
+    subcategory_id: '',
+    cost_center_id: ''
+  });
 
   // Cálculo dos totais e status de vencimento
   const today = new Date();
@@ -395,7 +405,7 @@ export default function MonthlyControl() {
       // Garantir valor padrão
       if (!resultDate) resultDate = formData.transaction_date;
       previews.push({
-        creation_date: resultDate,
+        creation_date: new Date().toISOString().split('T')[0],
         due_date: resultDate,
         description: formData.description || 'Nova transação',
         amount: amount
@@ -667,6 +677,98 @@ export default function MonthlyControl() {
       }
     }
     setBatchActionsAnchor(null);
+  };
+
+  const handleBatchEdit = () => {
+    if (selectedTransactions.length === 0) return;
+    
+    // Limpar dados do formulário de edição em lote
+    setBatchEditData({
+      amount: '',
+      contact_id: '',
+      category_id: '',
+      subcategory_id: '',
+      cost_center_id: ''
+    });
+    
+    setBatchEditDialogOpen(true);
+    setBatchActionsAnchor(null);
+  };
+
+  const handleConfirmBatchEdit = async () => {
+    try {
+      // Função para converter formato brasileiro para número
+      const parseBrazilianNumber = (str: string): number => {
+        if (typeof str === 'number') return str;
+        
+        str = str.toString().trim();
+        
+        // Se não tem vírgula, trata como número inteiro
+        if (!str.includes(',')) {
+          // Remove pontos (milhares) e converte
+          return parseFloat(str.replace(/\./g, '')) || 0;
+        }
+        
+        // Divide em parte inteira e decimal
+        const parts = str.split(',');
+        const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+        const decimalPart = parts[1] || '00'; // Parte decimal
+        
+        // Reconstrói o número no formato americano
+        const americanFormat = integerPart + '.' + decimalPart;
+        return parseFloat(americanFormat) || 0;
+      };
+      
+      // Criar objeto com apenas os campos preenchidos
+      const updateData: any = {};
+      
+      if (batchEditData.amount && batchEditData.amount.trim() !== '') {
+        updateData.amount = parseBrazilianNumber(batchEditData.amount);
+      }
+      if (batchEditData.contact_id && batchEditData.contact_id !== '') {
+        updateData.contact_id = parseInt(batchEditData.contact_id);
+      }
+      // Handle multiple categories - send as array if multiple selected
+      if (batchEditData.category_id && batchEditData.category_id !== '') {
+        const categoryIds = batchEditData.category_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (categoryIds.length > 0) {
+          // If multiple categories, send as array; if single, send as single value
+          updateData.category_id = categoryIds.length === 1 ? categoryIds[0] : categoryIds;
+        }
+      }
+      // Handle multiple subcategories - send as array if multiple selected
+      if (batchEditData.subcategory_id && batchEditData.subcategory_id !== '') {
+        const subcategoryIds = batchEditData.subcategory_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (subcategoryIds.length > 0) {
+          // If multiple subcategories, send as array; if single, send as single value
+          updateData.subcategory_id = subcategoryIds.length === 1 ? subcategoryIds[0] : subcategoryIds;
+        }
+      }
+      if (batchEditData.cost_center_id && batchEditData.cost_center_id !== '') {
+        updateData.cost_center_id = parseInt(batchEditData.cost_center_id);
+      }
+      
+      // Se nenhum campo foi preenchido, não fazer nada
+      if (Object.keys(updateData).length === 0) {
+        showSnackbar('Nenhum campo foi preenchido para edição', 'warning');
+        return;
+      }
+      
+      // Atualizar todas as transações selecionadas
+      await Promise.all(
+        selectedTransactions.map(id => 
+          api.put(`/transactions/${id}`, updateData)
+        )
+      );
+      
+      setSelectedTransactions([]);
+      setBatchEditDialogOpen(false);
+      loadTransactions();
+      showSnackbar(`${selectedTransactions.length} transações atualizadas com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao editar transações em lote:', error);
+      showSnackbar('Erro ao editar transações em lote', 'error');
+    }
   };
 
   // Funções para PaymentDialog
@@ -2193,6 +2295,12 @@ export default function MonthlyControl() {
             horizontal: 'left',
           }}
         >
+          <MenuItem onClick={handleBatchEdit}>
+            <ListItemIcon>
+              <EditIcon fontSize="small" sx={{ color: colors.primary[600] }} />
+            </ListItemIcon>
+            <ListItemText>Editar em Lote</ListItemText>
+          </MenuItem>
           <MenuItem onClick={handleBatchMarkAsPaid}>
             <ListItemIcon>
               <PaidIcon fontSize="small" sx={{ color: colors.success[600] }} />
@@ -2883,6 +2991,271 @@ export default function MonthlyControl() {
           isBatchMode={isBatchMode}
           selectedTransactionIds={selectedTransactions}
         />
+
+        {/* Dialog para edição em lote */}
+        <Dialog
+          open={batchEditDialogOpen}
+          onClose={() => setBatchEditDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle sx={{ bgcolor: colors.primary[50], color: colors.primary[700] }}>
+            Edição em Lote
+            <Typography variant="body2" sx={{ color: colors.gray[600], mt: 0.5 }}>
+              {selectedTransactions.length} transação(ões) selecionada(s)
+            </Typography>
+          </DialogTitle>
+          <DialogContent sx={{ p: 3 }}>
+            <Typography variant="body2" sx={{ mb: 3, color: colors.gray[600] }}>
+              Preencha apenas os campos que deseja alterar. Os campos vazios não serão modificados.
+            </Typography>
+            
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gap: 3
+            }}>
+              {/* Valor */}
+              <TextField
+                label="Valor (R$)"
+                type="text"
+                value={batchEditData.amount}
+                onChange={(e) => {
+                  // Permite apenas números, vírgula e ponto
+                  const value = e.target.value.replace(/[^0-9.,]/g, '');
+                  setBatchEditData(prev => ({ ...prev, amount: value }));
+                }}
+                onBlur={(e) => {
+                  // Formatar o valor quando perder o foco
+                  const value = e.target.value.replace(/[^0-9.,]/g, '');
+                  if (value) {
+                    // Função para converter formato brasileiro para número
+                    const parseBrazilianNumber = (str: string): number => {
+                      // Remove espaços
+                      str = str.trim();
+                      
+                      // Se não tem vírgula, trata como número inteiro
+                      if (!str.includes(',')) {
+                        // Remove pontos (milhares) e converte
+                        return parseFloat(str.replace(/\./g, '')) || 0;
+                      }
+                      
+                      // Divide em parte inteira e decimal
+                      const parts = str.split(',');
+                      const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+                      const decimalPart = parts[1] || '00'; // Parte decimal
+                      
+                      // Reconstrói o número no formato americano
+                      const americanFormat = integerPart + '.' + decimalPart;
+                      return parseFloat(americanFormat) || 0;
+                    };
+                    
+                    const numericValue = parseBrazilianNumber(value);
+                    if (!isNaN(numericValue) && numericValue >= 0) {
+                      const formattedValue = numericValue.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      });
+                      setBatchEditData(prev => ({ ...prev, amount: formattedValue }));
+                    }
+                  }
+                }}
+                onFocus={(e) => {
+                  // Converter para formato de edição (sem formatação de milhares)
+                  const value = e.target.value;
+                  if (value) {
+                    // Função para converter formato brasileiro para número
+                    const parseBrazilianNumber = (str: string): number => {
+                      if (typeof str === 'number') return str;
+                      
+                      str = str.toString().trim();
+                      
+                      // Se não tem vírgula, trata como número inteiro
+                      if (!str.includes(',')) {
+                        // Remove pontos (milhares) e converte
+                        return parseFloat(str.replace(/\./g, '')) || 0;
+                      }
+                      
+                      // Divide em parte inteira e decimal
+                      const parts = str.split(',');
+                      const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+                      const decimalPart = parts[1] || '00'; // Parte decimal
+                      
+                      // Reconstrói o número no formato americano
+                      const americanFormat = integerPart + '.' + decimalPart;
+                      return parseFloat(americanFormat) || 0;
+                    };
+                    
+                    const numericValue = parseBrazilianNumber(value);
+                    if (!isNaN(numericValue)) {
+                      // Converte para formato editável (sem pontos de milhar)
+                      const editableValue = numericValue.toFixed(2).replace('.', ',');
+                      setBatchEditData(prev => ({ ...prev, amount: editableValue }));
+                    }
+                  }
+                }}
+                fullWidth
+                size="small"
+                placeholder="Deixe vazio para não alterar"
+                helperText="Use vírgula para decimais (ex: 150,00)"
+                InputProps={{
+                  startAdornment: <Box sx={{ mr: 1 }}>R$</Box>
+                }}
+              />
+
+              {/* Contato */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Contato</InputLabel>
+                <Select
+                  value={batchEditData.contact_id}
+                  onChange={(e) => setBatchEditData(prev => ({ ...prev, contact_id: e.target.value }))}
+                  label="Contato"
+                >
+                  <MenuItem value="">
+                    <em>Não alterar</em>
+                  </MenuItem>
+                  {contacts.map((contact) => (
+                    <MenuItem key={contact.id} value={contact.id}>
+                      {contact.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Categoria - Updated to support multiple selection */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Categoria</InputLabel>
+                <Select
+                  multiple
+                  value={batchEditData.category_id ? batchEditData.category_id.split(',') : []}
+                  onChange={(e) => {
+                    const selected = e.target.value as string[];
+                    setBatchEditData(prev => ({ 
+                      ...prev, 
+                      category_id: selected.join(','),
+                      // Only clear subcategory if no categories are selected
+                      subcategory_id: selected.length === 0 ? prev.subcategory_id : ''
+                    }));
+                  }}
+                  label="Categoria"
+                  renderValue={(selected) => {
+                    if (selected.length === 0) return 'Não alterar';
+                    if (selected.length === 1) {
+                      const category = categories.find(cat => cat.id.toString() === selected[0]);
+                      return category ? category.name : selected[0];
+                    }
+                    return `${selected.length} selecionadas`;
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>Não alterar</em>
+                  </MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id.toString()}>
+                      <Checkbox 
+                        checked={batchEditData.category_id ? batchEditData.category_id.split(',').includes(category.id.toString()) : false}
+                        size="small"
+                        sx={{ mr: 1, p: 0 }}
+                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ color: category.source_type === 'Despesa' ? colors.error[600] : category.source_type === 'Receita' ? colors.success[600] : colors.primary[600] }}>
+                          {category.source_type === 'Despesa' && <ExpenseIcon sx={{ fontSize: 16 }} />}
+                          {category.source_type === 'Receita' && <IncomeIcon sx={{ fontSize: 16 }} />}
+                          {category.source_type === 'Investimento' && <InvestmentIcon sx={{ fontSize: 16 }} />}
+                        </Box>
+                        {category.name}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* Subcategoria - Updated to support multiple selection and work without category */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Subcategoria</InputLabel>
+                <Select
+                  multiple
+                  value={batchEditData.subcategory_id ? batchEditData.subcategory_id.split(',') : []}
+                  onChange={(e) => {
+                    const selected = e.target.value as string[];
+                    setBatchEditData(prev => ({ 
+                      ...prev, 
+                      subcategory_id: selected.join(',')
+                    }));
+                  }}
+                  label="Subcategoria"
+                  renderValue={(selected) => {
+                    if (selected.length === 0) return 'Não alterar';
+                    if (selected.length === 1) {
+                      const subcategory = subcategories.find(sub => sub.id.toString() === selected[0]);
+                      return subcategory ? subcategory.name : selected[0];
+                    }
+                    return `${selected.length} selecionadas`;
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>Não alterar</em>
+                  </MenuItem>
+                  {subcategories
+                    .filter(sub => {
+                      // If no categories are selected, show all subcategories
+                      if (!batchEditData.category_id || batchEditData.category_id === '') {
+                        return true;
+                      }
+                      // If categories are selected, filter subcategories by those categories
+                      const selectedCategories = batchEditData.category_id.split(',').filter(id => id.trim() !== '');
+                      return selectedCategories.length === 0 || selectedCategories.some(catId => catId === sub.category_id.toString());
+                    })
+                    .map((subcategory) => (
+                      <MenuItem key={subcategory.id} value={subcategory.id.toString()}>
+                        <Checkbox 
+                          checked={batchEditData.subcategory_id ? batchEditData.subcategory_id.split(',').includes(subcategory.id.toString()) : false}
+                          size="small"
+                          sx={{ mr: 1, p: 0 }}
+                        />
+                        {subcategory.name}
+                      </MenuItem>
+                    ))
+                  }
+                </Select>
+              </FormControl>
+
+              {/* Centro de Custo */}
+              <FormControl fullWidth size="small">
+                <InputLabel>Centro de Custo</InputLabel>
+                <Select
+                  value={batchEditData.cost_center_id}
+                  onChange={(e) => setBatchEditData(prev => ({ ...prev, cost_center_id: e.target.value }))}
+                  label="Centro de Custo"
+                >
+                  <MenuItem value="">
+                    <em>Não alterar</em>
+                  </MenuItem>
+                  {costCenters.map((costCenter) => (
+                    <MenuItem key={costCenter.id} value={costCenter.id}>
+                      {costCenter.number ? `${costCenter.number} - ${costCenter.name}` : costCenter.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button 
+              onClick={() => setBatchEditDialogOpen(false)}
+              variant="outlined"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirmBatchEdit}
+              variant="contained"
+              disabled={loading}
+            >
+              Atualizar {selectedTransactions.length} Transação(ões)
+            </Button>
+          </DialogActions>
+        </Dialog>
         </Box>
       </Box>
     </LocalizationProvider>
