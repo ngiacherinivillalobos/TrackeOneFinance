@@ -1,0 +1,90 @@
+/* Estilos discretos e elegantes para os filtros do MonthlyControl */
+.MuiAutocomplete-listbox {
+  padding: 2px !important;
+  border-radius: 6px !important;
+  max-height: 280px !important;
+}
+
+.MuiAutocomplete-option {
+  min-height: 32px !important;
+  padding: 4px 12px !important;
+  border-radius: 4px !important;
+  margin: 0.5px 0 !important;
+  transition: all 0.12s ease !important;
+  border: none !important;
+  font-size: 14px !important;
+}
+
+.MuiAutocomplete-option:hover {
+  background-color: #f5f7fa !important;
+  transform: translateX(2px) !important;
+}
+
+.MuiAutocomplete-option[aria-selected="true"] {
+  background-color: #e8f4fd !important;
+  border-left: 3px solid #1976d2 !important;
+  font-weight: 500 !important;
+}
+
+.MuiAutocomplete-popper .MuiPaper-root {
+  border-radius: 6px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+  border: 1px solid #e8eaed !important;
+  margin-top: 2px !important;
+  background: #ffffff !important;
+}
+
+/* Estilos para checkboxes dentro dos dropdowns */
+.MuiAutocomplete-option .MuiCheckbox-root {
+  transform: scale(0.85) !important;
+}
+
+.MuiAutocomplete-option .MuiCheckbox-root .MuiSvgIcon-root {
+  transition: all 0.15s ease !important;
+}
+
+/* Estilos para a seção de filtros adicionais (compacto e discreto) */
+.filtros-adicionais {
+  padding: 12px !important;
+  margin-bottom: 16px !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  background: #ffffff !important;
+}
+
+.filtros-adicionais .MuiTypography-root {
+  margin-bottom: 8px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  color: #666 !important;
+}
+
+.filtros-adicionais .MuiButton-root {
+  height: 32px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+}
+
+/* Estilos para a seção de filtros adicionais (compacto e discreto) */
+.filtros-adicionais {
+  padding: 16px !important;
+  margin-bottom: 16px !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  background: #fafafa !important;
+}
+
+.filtros-adicionais .MuiTypography-root {
+  margin-bottom: 12px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  color: #666 !important;
+}
+
+.filtros-adicionais .MuiButton-root {
+  height: 32px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+}

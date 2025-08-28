@@ -1,0 +1,25 @@
+{
+  "name": "trackone-finance",
+  "version": "1.0.0",
+  "description": "Sistema de gerenciamento financeiro",
+  "scripts": {
+    "client": "cd client && npm run dev",
+    "server": "cd server && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.1",
+    "@mui/material": "^7.3.1",
+    "@types/react": "^19.1.11",
+    "@types/react-dom": "^19.1.7",
+    "concurrently": "^8.0.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0"
+  }
+}
