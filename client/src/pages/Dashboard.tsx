@@ -90,6 +90,7 @@ export default function Dashboard() {
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [dateFilterType, setDateFilterType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
   const [showFilters, setShowFilters] = useState(false);
+  const [showAllCenters, setShowAllCenters] = useState(false);
   
   // Estados para dados
   const [transactions, setTransactions] = useState<Transaction[]>([]);

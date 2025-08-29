@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../lib/axios';
+import { createContext, useState, useEffect, useContext } from 'react';
+import api from '../services/api';
+
+// Definir o tipo para o timeout do Node.js
+type Timeout = ReturnType<typeof setTimeout>;
 
 interface User {
   id: number;
@@ -34,7 +37,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [tokenCheckInterval, setTokenCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const [tokenCheckInterval, setTokenCheckInterval] = useState<Timeout | null>(null);
 
   // Função para validar o token com o servidor
   const validateToken = async (tokenToValidate: string) => {
