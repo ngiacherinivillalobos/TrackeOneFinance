@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { initializeDatabase } from './database/connection';
 import { runMigrations } from './database/migrations';
@@ -21,6 +21,17 @@ app.get('/api/cash-flow-test', (req: Request, res: Response) => {
 
 // Monta o roteador principal
 app.use('/api', mainRouter);
+
+// Middleware para lidar com rotas não encontradas
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.status(404).json({ error: 'Rota não encontrada' });
+});
+
+// Middleware de tratamento de erros
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Erro interno do servidor' });
+});
 
 const PORT = process.env.PORT || 3001;
 
