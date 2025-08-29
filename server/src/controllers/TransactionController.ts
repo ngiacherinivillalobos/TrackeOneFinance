@@ -50,6 +50,8 @@ const list = async (req: Request, res: Response) => {
   
   try {
     const db = getDatabase();
+    const userId = (req as any).user?.id;
+    const userCostCenterId = (req as any).user?.cost_center_id;
     
     // Construir filtros dinamicamente
     let whereConditions: string[] = [];
@@ -118,11 +120,15 @@ const list = async (req: Request, res: Response) => {
       queryParams.push(req.query.contact_id);
     }
     
-    // Filtro por centro de custo
-    if (req.query.cost_center_id) {
-      console.log('Adding cost_center_id filter:', req.query.cost_center_id);
+    // Filtro por centro de custo - sempre aplicar, mesmo que seja 'all'
+    if (req.query.cost_center_id && req.query.cost_center_id !== 'all') {
+      console.log('Adding cost_center_id filter from query:', req.query.cost_center_id);
       whereConditions.push('t.cost_center_id = ?');
       queryParams.push(req.query.cost_center_id);
+    } else if (userCostCenterId && (!req.query.cost_center_id || req.query.cost_center_id === '')) {
+      console.log('Adding cost_center_id filter from user:', userCostCenterId);
+      whereConditions.push('t.cost_center_id = ?');
+      queryParams.push(userCostCenterId);
     }
     
     const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
@@ -802,6 +808,115 @@ const update = async (req: Request, res: Response) => {
   }
 };
 
+const patchTransaction = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - PATCH (BATCH EDIT) =====');
+  console.log('Request body:', req.body);
+  console.log('Transaction ID:', req.params.id);
+  
+  try {
+    const db = getDatabase();
+    const transactionId = req.params.id;
+    
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
+
+    // Construir query dinamicamente com apenas os campos fornecidos
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
+    
+    const {
+      amount,
+      contact_id,
+      category_id,
+      subcategory_id,
+      cost_center_id,
+      description,
+      transaction_date,
+      payment_status_id
+    } = req.body;
+
+    // Adicionar campos apenas se estiverem presentes
+    if (amount !== undefined && amount !== null) {
+      updateFields.push('amount = ?');
+      updateValues.push(amount);
+    }
+
+    if (contact_id !== undefined && contact_id !== null && contact_id !== '') {
+      updateFields.push('contact_id = ?');
+      updateValues.push(contact_id);
+    }
+
+    if (category_id !== undefined && category_id !== null && category_id !== '') {
+      updateFields.push('category_id = ?');
+      updateValues.push(category_id);
+    }
+
+    if (subcategory_id !== undefined && subcategory_id !== null && subcategory_id !== '') {
+      updateFields.push('subcategory_id = ?');
+      updateValues.push(subcategory_id);
+    }
+
+    if (cost_center_id !== undefined && cost_center_id !== null && cost_center_id !== '') {
+      updateFields.push('cost_center_id = ?');
+      updateValues.push(cost_center_id);
+    }
+
+    if (description !== undefined && description !== null && description !== '') {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+
+    if (transaction_date !== undefined && transaction_date !== null && transaction_date !== '') {
+      updateFields.push('transaction_date = ?');
+      updateValues.push(transaction_date);
+    }
+
+    if (payment_status_id !== undefined && payment_status_id !== null) {
+      updateFields.push('payment_status_id = ?');
+      updateValues.push(payment_status_id);
+    }
+
+    // Se nenhum campo foi fornecido para atualização
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: 'No fields provided for update' });
+    }
+
+    // Adicionar ID da transação ao final dos parâmetros
+    updateValues.push(transactionId);
+
+    const query = `UPDATE transactions SET ${updateFields.join(', ')} WHERE id = ?`;
+    
+    console.log('PATCH Query:', query);
+    console.log('PATCH Values:', updateValues);
+
+    const result = await new Promise<any>((resolve, reject) => {
+      db.run(query, updateValues, function(this: any, err: any) {
+        if (err) {
+          console.error('Database error:', err);
+          reject(err);
+        } else {
+          console.log('Transaction patched, changes:', this.changes);
+          resolve({ changes: this.changes });
+        }
+      });
+    });
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    res.json({ 
+      message: 'Transaction updated successfully',
+      transactionId: transactionId,
+      updatedFields: updateFields.length
+    });
+  } catch (error) {
+    console.error('Error patching transaction:', error);
+    res.status(500).json({ error: 'Failed to patch transaction: ' + error });
+  }
+};
+
 const deleteTransaction = async (req: Request, res: Response) => {
   console.log('===== TRANSACTION CONTROLLER - DELETE =====');
   console.log('Transaction ID:', req.params.id);
@@ -1130,5 +1245,6 @@ export default {
   delete: deleteTransaction,
   markAsPaid,
   getPaymentDetails,
-  reversePayment
+  reversePayment,
+  patch: patchTransaction  // Nova função para edição em lote
 };

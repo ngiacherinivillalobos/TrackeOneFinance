@@ -495,8 +495,8 @@ export default function Transactions() {
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold', color: '#1a365d' }}>
             Filtros
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ minWidth: 200, flex: '1 1 auto' }}>
               <TextField
                 label="Mês"
                 type="month"
@@ -505,8 +505,8 @@ export default function Transactions() {
                 size="small"
                 fullWidth
               />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            </Box>
+            <Box sx={{ minWidth: 200, flex: '1 1 auto' }}>
               <FormControl size="small" fullWidth>
                 <InputLabel>Categoria</InputLabel>
                 <Select
@@ -522,8 +522,8 @@ export default function Transactions() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            </Box>
+            <Box sx={{ minWidth: 200, flex: '1 1 auto' }}>
               <FormControl size="small" fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
@@ -539,8 +539,8 @@ export default function Transactions() {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            </Box>
+            <Box sx={{ minWidth: 200, flex: '1 1 auto' }}>
               <Button
                 variant="outlined"
                 onClick={clearFilters}
@@ -550,159 +550,148 @@ export default function Transactions() {
               >
                 Limpar Filtros
               </Button>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </Paper>
 
         {/* Totalizadores */}
         <Paper sx={{ p: 3, mb: 3, borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.1)', bgcolor: 'white' }}>
-          <Grid container spacing={2}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
             {/* Totalizadores principais mais discretos */}
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center', p: 1 }}>
-                <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
-                  Despesas
-                </Typography>
-                <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 'normal', fontSize: '1rem' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalDespesas)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center', p: 1 }}>
-                <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
-                  Receitas
-                </Typography>
-                <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 'normal', fontSize: '1rem' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalReceitas)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Box sx={{ textAlign: 'center', p: 1 }}>
-                <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
-                  Investimentos
-                </Typography>
-                <Typography variant="h6" sx={{ color: '#2196f3', fontWeight: 'normal', fontSize: '1rem' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalInvestimentos)}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
+            <Box sx={{ flex: '1 1 200px', textAlign: 'center', p: 1 }}>
+              <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
+                Despesas
+              </Typography>
+              <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 'normal', fontSize: '1rem' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalDespesas)}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: '1 1 200px', textAlign: 'center', p: 1 }}>
+              <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
+                Receitas
+              </Typography>
+              <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 'normal', fontSize: '1rem' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalReceitas)}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: '1 1 200px', textAlign: 'center', p: 1 }}>
+              <Typography variant="body2" sx={{ color: '#666', fontSize: '0.8rem' }}>
+                Investimentos
+              </Typography>
+              <Typography variant="h6" sx={{ color: '#2196f3', fontWeight: 'normal', fontSize: '1rem' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalInvestimentos)}
+              </Typography>
+            </Box>
+          </Box>
           
-          <Grid container spacing={2} sx={{ mt: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
             {/* Totalizadores de status mais visíveis */}
-            <Grid item xs={6} md={2.4}>
-              <Box sx={{ 
-                textAlign: 'center', 
-                p: 2, 
-                bgcolor: '#ffebee', 
-                borderRadius: 2,
-                border: '2px solid #f44336'
+            <Box sx={{ 
+              flex: '1 1 200px',
+              textAlign: 'center', 
+              p: 2, 
+              bgcolor: '#ffebee', 
+              borderRadius: 2,
+              border: '2px solid #f44336'
+            }}>
+              <Typography variant="body1" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                Vencidos
+              </Typography>
+              <Typography variant="h5" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalVencidos)}
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              flex: '1 1 200px',
+              textAlign: 'center', 
+              p: 2, 
+              bgcolor: '#fff3e0', 
+              borderRadius: 2,
+              border: '2px solid #ff9800'
+            }}>
+              <Typography variant="body1" sx={{ color: '#f57c00', fontWeight: 'bold' }}>
+                Vencem Hoje
+              </Typography>
+              <Typography variant="h5" sx={{ color: '#f57c00', fontWeight: 'bold' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalVencemHoje)}
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              flex: '1 1 200px',
+              textAlign: 'center', 
+              p: 2, 
+              bgcolor: '#e3f2fd', 
+              borderRadius: 2,
+              border: '2px solid #2196f3'
+            }}>
+              <Typography variant="body1" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+                A Vencer
+              </Typography>
+              <Typography variant="h5" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalAVencer)}
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              flex: '1 1 200px',
+              textAlign: 'center', 
+              p: 2, 
+              bgcolor: '#e8f5e8', 
+              borderRadius: 2,
+              border: '2px solid #4caf50'
+            }}>
+              <Typography variant="body1" sx={{ color: '#388e3c', fontWeight: 'bold' }}>
+                Pagos
+              </Typography>
+              <Typography variant="h5" sx={{ color: '#388e3c', fontWeight: 'bold' }}>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.totalPagos)}
+              </Typography>
+            </Box>
+            <Box sx={{ 
+              flex: '1 1 200px',
+              textAlign: 'center', 
+              p: 2, 
+              bgcolor: totals.saldoPeriodo >= 0 ? '#e8f5e8' : '#ffebee', 
+              borderRadius: 2,
+              border: `2px solid ${totals.saldoPeriodo >= 0 ? '#4caf50' : '#f44336'}`
+            }}>
+              <Typography variant="body1" sx={{ 
+                color: totals.saldoPeriodo >= 0 ? '#388e3c' : '#d32f2f', 
+                fontWeight: 'bold' 
               }}>
-                <Typography variant="body1" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
-                  Vencidos
-                </Typography>
-                <Typography variant="h5" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalVencidos)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} md={2.4}>
-              <Box sx={{ 
-                textAlign: 'center', 
-                p: 2, 
-                bgcolor: '#fff3e0', 
-                borderRadius: 2,
-                border: '2px solid #ff9800'
+                Saldo do Período
+              </Typography>
+              <Typography variant="h5" sx={{ 
+                color: totals.saldoPeriodo >= 0 ? '#388e3c' : '#d32f2f', 
+                fontWeight: 'bold' 
               }}>
-                <Typography variant="body1" sx={{ color: '#f57c00', fontWeight: 'bold' }}>
-                  Vencem Hoje
-                </Typography>
-                <Typography variant="h5" sx={{ color: '#f57c00', fontWeight: 'bold' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalVencemHoje)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} md={2.4}>
-              <Box sx={{ 
-                textAlign: 'center', 
-                p: 2, 
-                bgcolor: '#e3f2fd', 
-                borderRadius: 2,
-                border: '2px solid #2196f3'
-              }}>
-                <Typography variant="body1" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
-                  A Vencer
-                </Typography>
-                <Typography variant="h5" sx={{ color: '#1976d2', fontWeight: 'bold' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalAVencer)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={6} md={2.4}>
-              <Box sx={{ 
-                textAlign: 'center', 
-                p: 2, 
-                bgcolor: '#e8f5e8', 
-                borderRadius: 2,
-                border: '2px solid #4caf50'
-              }}>
-                <Typography variant="body1" sx={{ color: '#388e3c', fontWeight: 'bold' }}>
-                  Pagos
-                </Typography>
-                <Typography variant="h5" sx={{ color: '#388e3c', fontWeight: 'bold' }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.totalPagos)}
-                </Typography>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={2.4}>
-              <Box sx={{ 
-                textAlign: 'center', 
-                p: 2, 
-                bgcolor: totals.saldoPeriodo >= 0 ? '#e8f5e8' : '#ffebee', 
-                borderRadius: 2,
-                border: `2px solid ${totals.saldoPeriodo >= 0 ? '#4caf50' : '#f44336'}`
-              }}>
-                <Typography variant="body1" sx={{ 
-                  color: totals.saldoPeriodo >= 0 ? '#388e3c' : '#d32f2f', 
-                  fontWeight: 'bold' 
-                }}>
-                  Saldo do Período
-                </Typography>
-                <Typography variant="h5" sx={{ 
-                  color: totals.saldoPeriodo >= 0 ? '#388e3c' : '#d32f2f', 
-                  fontWeight: 'bold' 
-                }}>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  }).format(totals.saldoPeriodo)}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
+                {new Intl.NumberFormat('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                }).format(totals.saldoPeriodo)}
+              </Typography>
+            </Box>
+          </Box>
         </Paper>
 
         {/* Tabela de transações */}
@@ -828,71 +817,73 @@ export default function Transactions() {
             {editingTransaction ? 'Editar Transação' : `Nova ${newTransactionType}`}
           </DialogTitle>
           <DialogContent sx={{ p: 3 }}>
-            <Grid container spacing={3} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <TextField
-                  label="Descrição"
-                  value={formData.descricao}
-                  onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
-                  fullWidth
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Valor"
-                  type="number"
-                  value={formData.valor}
-                  onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
-                  fullWidth
-                  required
-                  inputProps={{ step: "0.01" }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Data de Vencimento"
-                  type="date"
-                  value={formData.data_vencimento}
-                  onChange={(e) => setFormData(prev => ({ ...prev, data_vencimento: e.target.value }))}
-                  fullWidth
-                  required
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Categoria</InputLabel>
-                  <Select
-                    value={formData.category_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
-                    label="Categoria"
-                  >
-                    {categories.map((category) => (
-                      <MenuItem key={category.id} value={category.id}>
-                        {category.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={formData.payment_status_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, payment_status_id: e.target.value }))}
-                    label="Status"
-                  >
-                    {paymentStatuses.map((status) => (
-                      <MenuItem key={status.id} value={status.id}>
-                        {status.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
+              <TextField
+                label="Descrição"
+                value={formData.descricao}
+                onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
+                fullWidth
+                required
+              />
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ flex: '1 1 200px' }}>
+                  <TextField
+                    label="Valor"
+                    type="number"
+                    value={formData.valor}
+                    onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
+                    fullWidth
+                    required
+                    inputProps={{ step: "0.01" }}
+                  />
+                </Box>
+                <Box sx={{ flex: '1 1 200px' }}>
+                  <TextField
+                    label="Data de Vencimento"
+                    type="date"
+                    value={formData.data_vencimento}
+                    onChange={(e) => setFormData(prev => ({ ...prev, data_vencimento: e.target.value }))}
+                    fullWidth
+                    required
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Box>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ flex: '1 1 200px' }}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Categoria</InputLabel>
+                    <Select
+                      value={formData.category_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, category_id: e.target.value }))}
+                      label="Categoria"
+                    >
+                      {categories.map((category) => (
+                        <MenuItem key={category.id} value={category.id}>
+                          {category.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+                <Box sx={{ flex: '1 1 200px' }}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Status</InputLabel>
+                    <Select
+                      value={formData.payment_status_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, payment_status_id: e.target.value }))}
+                      label="Status"
+                    >
+                      {paymentStatuses.map((status) => (
+                        <MenuItem key={status.id} value={status.id}>
+                          {status.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Box>
+            </Box>
           </DialogContent>
           <DialogActions sx={{ p: 3 }}>
             <Button onClick={handleClose}>Cancelar</Button>

@@ -1,33 +1,5 @@
 import api from '../services/api';
 
-export interface PaymentData {
-  payment_date: string;
-  paid_amount: number;
-  payment_type: 'bank_account' | 'credit_card';
-  bank_account_id?: number;
-  card_id?: number;
-  observations?: string;
-  discount?: number;
-  interest?: number;
-}
-
-export interface PaymentDetails {
-  id: number;
-  transaction_id: number;
-  payment_date: string;
-  paid_amount: number;
-  original_amount: number;
-  payment_type: string;
-  bank_account_id?: number;
-  card_id?: number;
-  discount_amount: number;
-  interest_amount: number;
-  observations?: string;
-  bank_account_name?: string;
-  card_name?: string;
-  created_at: string;
-}
-
 export interface Transaction {
   id?: number;
   description: string;
@@ -56,6 +28,17 @@ export interface Transaction {
   contact_name?: string;
   cost_center_name?: string;
   cost_center_number?: string;
+}
+
+export interface PaymentData {
+  payment_date: string;
+  paid_amount: number;
+  payment_type: 'bank_account' | 'credit_card';
+  bank_account_id?: number;
+  card_id?: number;
+  observations?: string;
+  discount?: number;
+  interest?: number;
 }
 
 export const transactionService = {
@@ -87,13 +70,8 @@ export const transactionService = {
     await api.delete(`/transactions/${id}`);
   },
 
-  async markAsPaid(id: number, paymentData: PaymentData): Promise<any> {
+  async markAsPaid(id: number, paymentData: PaymentData): Promise<void> {
     const response = await api.post(`/transactions/${id}/mark-as-paid`, paymentData);
-    return response.data;
-  },
-
-  async getPaymentDetails(id: number): Promise<PaymentDetails[]> {
-    const response = await api.get(`/transactions/${id}/payment-details`);
     return response.data;
   }
 };

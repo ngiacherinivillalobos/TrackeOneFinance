@@ -11,7 +11,6 @@ class CardController {
           console.error('Database error:', err);
           res.status(500).json({ error: 'Internal server error' });
         } else {
-          console.log('Cards found:', rows.length, 'records');
           res.json(rows);
         }
       });

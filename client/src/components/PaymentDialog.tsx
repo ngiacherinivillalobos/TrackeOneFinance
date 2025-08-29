@@ -48,6 +48,10 @@ export interface PaymentData {
   interest?: number;
 }
 
+interface PaymentFormData extends PaymentData {
+  paid_amount_display: string;
+}
+
 interface PaymentDialogProps {
   open: boolean;
   transaction: Transaction | null;
@@ -72,9 +76,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   // Estados do formulário
-  const [formData, setFormData] = useState<PaymentData>({
+  const [formData, setFormData] = useState<PaymentFormData>({
     payment_date: new Date().toISOString().split('T')[0],
     paid_amount: 0,
+    paid_amount_display: '',
     payment_type: 'bank_account',
     bank_account_id: undefined,
     card_id: undefined,
@@ -152,9 +157,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   const resetForm = () => {
     if (transaction) {
+      const displayValue = isBatchMode ? '' : transaction.amount.toFixed(2).replace('.', ',');
       setFormData({
         payment_date: new Date().toISOString().split('T')[0],
-        paid_amount: isBatchMode ? 0 : transaction.amount, // Em modo lote, não definir valor padrão
+        paid_amount: isBatchMode ? 0 : transaction.amount,
+        paid_amount_display: displayValue,
         payment_type: 'bank_account',
         bank_account_id: undefined,
         card_id: undefined,
@@ -208,11 +215,21 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
     setSubmitting(true);
     try {
-      await onConfirm({
-        ...formData,
+      // Extrair apenas os campos necessários para PaymentData
+      const paymentData: PaymentData = {
+        payment_date: formData.payment_date,
+        paid_amount: formData.paid_amount,
+        payment_type: formData.payment_type,
+        bank_account_id: formData.bank_account_id,
+        card_id: formData.card_id,
+        observations: formData.observations,
         discount: valueDifference.type === 'discount' ? valueDifference.amount : undefined,
         interest: valueDifference.type === 'interest' ? valueDifference.amount : undefined
-      });
+      };
+      
+      await onConfirm(paymentData);
+      
+      // Fechar o diálogo apenas após a confirmação bem-sucedida
       onClose();
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
@@ -416,20 +433,86 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                     <TextField
                       fullWidth
                       label="Valor Pago"
-                      value={formData.paid_amount.toLocaleString('pt-BR', { 
-                        style: 'decimal',
-                        minimumFractionDigits: 2, 
-                        maximumFractionDigits: 2 
-                      })}
+                      type="text"
+                      value={formData.paid_amount_display}
                       onChange={(e) => {
-                        // Remove formatação e converte para número
-                        const rawValue = e.target.value.replace(/\./g, '').replace(',', '.');
-                        const numericValue = parseFloat(rawValue) || 0;
-                        setFormData(prev => ({ ...prev, paid_amount: numericValue }));
+                        // Permite apenas números, vírgula e ponto
+                        const value = e.target.value.replace(/[^0-9.,]/g, '');
+                        setFormData(prev => ({ ...prev, paid_amount_display: value }));
+                      }}
+                      onFocus={(e) => {
+                        // Converter para formato de edição (sem formatação de milhares)
+                        const value = e.target.value;
+                        if (value) {
+                          // Remove formatação e mantém apenas números e vírgula
+                          const parseBrazilianNumber = (str: string): number => {
+                            str = str.trim();
+                            if (!str.includes(',')) {
+                              return parseFloat(str.replace(/\./g, '')) || 0;
+                            }
+                            const parts = str.split(',');
+                            const integerPart = parts[0].replace(/\./g, '');
+                            const decimalPart = parts[1] || '00';
+                            const americanFormat = integerPart + '.' + decimalPart;
+                            return parseFloat(americanFormat) || 0;
+                          };
+                          
+                          const numericValue = parseBrazilianNumber(value);
+                          if (!isNaN(numericValue)) {
+                            // Converte para formato editável (sem pontos de milhar)
+                            const editableValue = numericValue.toFixed(2).replace('.', ',');
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              paid_amount_display: editableValue,
+                              paid_amount: numericValue
+                            }));
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Formatar o valor quando perder o foco
+                        const value = e.target.value.replace(/[^0-9.,]/g, '');
+                        if (value) {
+                          // Função para converter formato brasileiro para número
+                          const parseBrazilianNumber = (str: string): number => {
+                            // Remove espaços
+                            str = str.trim();
+                            
+                            // Se não tem vírgula, trata como número inteiro
+                            if (!str.includes(',')) {
+                              // Remove pontos (milhares) e converte
+                              return parseFloat(str.replace(/\./g, '')) || 0;
+                            }
+                            
+                            // Divide em parte inteira e decimal
+                            const parts = str.split(',');
+                            const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+                            const decimalPart = parts[1] || '00'; // Parte decimal
+                            
+                            // Reconstrói o número no formato americano
+                            const americanFormat = integerPart + '.' + decimalPart;
+                            return parseFloat(americanFormat) || 0;
+                          };
+                          
+                          const numericValue = parseBrazilianNumber(value);
+                          if (!isNaN(numericValue) && numericValue >= 0) {
+                            const formattedValue = numericValue.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            });
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              paid_amount_display: formattedValue,
+                              paid_amount: numericValue
+                            }));
+                          }
+                        }
                       }}
                       InputProps={{
                         startAdornment: <Typography sx={{ mr: 1, color: '#059669', fontWeight: 600 }}>R$</Typography>
                       }}
+                      placeholder="0,00"
+                      helperText="Use vírgula para decimais (ex: 1666,00)"
                       required
                       sx={{
                         '& .MuiOutlinedInput-root': {

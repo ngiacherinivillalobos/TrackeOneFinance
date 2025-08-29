@@ -11,6 +11,18 @@ import {
   Box,
   Chip,
   LinearProgress,
+  Autocomplete,
+  TextField,
+  Button,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  useMediaQuery,
+  useTheme,
+  IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -21,9 +33,21 @@ import {
   Timeline,
   CalendarToday,
   Assessment,
+  FilterList as FilterIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Clear as ClearIcon,
+  TrendingDown as ExpenseIcon,
+  ShowChart as InvestmentIcon,
+  ShowChart,
 } from '@mui/icons-material';
 import { ModernHeader, ModernStatsCard, ModernSection, ModernCard } from '../components/modern/ModernComponents';
 import { colors, gradients } from '../theme/modernTheme';
+import api from '../services/api';
+import { format, addMonths, subMonths, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useAuth } from '../contexts/AuthContext';
+import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 
 interface WeeklyBalance {
   startDate: string;
@@ -33,63 +57,272 @@ interface WeeklyBalance {
   remaining: number;
 }
 
-interface MonthSummary {
-  income: number;
-  expenses: number;
-  savings: number;
-  expectedBalance: number;
-  received: number;
-  paid: number;
-  toPay: number;
-  toReceive: number;
+interface Transaction {
+  id: number;
+  description: string;
+  amount: number;
+  transaction_date: string;
+  transaction_type: 'Despesa' | 'Receita' | 'Investimento';
+  is_paid: boolean;
+  cost_center_id?: number;
+  cost_center?: {
+    id: number;
+    name: string;
+    number?: string;
+  };
+}
+
+interface CostCenter {
+  id: number;
+  name: string;
+  number?: string;
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  // Responsividade
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  // Estados para filtros
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedCostCenter, setSelectedCostCenter] = useState<CostCenter | null>(null);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  const [dateFilterType, setDateFilterType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Estados para dados
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Estados para exibição
   const [weeklyBalances, setWeeklyBalances] = useState<WeeklyBalance[]>([]);
-  const [monthSummary, setMonthSummary] = useState<MonthSummary>({
-    income: 15250.00,
-    expenses: 8430.50,
-    savings: 6819.50,
-    expectedBalance: 6819.50,
-    received: 12100.00,
-    paid: 7850.25,
-    toPay: 2580.25,
-    toReceive: 3150.00,
-  });
+  const [savingsGoal, setSavingsGoal] = useState<SavingsGoal | null>(null);
 
+  // Carregar centros de custo
   useEffect(() => {
-    // Dados de exemplo mais realistas
-    setWeeklyBalances([
-      {
-        startDate: '2025-08-01',
-        endDate: '2025-08-07',
-        balance: 15000,
-        spent: 1850.75,
-        remaining: 13149.25,
-      },
-      {
-        startDate: '2025-08-08',
-        endDate: '2025-08-14',
-        balance: 13149.25,
-        spent: 2240.30,
-        remaining: 10908.95,
-      },
-      {
-        startDate: '2025-08-15',
-        endDate: '2025-08-21',
-        balance: 10908.95,
-        spent: 1890.45,
-        remaining: 9018.50,
-      },
-      {
-        startDate: '2025-08-22',
-        endDate: '2025-08-28',
-        balance: 9018.50,
-        spent: 2449.00,
-        remaining: 6569.50,
-      },
-    ]);
-  }, []);
+    const loadCostCenters = async () => {
+      try {
+        const response = await api.get('/cost-centers');
+        setCostCenters(response.data);
+        
+        // Se o usuário tiver um centro de custo associado, selecioná-lo automaticamente
+        if (user?.cost_center_id) {
+          const userCostCenter = response.data.find((cc: CostCenter) => cc.id === user.cost_center_id);
+          if (userCostCenter) {
+            setSelectedCostCenter(userCostCenter);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar centros de custo:', error);
+      }
+    };
+    
+    const loadSavingsGoal = async () => {
+      try {
+        const goal = await savingsGoalService.get();
+        setSavingsGoal(goal);
+      } catch (error) {
+        console.error('Erro ao carregar meta de economia:', error);
+      }
+    };
+    
+    loadCostCenters();
+    loadSavingsGoal();
+  }, [user]);
+  
+  // Carregar transações com base nos filtros
+  useEffect(() => {
+    loadTransactions();
+  }, [currentDate, selectedCostCenter, dateFilterType]);
+  
+  const loadTransactions = async () => {
+    try {
+      setLoading(true);
+      
+      // Calcular início e fim do período com base no tipo de filtro
+      let startDate: string | undefined;
+      let endDate: string | undefined;
+      
+      if (dateFilterType === 'month') {
+        startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+        endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+      } else if (dateFilterType === 'year') {
+        startDate = format(new Date(currentDate.getFullYear(), 0, 1), 'yyyy-MM-dd');
+        endDate = format(new Date(currentDate.getFullYear(), 11, 31), 'yyyy-MM-dd');
+      } else if (dateFilterType === 'all') {
+        // Para "Todo o período", não aplicar filtros de data
+        startDate = undefined;
+        endDate = undefined;
+      }
+      
+      // Parâmetros para a requisição
+      const params: any = {
+      };
+      
+      if (startDate && endDate) {
+        params.start_date = startDate;
+        params.end_date = endDate;
+      }
+      
+      // Adicionar filtro de centro de custo se selecionado
+      // Se não houver centro de custo selecionado, mas o usuário tem um associado, usar o do usuário
+      if (selectedCostCenter) {
+        params.cost_center_id = selectedCostCenter.id;
+      } else if (user?.cost_center_id) {
+        params.cost_center_id = user.cost_center_id;
+      } else {
+        // Se não houver centro de custo selecionado e o usuário não tem um associado, mostrar todos
+        params.cost_center_id = 'all';
+      }
+      
+      const response = await api.get('/transactions', { params });
+      
+      // Mapear os dados para incluir informações do centro de custo
+      const mappedTransactions = response.data.map((transaction: any) => ({
+        ...transaction,
+        cost_center: transaction.cost_center_name ? {
+          id: transaction.cost_center_id,
+          name: transaction.cost_center_name,
+          number: transaction.cost_center_number
+        } : null
+      }));
+      
+      setTransactions(mappedTransactions);
+      
+      // Calcular dados para o dashboard após carregar as transações
+      calculateDashboardData(mappedTransactions);
+    } catch (error) {
+      console.error('Erro ao carregar transações:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const calculateDashboardData = (transactionsData: Transaction[]) => {
+    // Calcular totais por tipo de transação
+    const totalReceitas = transactionsData
+      .filter(t => t.transaction_type === 'Receita')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalDespesas = transactionsData
+      .filter(t => t.transaction_type === 'Despesa')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalInvestimentos = transactionsData
+      .filter(t => t.transaction_type === 'Investimento')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Calcular saldo atual (Receitas - Despesas - Investimentos)
+    const saldoAtual = totalReceitas - totalDespesas - totalInvestimentos;
+    
+    // Atualizar estado com os novos valores
+    setMonthSummary({
+      income: totalReceitas,
+      expenses: totalDespesas,
+      savings: totalInvestimentos,
+      expectedBalance: saldoAtual,
+      received: totalReceitas, // Simplificação para este exemplo
+      paid: totalDespesas + totalInvestimentos, // Simplificação para este exemplo
+      toPay: 0, // Seria necessário calcular com base em transações não pagas
+      toReceive: 0 // Seria necessário calcular com base em transações não recebidas
+    });
+    
+    // Calcular dados para o gráfico semanal
+    calculateWeeklyBalances(transactionsData);
+  };
+  
+  const calculateWeeklyBalances = (transactionsData: Transaction[]) => {
+    // Criar semanas do mês
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Primeiro dia do mês
+    const firstDay = new Date(year, month, 1);
+    // Último dia do mês
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Ajustar para começar na segunda-feira da semana que contém o primeiro dia do mês
+    const firstDayOfWeek = firstDay.getDay(); // 0 = domingo, 1 = segunda, etc.
+    const startDate = new Date(firstDay);
+    startDate.setDate(firstDay.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1)); // Ajustar para segunda-feira
+    
+    const weeklyData: WeeklyBalance[] = [];
+    
+    // Criar dados para cada semana
+    for (let week = 0; week < 5; week++) { // Máximo de 5 semanas
+      const weekStart = new Date(startDate);
+      weekStart.setDate(startDate.getDate() + (week * 7));
+      
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      
+      // Garantir que não ultrapasse o último dia do mês
+      if (weekStart > lastDay) break;
+      
+      // Calcular saldo inicial (acumulado até a semana anterior)
+      let balance = 0;
+      if (week === 0) {
+        // Para a primeira semana, usar saldo acumulado até o mês anterior
+        balance = 0; // Simplificação para este exemplo
+      } else {
+        // Calcular saldo acumulado até esta semana
+        const previousWeekTransactions = transactionsData.filter(t => {
+          const transactionDate = parseISO(t.transaction_date);
+          return transactionDate < weekStart;
+        });
+        
+        const previousIncome = previousWeekTransactions
+          .filter(t => t.transaction_type === 'Receita')
+          .reduce((sum, t) => sum + t.amount, 0);
+          
+        const previousExpenses = previousWeekTransactions
+          .filter(t => t.transaction_type === 'Despesa')
+          .reduce((sum, t) => sum + t.amount, 0);
+          
+        const previousInvestments = previousWeekTransactions
+          .filter(t => t.transaction_type === 'Investimento')
+          .reduce((sum, t) => sum + t.amount, 0);
+          
+        balance = previousIncome - previousExpenses - previousInvestments;
+      }
+      
+      // Filtrar transações desta semana
+      const weekTransactions = transactionsData.filter(t => {
+        const transactionDate = parseISO(t.transaction_date);
+        return transactionDate >= weekStart && transactionDate <= weekEnd;
+      });
+      
+      // Calcular gastos da semana (despesas + investimentos)
+      const spent = weekTransactions
+        .filter(t => t.transaction_type === 'Despesa' || t.transaction_type === 'Investimento')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Calcular saldo restante
+      const remaining = balance - spent;
+      
+      weeklyData.push({
+        startDate: weekStart.toISOString().split('T')[0],
+        endDate: weekEnd.toISOString().split('T')[0],
+        balance,
+        spent,
+        remaining
+      });
+    }
+    
+    setWeeklyBalances(weeklyData);
+  };
+  
+  const [monthSummary, setMonthSummary] = useState({
+    income: 0,
+    expenses: 0,
+    savings: 0,
+    expectedBalance: 0,
+    received: 0,
+    paid: 0,
+    toPay: 0,
+    toReceive: 0,
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -104,6 +337,39 @@ export default function Dashboard() {
     if (percentage <= 80) return colors.warning[500];
     return colors.error[500];
   };
+  
+  // Funções para navegação entre meses
+  const handlePreviousPeriod = () => {
+    if (dateFilterType === 'month') {
+      setCurrentDate(prev => subMonths(prev, 1));
+    } else if (dateFilterType === 'year') {
+      setCurrentDate(prev => subMonths(prev, 12));
+    }
+  };
+  
+  const handleNextPeriod = () => {
+    if (dateFilterType === 'month') {
+      setCurrentDate(prev => addMonths(prev, 1));
+    } else if (dateFilterType === 'year') {
+      setCurrentDate(prev => addMonths(prev, 12));
+    }
+  };
+  
+  const handleClearFilters = () => {
+    setSelectedCostCenter(null);
+    setDateFilterType('month');
+    setShowAllCenters(false);
+  };
+  
+  // Formatar o nome do período
+  const formatPeriod = (date: Date) => {
+    if (dateFilterType === 'month') {
+      return format(date, 'MMMM yyyy', { locale: ptBR });
+    } else if (dateFilterType === 'year') {
+      return format(date, 'yyyy', { locale: ptBR });
+    }
+    return '';
+  };
 
   return (
     <Box sx={{ p: 3, minHeight: '100vh', bgcolor: colors.gray[50] }}>
@@ -115,6 +381,128 @@ export default function Dashboard() {
           { label: 'Dashboard' }
         ]}
       />
+
+      {/* Filtros - Estilo igual ao Controle Mensal */}
+      <Box sx={{ 
+        bgcolor: 'white',
+        borderRadius: 2,
+        p: { xs: 2, sm: 3 },
+        mb: 3,
+        border: `1px solid ${colors.gray[200]}`,
+        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+        transition: 'all 0.3s ease'
+      }}>
+        {/* Main Filters Row */}
+        <Box sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: { xs: 1, sm: 1.5, md: 2 },
+          alignItems: 'center',
+          mb: showFilters ? 2 : 0
+        }}>
+          {/* Period Type Selector */}
+          <FormControl size="small" sx={{ minWidth: 120, flex: '0 0 auto' }}>
+            <InputLabel sx={{ fontSize: '0.875rem' }}>Período</InputLabel>
+            <Select
+              value={dateFilterType}
+              label="Período"
+              onChange={(e) => setDateFilterType(e.target.value as 'month' | 'year' | 'custom' | 'all')}
+              sx={{ 
+                bgcolor: '#FFFFFF',
+                borderRadius: 1.5,
+                fontSize: '0.875rem',
+                boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'transparent',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: colors.primary[300],
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: colors.primary[500],
+                  borderWidth: 1
+                }
+              }}
+            >
+              <MenuItem value="month">Mês</MenuItem>
+              <MenuItem value="year">Ano</MenuItem>
+              <MenuItem value="all">Todo o período</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Period Navigation */}
+          {(dateFilterType === 'month' || dateFilterType === 'year') && (
+            <>
+              <IconButton onClick={handlePreviousPeriod} size="small">
+                <ChevronLeftIcon />
+              </IconButton>
+              
+              <Typography variant="h6" sx={{ minWidth: 120, textAlign: 'center' }}>
+                {formatPeriod(currentDate)}
+              </Typography>
+              
+              <IconButton onClick={handleNextPeriod} size="small">
+                <ChevronRightIcon />
+              </IconButton>
+            </>
+          )}
+
+          {/* Cost Center Filter */}
+          <Autocomplete
+            options={costCenters}
+            getOptionLabel={(option) => `${option.name}${option.number ? ` (${option.number})` : ''}`}
+            value={selectedCostCenter}
+            onChange={(event, newValue) => {
+              setSelectedCostCenter(newValue);
+              if (newValue) {
+                // Se um centro de custo específico foi selecionado, desative "Ver todos"
+                setShowAllCenters(false);
+              }
+            }}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                label="Centro de Custo" 
+                size="small"
+                sx={{ 
+                  minWidth: 200,
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: '#FFFFFF',
+                    borderRadius: 1.5,
+                    fontSize: '0.875rem',
+                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'transparent'
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: colors.primary[300]
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: colors.primary[500],
+                      borderWidth: 1
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    fontSize: '0.875rem'
+                  }
+                }}
+              />
+            )}
+            sx={{ flex: 1, maxWidth: 300 }}
+          />
+          
+          <IconButton 
+            onClick={handleClearFilters}
+            size="small"
+            sx={{ 
+              bgcolor: colors.gray[200],
+              '&:hover': { bgcolor: colors.gray[300] }
+            }}
+          >
+            <ClearIcon />
+          </IconButton>
+        </Box>
+      </Box>
 
       <Box sx={{ 
         display: 'grid',
@@ -134,7 +522,7 @@ export default function Dashboard() {
             subtitle="Total de entradas"
             icon={<TrendingUp sx={{ fontSize: 28 }} />}
             color="success"
-            trend={{ value: 12.5, isPositive: true }}
+            trend={{ value: 0, isPositive: true }}
           />
         </Box>
 
@@ -145,7 +533,7 @@ export default function Dashboard() {
             subtitle="Total de gastos"
             icon={<TrendingDown sx={{ fontSize: 28 }} />}
             color="error"
-            trend={{ value: 5.2, isPositive: false }}
+            trend={{ value: 0, isPositive: false }}
           />
         </Box>
 
@@ -156,18 +544,18 @@ export default function Dashboard() {
             subtitle="Disponível"
             icon={<AccountBalance sx={{ fontSize: 28 }} />}
             color="primary"
-            trend={{ value: 8.3, isPositive: true }}
+            trend={{ value: 0, isPositive: true }}
           />
         </Box>
 
         <Box>
           <ModernStatsCard
-            title="Economias"
+            title="Economias/Investimentos"
             value={formatCurrency(monthSummary.savings)}
-            subtitle="Meta: R$ 8.000"
+            subtitle="Total investido"
             icon={<AttachMoney sx={{ fontSize: 28 }} />}
-            color="warning"
-            trend={{ value: 15.7, isPositive: true }}
+            color="warning"  // Mantido como warning
+            trend={{ value: 0, isPositive: true }}
           />
         </Box>
       </Box>
@@ -207,7 +595,7 @@ export default function Dashboard() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(monthSummary.received / monthSummary.income) * 100}
+                    value={monthSummary.income > 0 ? (monthSummary.received / monthSummary.income) * 100 : 0}
                     sx={{
                       height: 8,
                       borderRadius: 4,
@@ -233,7 +621,7 @@ export default function Dashboard() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(monthSummary.paid / monthSummary.expenses) * 100}
+                    value={monthSummary.expenses > 0 ? (monthSummary.paid / monthSummary.expenses) * 100 : 0}
                     sx={{
                       height: 8,
                       borderRadius: 4,
@@ -294,32 +682,34 @@ export default function Dashboard() {
           </ModernSection>
         </Box>
 
-        {/* Meta de Economia */}
+        {/* Meta de Economia - Alterada para ModernSection com gradiente azul */}
         <Box>
-          <ModernCard
+          <ModernSection
             title="Meta de Economia"
-            subtitle="Progresso até o final do mês"
-            icon={<Timeline sx={{ fontSize: 24 }} />}
-            gradient="success"
+            subtitle={savingsGoal ? `Prazo: ${format(parseISO(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
+            icon={<ShowChart sx={{ fontSize: 24 }} />}
+            headerGradient
           >
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Meta: R$ 8.000,00
+                  Meta: {savingsGoal ? formatCurrency(savingsGoal.target_amount) : 'R$ 8.000,00'}
                 </Typography>
                 <Typography variant="body2" fontWeight={600}>
-                  {((monthSummary.savings / 8000) * 100).toFixed(1)}%
+                  {savingsGoal && savingsGoal.target_amount > 0 ? 
+                    ((monthSummary.savings / savingsGoal.target_amount) * 100).toFixed(1) : '0.0'}%
                 </Typography>
               </Box>
               <LinearProgress
                 variant="determinate"
-                value={(monthSummary.savings / 8000) * 100}
+                value={savingsGoal && savingsGoal.target_amount > 0 ? 
+                  Math.min((monthSummary.savings / savingsGoal.target_amount) * 100, 100) : 0}
                 sx={{
                   height: 12,
                   borderRadius: 6,
-                  backgroundColor: colors.success[100],
+                  backgroundColor: colors.primary[100],
                   '& .MuiLinearProgress-bar': {
-                    background: gradients.success,
+                    background: gradients.primary,
                     borderRadius: 6,
                   },
                 }}
@@ -328,7 +718,7 @@ export default function Dashboard() {
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
-                <Typography variant="h5" fontWeight={700} color={colors.success[700]}>
+                <Typography variant="h5" fontWeight={700} color={colors.primary[700]}>
                   {formatCurrency(monthSummary.savings)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -337,14 +727,16 @@ export default function Dashboard() {
               </Box>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="body1" fontWeight={600}>
-                  {formatCurrency(8000 - monthSummary.savings)}
+                  {savingsGoal ? 
+                    formatCurrency(Math.max(0, savingsGoal.target_amount - monthSummary.savings)) : 
+                    formatCurrency(Math.max(0, 8000 - monthSummary.savings))}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Restante para meta
                 </Typography>
               </Box>
             </Box>
-          </ModernCard>
+          </ModernSection>
         </Box>
       </Box>
 
@@ -368,7 +760,7 @@ export default function Dashboard() {
                 </TableHead>
                 <TableBody>
                   {weeklyBalances.map((week, index) => {
-                    const spentPercentage = (week.spent / week.balance) * 100;
+                    const spentPercentage = week.balance > 0 ? (week.spent / week.balance) * 100 : 0;
                     const isHighSpending = spentPercentage > 20;
                     
                     return (
@@ -383,7 +775,7 @@ export default function Dashboard() {
                         <TableCell>
                           <Box>
                             <Typography variant="body2" fontWeight={600}>
-                              {new Date(week.startDate).toLocaleDateString('pt-BR')} - {new Date(week.endDate).toLocaleDateString('pt-BR')}
+                              {format(parseISO(week.startDate), 'dd/MM')} - {format(parseISO(week.endDate), 'dd/MM')}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               Semana {index + 1}

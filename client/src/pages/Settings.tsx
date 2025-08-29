@@ -8,6 +8,8 @@ import BankAccounts from './BankAccounts';
 import Cards from './Cards';
 import Contacts from './Contacts';
 import CostCenters from './CostCenters';
+import { UsersManagement } from '../components/UsersManagement';
+import { SavingsGoalSettings } from '../components/SavingsGoalSettings';
 import { ModernHeader } from '../components/modern/ModernComponents';
 import { colors } from '../theme/modernTheme';
 
@@ -44,11 +46,11 @@ export default function Settings() {
       <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: { xs: '100%', md: '1400px' }, mx: 'auto' }}>
         {/* Modern Header */}
         <ModernHeader
-          title="Cadastros"
-          subtitle="Configure categorias, contatos, contas e demais informações do sistema"
+          title="Configurações"
+          subtitle="Gerencie categorias, contatos, contas e configurações do sistema"
           breadcrumbs={[
             { label: 'TrackeOne Finance' },
-            { label: 'Cadastros' }
+            { label: 'Configurações' }
           ]}
         />
 
@@ -85,6 +87,8 @@ export default function Settings() {
             <Tab label="Cartões" />
             <Tab label="Contatos" />
             <Tab label="Centro de Custo" />
+            <Tab label="Usuários" />
+            <Tab label="Meta de Economia" />
           </Tabs>
 
           <TabPanel value={activeTab} index={0}>
@@ -110,6 +114,12 @@ export default function Settings() {
           </TabPanel>
           <TabPanel value={activeTab} index={7}>
             <CostCenters />
+          </TabPanel>
+          <TabPanel value={activeTab} index={8}>
+            <UsersManagement />
+          </TabPanel>
+          <TabPanel value={activeTab} index={9}>
+            <SavingsGoalSettings />
           </TabPanel>
         </Paper>
       </Box>

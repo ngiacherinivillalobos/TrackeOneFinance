@@ -7,8 +7,6 @@ dotenv.config();
 
 const dbPath = path.resolve(__dirname, '..', '..', '..', process.env.DATABASE_PATH || 'database/track_one_finance.db');
 
-console.log('Database path:', dbPath);
-
 let db: Database;
 
 const initializeDatabase = (): Promise<void> => {

@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS subcategories (
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 
--- 4. Tabela de status de pagamento
 CREATE TABLE IF NOT EXISTS payment_status (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -45,7 +44,13 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
     current_balance DECIMAL(10,2) DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-
+-- 11. Tabela de usuários para autenticação
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 -- 6. Tabela de cartões de crédito
 CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

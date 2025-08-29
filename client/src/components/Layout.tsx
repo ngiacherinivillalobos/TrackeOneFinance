@@ -10,6 +10,7 @@ import {
   ListItemIcon,
   ListItemText,
   Typography,
+  Divider,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -18,8 +19,9 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 const collapsedDrawerWidth = 60;
@@ -37,10 +39,9 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { text: 'Visão Geral', icon: <DashboardIcon />, path: '/' },
   { text: 'Controle Mensal', icon: <ListAltIcon />, path: '/monthly-control' },
-  { text: 'Transações', icon: <SwapHorizIcon />, path: '/transactions' },
   { text: 'Fluxo de Caixa', icon: <AccountBalanceWalletIcon />, path: '/cash-flow' },
   { text: 'Cartão de Crédito', icon: <CreditCardIcon />, path: '/credit-card' },
-  { text: 'Cadastros', icon: <SettingsIcon />, path: '/settings' },
+  { text: 'Configurações', icon: <SettingsIcon />, path: '/settings' },
 ];
 
 export default function Layout({ children }: LayoutProps) {
@@ -51,6 +52,7 @@ export default function Layout({ children }: LayoutProps) {
   });
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -64,6 +66,11 @@ export default function Layout({ children }: LayoutProps) {
 
   const currentDrawerWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   // Função para obter o título da página atual
   const getPageTitle = () => {
     const currentPage = menuItems.find(item => item.path === location.pathname);
@@ -75,6 +82,8 @@ export default function Layout({ children }: LayoutProps) {
       height: '100%',
       bgcolor: '#4586C8',
       color: 'white',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       <Box sx={{ 
         display: 'flex', 
@@ -99,9 +108,11 @@ export default function Layout({ children }: LayoutProps) {
           {sidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
         </IconButton>
       </Box>
-      <List sx={{ pt: 0 }}>
+      
+      <List sx={{ pt: 0, flex: 1 }}>
         {menuItems.map((item) => (
           <ListItem
+            key={item.path}
             component="div"
             onClick={() => {
               navigate(item.path);
@@ -143,13 +154,64 @@ export default function Layout({ children }: LayoutProps) {
           </ListItem>
         ))}
       </List>
+      
+      {/* Informações do usuário e logout */}
+      <Box sx={{ mt: 'auto', mb: 2 }}>
+        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.2)', my: 1 }} />
+        {!sidebarCollapsed && user && (
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+              Logado como:
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+              {user.email}
+            </Typography>
+          </Box>
+        )}
+        <ListItem
+          component="div"
+          onClick={handleLogout}
+          sx={{
+            color: 'white',
+            minHeight: 48,
+            justifyContent: sidebarCollapsed ? 'center' : 'initial',
+            px: sidebarCollapsed ? 1 : 2.5,
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: 'rgba(255, 255, 255, 0.1)',
+            },
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: 0,
+              mr: sidebarCollapsed ? 'auto' : 3,
+              justifyContent: 'center',
+              color: 'white',
+            }}
+          >
+            <LogoutIcon />
+          </ListItemIcon>
+          {!sidebarCollapsed && (
+            <ListItemText 
+              primary="Sair" 
+              sx={{ 
+                opacity: 1,
+                '& .MuiListItemText-primary': {
+                  fontSize: '0.95rem',
+                  fontWeight: 500,
+                }
+              }}
+            />
+          )}
+        </ListItem>
+      </Box>
     </Box>
   );
 
   return (
     <Box sx={{ display: 'flex', bgcolor: '#EBF5FE', minHeight: '100vh' }}>
       <CssBaseline />
-      {/* AppBar removido conforme solicitado */}
       <Box
         component="nav"
         sx={{ width: { sm: currentDrawerWidth }, flexShrink: { sm: 0 } }}
@@ -222,7 +284,6 @@ export default function Layout({ children }: LayoutProps) {
           </IconButton>
         </Box>
         
-        {/* Toolbar removido junto com o AppBar */}
         {children}
       </Box>
     </Box>

@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import ContactController from '../controllers/ContactController';
+import { authMiddleware } from '../controllers/authMiddleware';
 
 const router = Router();
 
-router.get('/', ContactController.index);
-router.get('/:id', ContactController.show);
-router.post('/', ContactController.create);
-router.put('/:id', ContactController.update);
-router.delete('/:id', ContactController.delete);
+router.get('/', authMiddleware, ContactController.index);
+router.get('/:id', authMiddleware, ContactController.show);
+router.post('/', authMiddleware, ContactController.create);
+router.put('/:id', authMiddleware, ContactController.update);
+router.delete('/:id', authMiddleware, ContactController.delete);
 
 export default router;

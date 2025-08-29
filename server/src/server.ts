@@ -14,6 +14,11 @@ app.get('/api/test', (req: Request, res: Response) => {
   res.json({ message: 'Server is working!' });
 });
 
+// Rota de teste do Cash Flow diretamente
+app.get('/api/cash-flow-test', (req: Request, res: Response) => {
+  res.json({ message: 'Cash Flow direct route working!' });
+});
+
 // Monta o roteador principal
 app.use('/api', mainRouter);
 

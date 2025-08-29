@@ -1,19 +1,53 @@
 -- Migração para adicionar campos de parcelamento na tabela transactions
 -- Execute este script para adicionar os novos campos de parcelamento
 
--- Adicionar campos de parcelamento
-ALTER TABLE transactions ADD COLUMN is_installment BOOLEAN DEFAULT 0;
-ALTER TABLE transactions ADD COLUMN installment_number INTEGER DEFAULT NULL;
-ALTER TABLE transactions ADD COLUMN total_installments INTEGER DEFAULT NULL;
+-- Garantir que não exista nenhuma tabela temporária
+DROP TABLE IF EXISTS transactions_new;
 
--- Comentários dos campos:
--- is_installment: Indica se a transação é parcelada (0 = não, 1 = sim)
--- installment_number: Número da parcela atual (ex: 1, 2, 3, etc.)
--- total_installments: Total de parcelas (ex: 12 para parcelamento em 12x)
+-- Criar nova tabela com os campos de parcelamento
+CREATE TABLE transactions_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('expense', 'income', 'investment')),
+    category_id INTEGER,
+    subcategory_id INTEGER,
+    payment_status_id INTEGER,
+    bank_account_id INTEGER,
+    card_id INTEGER,
+    contact_id INTEGER,
+    transaction_date DATE NOT NULL,
+    created_at DATETIME,
+    cost_center_id INTEGER,
+    
+    -- Campos de parcelamento
+    is_installment BOOLEAN DEFAULT 0,
+    installment_number INTEGER DEFAULT NULL,
+    total_installments INTEGER DEFAULT NULL,
+    
+    FOREIGN KEY (category_id) REFERENCES categories(id),
+    FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
+    FOREIGN KEY (payment_status_id) REFERENCES payment_status(id),
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id),
+    FOREIGN KEY (contact_id) REFERENCES contacts(id),
+    FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id)
+);
 
--- Exemplo de uso:
--- Para uma transação parcelada em 12x, a primeira parcela seria:
--- is_installment = 1, installment_number = 1, total_installments = 12
+-- Copiar dados da tabela antiga para a nova
+INSERT INTO transactions_new (
+    id, description, amount, type, category_id, subcategory_id, 
+    payment_status_id, bank_account_id, card_id, contact_id, transaction_date, 
+    created_at, cost_center_id
+)
+SELECT 
+    id, description, amount, type, category_id, subcategory_id, 
+    payment_status_id, bank_account_id, card_id, contact_id, transaction_date, 
+    created_at, cost_center_id
+FROM transactions;
 
--- Para uma transação não parcelada:
--- is_installment = 0, installment_number = NULL, total_installments = NULL
+-- Remover a tabela antiga
+DROP TABLE transactions;
+
+-- Renomear a nova tabela
+ALTER TABLE transactions_new RENAME TO transactions;

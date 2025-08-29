@@ -73,6 +73,7 @@ import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Transaction {
   id: number;
@@ -138,13 +139,14 @@ interface PaymentStatus {
 interface Filters {
   transaction_type: string[];
   payment_status_id: string[];
-  category_id: string;
+  category_id: string[];
   subcategory_id: string;
   contact_id: string[];
   cost_center_id: string[];
 }
 
 export default function MonthlyControl() {
+  const { user } = useAuth();
   // Responsividade
   const theme = useTheme();
   const isMediumScreen = useMediaQuery(theme.breakpoints.up('md'));
@@ -165,13 +167,18 @@ export default function MonthlyControl() {
   // Estados para filtros
   const [filters, setFilters] = useState<Filters>({
     transaction_type: [],
-    payment_status_id: ['unpaid', 'overdue'],
-    category_id: '',
+    payment_status_id: [], // Mostrando todas as transações por padrão
+    category_id: [],
     subcategory_id: '',
     contact_id: [],
     cost_center_id: []
   });
   
+  // Adicionar um efeito para monitorar mudanças nos filtros
+  useEffect(() => {
+    console.log('Filtros atualizados:', filters);
+  }, [filters]);
+
   // Estados para ordenação
   const [orderBy, setOrderBy] = useState<string>('transaction_date');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
@@ -238,6 +245,8 @@ export default function MonthlyControl() {
   const [batchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [batchEditData, setBatchEditData] = useState({
     amount: '',
+    description: '',
+    transaction_date: '',
     contact_id: '',
     category_id: '',
     subcategory_id: '',
@@ -282,17 +291,18 @@ export default function MonthlyControl() {
 
   // Carregar dados iniciais
   useEffect(() => {
-    console.log("useEffect para carregar dados foi acionado. Dependências:", {
-      currentDate,
-      filters,
-      dateFilterType,
-      customStartDate,
-      customEndDate,
-      selectedYear,
-    });
     loadTransactions();
+  }, [currentDate, dateFilterType, customStartDate, customEndDate, selectedYear]);
+
+  // Carregar transações quando os filtros mudarem
+  useEffect(() => {
+    loadTransactions();
+  }, [filters]);
+
+  // Carregar dados dos filtros separadamente
+  useEffect(() => {
     loadFilterData();
-  }, [currentDate, filters, dateFilterType, customStartDate, customEndDate, selectedYear]);
+  }, []);
 
   // Atualizar preview de recorrências quando dados do formulário mudam
   useEffect(() => {
@@ -415,8 +425,42 @@ export default function MonthlyControl() {
     setRecurrencePreview(previews);
   };
 
+  const loadFilterData = async () => {
+    try {
+      const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes] = await Promise.all([
+        api.get('/categories'),
+        api.get('/subcategories'),
+        api.get('/contacts'),
+        api.get('/cost-centers'),
+        api.get('/payment-statuses')
+      ]);
+      
+      setCategories(categoriesRes.data);
+      setSubcategories(subcategoriesRes.data);
+      setContacts(contactsRes.data);
+      setCostCenters(costCentersRes.data);
+      setPaymentStatuses(paymentStatusesRes.data);
+      
+      // Se o usuário tiver um centro de custo associado, selecioná-lo automaticamente
+      // apenas se nenhum filtro de centro de custo já estiver selecionado
+      if (user?.cost_center_id && filters.cost_center_id.length === 0) {
+        const userCostCenter = costCentersRes.data.find((cc: CostCenter) => cc.id === user.cost_center_id);
+        if (userCostCenter) {
+          // Usar setTimeout para garantir que o estado seja atualizado corretamente
+          setTimeout(() => {
+            setFilters(prev => ({
+              ...prev,
+              cost_center_id: [userCostCenter.id.toString()]
+            }));
+          }, 0);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados dos filtros:', error);
+    }
+  };
+
   const loadTransactions = async () => {
-    console.log("Iniciando loadTransactions...");
     try {
       setLoading(true);
       
@@ -438,15 +482,35 @@ export default function MonthlyControl() {
       }
       
       // Preparar parâmetros de filtro
-      const baseParams: any = {
-        ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
-          // Tratar filtros de array e payment_status_id separadamente
-          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id') {
-            return false; // Não incluir nos parâmetros da URL (serão aplicados no frontend)
-          }
-          return value !== '';
-        }))
-      };
+      const baseParams: any = {};
+      
+      // Adicionar filtro de centro de custo do usuário se não houver filtro específico
+      if (filters.cost_center_id.length === 0 && user?.cost_center_id) {
+        baseParams.cost_center_id = user.cost_center_id;
+      } else if (filters.cost_center_id.length > 0) {
+        baseParams.cost_center_id = filters.cost_center_id[0];
+      }
+      
+      // Adicionar outros filtros
+      if (filters.transaction_type.length > 0) {
+        baseParams.transaction_type = filters.transaction_type.join(',');
+      }
+      
+      if (filters.payment_status_id.length > 0) {
+        baseParams.payment_status_id = filters.payment_status_id.join(',');
+      }
+      
+      if (filters.category_id.length > 0) {
+        baseParams.category_id = filters.category_id.join(',');
+      }
+      
+      if (filters.subcategory_id) {
+        baseParams.subcategory_id = filters.subcategory_id;
+      }
+      
+      if (filters.contact_id.length > 0) {
+        baseParams.contact_id = filters.contact_id.join(',');
+      }
       
       // Adicionar parâmetros de data apenas se não for "Todo o período"
       if (dateFilterType !== 'all' && startDate && endDate) {
@@ -456,45 +520,10 @@ export default function MonthlyControl() {
       
       const params = new URLSearchParams(baseParams);
       
-      console.log('Enviando requisição para /api/transactions com os parâmetros:', params.toString());
-      
       const response = await api.get(`/transactions?${params}`);
-      console.log("Resposta da API recebida:", response.data);
       
-      // Aplicar filtros no frontend
-      let filteredTransactions = response.data;
-      
-      // Filtro de status de pagamento
-      if (filters.payment_status_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => {
-          if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
-          if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && new Date(t.transaction_date) < new Date()) return true;
-          if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
-          return false;
-        });
-      }
-      
-      // Filtro de tipo de transação
-      if (filters.transaction_type.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.transaction_type.includes(t.transaction_type)
-        );
-      }
-      
-      // Filtro de contato
-      if (filters.contact_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.contact_id.includes(t.contact_id?.toString() || '')
-        );
-      }
-      
-      // Filtro de centro de custo
-      if (filters.cost_center_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
-        );
-      }
+      // Não aplicar filtros no frontend - o backend já filtra corretamente
+      const filteredTransactions = response.data;
       
       setTransactions(filteredTransactions.map((transaction: any) => ({
         ...transaction,
@@ -537,28 +566,7 @@ export default function MonthlyControl() {
         });
       }
     } finally {
-      console.log("Finalizando loadTransactions.");
       setLoading(false);
-    }
-  };
-
-  const loadFilterData = async () => {
-    try {
-      const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/subcategories'),
-        api.get('/contacts'),
-        api.get('/cost-centers'),
-        api.get('/payment-statuses')
-      ]);
-      
-      setCategories(categoriesRes.data);
-      setSubcategories(subcategoriesRes.data);
-      setContacts(contactsRes.data);
-      setCostCenters(costCentersRes.data);
-      setPaymentStatuses(paymentStatusesRes.data);
-    } catch (error) {
-      console.error('Erro ao carregar dados dos filtros:', error);
     }
   };
 
@@ -685,6 +693,8 @@ export default function MonthlyControl() {
     // Limpar dados do formulário de edição em lote
     setBatchEditData({
       amount: '',
+      description: '',
+      transaction_date: '',
       contact_id: '',
       category_id: '',
       subcategory_id: '',
@@ -725,28 +735,30 @@ export default function MonthlyControl() {
       if (batchEditData.amount && batchEditData.amount.trim() !== '') {
         updateData.amount = parseBrazilianNumber(batchEditData.amount);
       }
+      
+      if (batchEditData.description && batchEditData.description.trim() !== '') {
+        updateData.description = batchEditData.description;
+      }
+      
+      if (batchEditData.transaction_date && batchEditData.transaction_date.trim() !== '') {
+        updateData.transaction_date = batchEditData.transaction_date;
+      }
       if (batchEditData.contact_id && batchEditData.contact_id !== '') {
         updateData.contact_id = parseInt(batchEditData.contact_id);
       }
-      // Handle multiple categories - send as array if multiple selected
+      // Handle category - simple single selection
       if (batchEditData.category_id && batchEditData.category_id !== '') {
-        const categoryIds = batchEditData.category_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-        if (categoryIds.length > 0) {
-          // If multiple categories, send as array; if single, send as single value
-          updateData.category_id = categoryIds.length === 1 ? categoryIds[0] : categoryIds;
-        }
+        updateData.category_id = parseInt(batchEditData.category_id);
       }
-      // Handle multiple subcategories - send as array if multiple selected
+      // Handle subcategory - simple single selection
       if (batchEditData.subcategory_id && batchEditData.subcategory_id !== '') {
-        const subcategoryIds = batchEditData.subcategory_id.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-        if (subcategoryIds.length > 0) {
-          // If multiple subcategories, send as array; if single, send as single value
-          updateData.subcategory_id = subcategoryIds.length === 1 ? subcategoryIds[0] : subcategoryIds;
-        }
+        updateData.subcategory_id = parseInt(batchEditData.subcategory_id);
       }
       if (batchEditData.cost_center_id && batchEditData.cost_center_id !== '') {
         updateData.cost_center_id = parseInt(batchEditData.cost_center_id);
       }
+      
+      // Debug do updateData
       
       // Se nenhum campo foi preenchido, não fazer nada
       if (Object.keys(updateData).length === 0) {
@@ -754,10 +766,10 @@ export default function MonthlyControl() {
         return;
       }
       
-      // Atualizar todas as transações selecionadas
+      // Atualizar todas as transações selecionadas usando PATCH
       await Promise.all(
         selectedTransactions.map(id => 
-          api.put(`/transactions/${id}`, updateData)
+          api.patch(`/transactions/${id}`, updateData)
         )
       );
       
@@ -796,7 +808,10 @@ export default function MonthlyControl() {
         showSnackbar('Transação marcada como paga com sucesso!', 'success');
       }
       
-      loadTransactions(); // Recarregar a lista
+      // Fechar o diálogo antes de recarregar as transações
+      handleClosePaymentDialog();
+      
+      // Não é necessário chamar loadTransactions() aqui pois o PaymentDialog já chama após fechar
     } catch (error) {
       console.error('Erro ao marcar como pago:', error);
       showSnackbar('Erro ao processar pagamento', 'error');
@@ -822,10 +837,9 @@ export default function MonthlyControl() {
         showSnackbar('Erro ao estornar pagamento', 'error');
       }
     }
-    handleActionMenuClose();
   };
 
-  // Funções para modal de transação
+  // Função para mostrar notificação
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'success') => {
     setSnackbar({
       open: true,
@@ -833,6 +847,51 @@ export default function MonthlyControl() {
       severity
     });
   };
+
+  // Função para fechar notificação
+  const handleSnackbarClose = () => {
+    setSnackbar({
+      open: false,
+      message: '',
+      severity: 'success'
+    });
+  };
+
+  // Função para estorno em lote
+  const handleBatchReversePayment = async () => {
+    if (selectedTransactions.length === 0) return;
+    
+    // Filtrar apenas transações que estão pagas
+    const paidTransactions = transactions.filter(t => 
+      selectedTransactions.includes(t.id) && t.is_paid
+    );
+    
+    if (paidTransactions.length === 0) {
+      showSnackbar('Nenhuma transação paga selecionada para estorno', 'warning');
+      setBatchActionsAnchor(null);
+      return;
+    }
+    
+    if (window.confirm(`Tem certeza que deseja estornar ${paidTransactions.length} pagamento(s)? O status voltará para "Em Aberto" ou "Vencido" conforme a data.`)) {
+      try {
+        await Promise.all(
+          paidTransactions.map(transaction => 
+            api.post(`/transactions/${transaction.id}/reverse-payment`)
+          )
+        );
+        
+        setSelectedTransactions([]);
+        loadTransactions();
+        showSnackbar(`${paidTransactions.length} pagamento(s) estornado(s) com sucesso!`, 'success');
+      } catch (error) {
+        console.error('Erro ao estornar pagamentos em lote:', error);
+        showSnackbar('Erro ao estornar pagamentos em lote', 'error');
+      }
+    }
+    setBatchActionsAnchor(null);
+  };
+
+  // Funções para modal de transação
 
   const handleNewTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
     setFormData({
@@ -1130,6 +1189,16 @@ export default function MonthlyControl() {
     return transactionDate < today;
   };
 
+  // Verificar se transação vence hoje
+  const isTransactionDueToday = (transaction: Transaction) => {
+    if (transaction.is_paid) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+    transactionDate.setHours(0, 0, 0, 0);
+    return transactionDate.getTime() === today.getTime();
+  };
+
   // Obter status da transação
   const getTransactionStatus = (transaction: Transaction) => {
     if (transaction.is_paid) return 'Pago';
@@ -1192,6 +1261,7 @@ export default function MonthlyControl() {
               </Box>
             )}
           />
+
           {/* Modern Filters Section */}
           <Box sx={{
             bgcolor: 'white',
@@ -1398,7 +1468,12 @@ export default function MonthlyControl() {
                   multiple
                   value={filters.transaction_type}
                   label="Tipo"
-                  onChange={(e) => setFilters(prev => ({ ...prev, transaction_type: e.target.value as string[] }))}
+                  onChange={(e) => {
+                    setFilters(prev => ({
+                      ...prev,
+                      transaction_type: e.target.value as string[]
+                    }));
+                  }}
                   renderValue={(selected) => {
                     if (selected.length === 0) return 'Todos';
                     if (selected.length === 1) return selected[0];
@@ -1485,7 +1560,12 @@ export default function MonthlyControl() {
                   multiple
                   value={filters.payment_status_id}
                   label="Situação"
-                  onChange={(e) => setFilters(prev => ({ ...prev, payment_status_id: e.target.value as string[] }))}
+                  onChange={(e) => {
+                    setFilters(prev => ({
+                      ...prev,
+                      payment_status_id: e.target.value as string[]
+                    }));
+                  }}
                   renderValue={(selected) => {
                     if (selected.length === 0) return 'Todos';
                     if (selected.length === 1) {
@@ -1579,7 +1659,12 @@ export default function MonthlyControl() {
                   multiple
                   value={filters.cost_center_id}
                   label="Centro de Custo"
-                  onChange={(e) => setFilters(prev => ({ ...prev, cost_center_id: e.target.value as string[] }))}
+                  onChange={(e) => {
+                    setFilters(prev => ({
+                      ...prev,
+                      cost_center_id: e.target.value as string[]
+                    }));
+                  }}
                   renderValue={(selected) => {
                     if (selected.length === 0) return 'Todos';
                     if (selected.length === 1) {
@@ -1649,7 +1734,12 @@ export default function MonthlyControl() {
                   multiple
                   value={filters.contact_id}
                   label="Contato"
-                  onChange={(e) => setFilters(prev => ({ ...prev, contact_id: e.target.value as string[] }))}
+                  onChange={(e) => {
+                    setFilters(prev => ({
+                      ...prev,
+                      contact_id: e.target.value as string[]
+                    }));
+                  }}
                   renderValue={(selected) => {
                     if (selected.length === 0) return 'Todos';
                     if (selected.length === 1) {
@@ -1740,7 +1830,7 @@ export default function MonthlyControl() {
                   setFilters({
                     transaction_type: [],
                     payment_status_id: [],
-                    category_id: '',
+                    category_id: [],
                     subcategory_id: '',
                     contact_id: [],
                     cost_center_id: []
@@ -1785,20 +1875,23 @@ export default function MonthlyControl() {
                   <InputLabel sx={{ fontSize: '0.875rem' }}>Categoria</InputLabel>
                   <Select
                     multiple
-                    value={filters.category_id ? [filters.category_id] : []}
+                    value={filters.category_id}
                     label="Categoria"
                     onChange={(e) => {
                       const selected = e.target.value as string[];
-                      setFilters(prev => ({ 
-                        ...prev, 
-                        category_id: selected.length > 0 ? selected[0] : '',
+                      setFilters(prev => ({
+                        ...prev,
+                        category_id: selected,
                         subcategory_id: '' // Clear subcategory when category changes
                       }));
                     }}
                     renderValue={(selected) => {
                       if (selected.length === 0) return 'Todas';
-                      const category = categories.find(cat => cat.id.toString() === selected[0]);
-                      return category ? category.name : 'Selecionada';
+                      if (selected.length === 1) {
+                        const category = categories.find(cat => cat.id.toString() === selected[0]);
+                        return category ? category.name : selected[0];
+                      }
+                      return `${selected.length} selecionadas`;
                     }}
                     sx={{ 
                       bgcolor: '#FFFFFF',
@@ -1820,7 +1913,7 @@ export default function MonthlyControl() {
                     {categories.filter(cat => filters.transaction_type.length === 0 || filters.transaction_type.includes(cat.source_type)).map((category) => (
                       <MenuItem key={category.id} value={category.id.toString()}>
                         <Checkbox 
-                          checked={filters.category_id === category.id.toString()} 
+                          checked={filters.category_id.includes(category.id.toString())} 
                           size="small"
                           sx={{ mr: 1, p: 0 }}
                         />
@@ -1835,9 +1928,9 @@ export default function MonthlyControl() {
                       </MenuItem>
                     ))}
                   </Select>
-                  {filters.category_id && (
+                  {filters.category_id.length > 0 && (
                     <Chip 
-                      label={1}
+                      label={filters.category_id.length}
                       size="small"
                       sx={{
                         position: 'absolute',
@@ -1867,8 +1960,8 @@ export default function MonthlyControl() {
                     label="Subcategoria"
                     onChange={(e) => {
                       const selected = e.target.value as string[];
-                      setFilters(prev => ({ 
-                        ...prev, 
+                      setFilters(prev => ({
+                        ...prev,
                         subcategory_id: selected.length > 0 ? selected[0] : ''
                       }));
                     }}
@@ -1893,13 +1986,17 @@ export default function MonthlyControl() {
                         borderWidth: 1
                       }
                     }}
-                    disabled={!filters.category_id}
                   >
-                    {subcategories.filter(sub => 
-                      filters.category_id ? 
-                      sub.category_id.toString() === filters.category_id : 
-                      false
-                    ).map((subcategory) => (
+                    {subcategories.filter(sub => {
+                      // Se nenhuma categoria selecionada, mostrar todas as subcategorias filtradas por tipo de transação
+                      if (filters.category_id.length === 0) {
+                        if (filters.transaction_type.length === 0) return true;
+                        const category = categories.find(cat => cat.id === sub.category_id);
+                        return category && filters.transaction_type.includes(category.source_type);
+                      }
+                      // Se categorias selecionadas, mostrar apenas subcategorias dessas categorias
+                      return filters.category_id.includes(sub.category_id.toString());
+                    }).map((subcategory) => (
                       <MenuItem key={subcategory.id} value={subcategory.id.toString()}>
                         <Checkbox 
                           checked={filters.subcategory_id === subcategory.id.toString()} 
@@ -2007,37 +2104,30 @@ export default function MonthlyControl() {
                 {selectedTransactions.length} de {transactions.length} registro(s) selecionado(s)
               </Typography>
               {selectedTransactions.length > 0 && (
-                <Chip
-                  label={`${selectedTransactions.length} selecionados`}
+                <Button
+                  variant="outlined"
                   size="small"
+                  onClick={(e) => setBatchActionsAnchor(e.currentTarget)}
                   sx={{
-                    bgcolor: colors.primary[100],
-                    color: colors.primary[700],
-                    fontWeight: 600
+                    borderColor: colors.primary[300],
+                    color: colors.primary[600],
+                    borderRadius: 1,
+                    fontSize: '0.7rem',
+                    px: 1,
+                    py: 0.25,
+                    minWidth: 'auto',
+                    height: 24,
+                    lineHeight: 1,
+                    '&:hover': {
+                      borderColor: colors.primary[400],
+                      bgcolor: colors.primary[50]
+                    }
                   }}
-                />
+                >
+                  Ações em Lote
+                </Button>
               )}
             </Box>
-            
-            {selectedTransactions.length > 0 && (
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={(e) => setBatchActionsAnchor(e.currentTarget)}
-                startIcon={<MoreVertIcon />}
-                sx={{
-                  borderColor: colors.primary[300],
-                  color: colors.primary[600],
-                  borderRadius: 2,
-                  '&:hover': {
-                    borderColor: colors.primary[400],
-                    bgcolor: colors.primary[50]
-                  }
-                }}
-              >
-                Ações em Lote
-              </Button>
-            )}
           </Box>
 
           {/* Transaction Table */}
@@ -2092,19 +2182,36 @@ export default function MonthlyControl() {
                 {sortedTransactions.map((transaction) => {
                   const statusColors = getStatusColor(transaction);
                   const isOverdue = isTransactionOverdue(transaction);
+                  const isDueToday = isTransactionDueToday(transaction);
+                  
+                  // Definir cor de fundo baseada no status da transação
+                  const getRowBackgroundColor = () => {
+                    if (selectedTransactions.includes(transaction.id)) {
+                      if (isOverdue) return colors.error[50];
+                      if (isDueToday) return '#fff3e0'; // Amarelo claro como no cartão "Vencem Hoje"
+                      return colors.primary[50];
+                    }
+                    if (isOverdue) return colors.error[50];
+                    if (isDueToday) return '#fff3e0'; // Amarelo claro como no cartão "Vencem Hoje"
+                    return 'white';
+                  };
+
+                  const getHoverBackgroundColor = () => {
+                    if (isOverdue) return colors.error[50];
+                    if (isDueToday) return '#ffcc02'; // Amarelo mais intenso no hover
+                    return colors.primary[50];
+                  };
                   
                   return (
                   <TableRow 
                     key={transaction.id}
                     sx={{ 
                       '&:hover': { 
-                        bgcolor: isOverdue ? colors.error[50] : colors.primary[50],
+                        bgcolor: getHoverBackgroundColor(),
                         transform: 'translateY(-1px)',
                         boxShadow: shadows.sm
                       },
-                      bgcolor: selectedTransactions.includes(transaction.id) 
-                        ? (isOverdue ? colors.error[50] : colors.primary[50]) 
-                        : (isOverdue ? colors.error[50] : 'white'),
+                      bgcolor: getRowBackgroundColor(),
                       transition: 'all 0.2s ease',
                       cursor: 'pointer'
                     }}
@@ -2307,6 +2414,12 @@ export default function MonthlyControl() {
             </ListItemIcon>
             <ListItemText>Marcar como Pago</ListItemText>
           </MenuItem>
+          <MenuItem onClick={handleBatchReversePayment}>
+            <ListItemIcon>
+              <UndoIcon fontSize="small" sx={{ color: colors.warning[600] }} />
+            </ListItemIcon>
+            <ListItemText>Estornar em Lote</ListItemText>
+          </MenuItem>
           <MenuItem 
             onClick={handleBatchDelete} 
             sx={{ color: colors.error[600] }}
@@ -2333,14 +2446,14 @@ export default function MonthlyControl() {
             }
           }}>
             <ListItemIcon>
-              <EditIcon fontSize="small" />
+              <EditIcon fontSize="small" sx={{ color: colors.primary[600] }} />
             </ListItemIcon>
             <ListItemText>Editar</ListItemText>
           </MenuItem>
           
           <MenuItem onClick={() => selectedTransactionId && handleDuplicateTransaction(selectedTransactionId)}>
             <ListItemIcon>
-              <DuplicateIcon fontSize="small" />
+              <DuplicateIcon fontSize="small" sx={{ color: colors.primary[600] }} />
             </ListItemIcon>
             <ListItemText>Duplicar</ListItemText>
           </MenuItem>
@@ -2364,7 +2477,7 @@ export default function MonthlyControl() {
                 sx={{ 
                   color: (() => {
                     const transaction = transactions.find(t => t.id === selectedTransactionId);
-                    return transaction?.is_paid ? '#ccc' : '#4caf50';
+                    return transaction?.is_paid ? colors.gray[400] : colors.success[600];
                   })() 
                 }} 
               />
@@ -2391,7 +2504,7 @@ export default function MonthlyControl() {
                 sx={{ 
                   color: (() => {
                     const transaction = transactions.find(t => t.id === selectedTransactionId);
-                    return !transaction?.is_paid ? '#ccc' : '#ff9800';
+                    return !transaction?.is_paid ? colors.gray[400] : colors.warning[600];
                   })() 
                 }} 
               />
@@ -2401,10 +2514,10 @@ export default function MonthlyControl() {
           
           <MenuItem 
             onClick={() => selectedTransactionId && handleDeleteTransaction(selectedTransactionId)}
-            sx={{ color: 'error.main' }}
+            sx={{ color: colors.error[600] }}
           >
             <ListItemIcon>
-              <DeleteIcon fontSize="small" color="error" />
+              <DeleteIcon fontSize="small" sx={{ color: colors.error[600] }} />
             </ListItemIcon>
             <ListItemText>Excluir</ListItemText>
           </MenuItem>
@@ -3012,9 +3125,24 @@ export default function MonthlyControl() {
             
             <Box sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
               gap: 3
             }}>
+              {/* Descrição */}
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <TextField
+                  label="Descrição"
+                  value={batchEditData.description}
+                  onChange={(e) => setBatchEditData(prev => ({ ...prev, description: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Deixe vazio para não alterar"
+                  helperText="Nova descrição para as transações selecionadas"
+                  multiline
+                  rows={2}
+                />
+              </Box>
+
               {/* Valor */}
               <TextField
                 label="Valor (R$)"
@@ -3103,6 +3231,21 @@ export default function MonthlyControl() {
                 }}
               />
 
+              {/* Data de Vencimento */}
+              <TextField
+                label="Data de Vencimento"
+                type="date"
+                value={batchEditData.transaction_date}
+                onChange={(e) => setBatchEditData(prev => ({ ...prev, transaction_date: e.target.value }))}
+                fullWidth
+                size="small"
+                placeholder="Deixe vazio para não alterar"
+                helperText="Nova data de vencimento"
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+
               {/* Contato */}
               <FormControl fullWidth size="small">
                 <InputLabel>Contato</InputLabel>
@@ -3122,41 +3265,26 @@ export default function MonthlyControl() {
                 </Select>
               </FormControl>
 
-              {/* Categoria - Updated to support multiple selection */}
+              {/* Categoria */}
               <FormControl fullWidth size="small">
                 <InputLabel>Categoria</InputLabel>
                 <Select
-                  multiple
-                  value={batchEditData.category_id ? batchEditData.category_id.split(',') : []}
+                  value={batchEditData.category_id}
                   onChange={(e) => {
-                    const selected = e.target.value as string[];
                     setBatchEditData(prev => ({ 
                       ...prev, 
-                      category_id: selected.join(','),
-                      // Only clear subcategory if no categories are selected
-                      subcategory_id: selected.length === 0 ? prev.subcategory_id : ''
+                      category_id: e.target.value,
+                      // Limpar subcategoria quando categoria muda
+                      subcategory_id: ''
                     }));
                   }}
                   label="Categoria"
-                  renderValue={(selected) => {
-                    if (selected.length === 0) return 'Não alterar';
-                    if (selected.length === 1) {
-                      const category = categories.find(cat => cat.id.toString() === selected[0]);
-                      return category ? category.name : selected[0];
-                    }
-                    return `${selected.length} selecionadas`;
-                  }}
                 >
                   <MenuItem value="">
                     <em>Não alterar</em>
                   </MenuItem>
                   {categories.map((category) => (
                     <MenuItem key={category.id} value={category.id.toString()}>
-                      <Checkbox 
-                        checked={batchEditData.category_id ? batchEditData.category_id.split(',').includes(category.id.toString()) : false}
-                        size="small"
-                        sx={{ mr: 1, p: 0 }}
-                      />
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Box sx={{ color: category.source_type === 'Despesa' ? colors.error[600] : category.source_type === 'Receita' ? colors.success[600] : colors.primary[600] }}>
                           {category.source_type === 'Despesa' && <ExpenseIcon sx={{ fontSize: 16 }} />}
@@ -3170,49 +3298,34 @@ export default function MonthlyControl() {
                 </Select>
               </FormControl>
 
-              {/* Subcategoria - Updated to support multiple selection and work without category */}
+              {/* Subcategoria - Condicionada à categoria selecionada */}
               <FormControl fullWidth size="small">
                 <InputLabel>Subcategoria</InputLabel>
                 <Select
-                  multiple
-                  value={batchEditData.subcategory_id ? batchEditData.subcategory_id.split(',') : []}
+                  value={batchEditData.subcategory_id}
                   onChange={(e) => {
-                    const selected = e.target.value as string[];
                     setBatchEditData(prev => ({ 
                       ...prev, 
-                      subcategory_id: selected.join(',')
+                      subcategory_id: e.target.value
                     }));
                   }}
                   label="Subcategoria"
-                  renderValue={(selected) => {
-                    if (selected.length === 0) return 'Não alterar';
-                    if (selected.length === 1) {
-                      const subcategory = subcategories.find(sub => sub.id.toString() === selected[0]);
-                      return subcategory ? subcategory.name : selected[0];
-                    }
-                    return `${selected.length} selecionadas`;
-                  }}
+                  disabled={!batchEditData.category_id || batchEditData.category_id === ''}
                 >
                   <MenuItem value="">
-                    <em>Não alterar</em>
+                    <em>{!batchEditData.category_id || batchEditData.category_id === '' ? 'Selecione uma categoria primeiro' : 'Não alterar'}</em>
                   </MenuItem>
                   {subcategories
                     .filter(sub => {
-                      // If no categories are selected, show all subcategories
+                      // Se nenhuma categoria específica está selecionada, não mostrar subcategorias
                       if (!batchEditData.category_id || batchEditData.category_id === '') {
-                        return true;
+                        return false;
                       }
-                      // If categories are selected, filter subcategories by those categories
-                      const selectedCategories = batchEditData.category_id.split(',').filter(id => id.trim() !== '');
-                      return selectedCategories.length === 0 || selectedCategories.some(catId => catId === sub.category_id.toString());
+                      // Se categoria está selecionada, filtrar subcategorias por essa categoria
+                      return sub.category_id.toString() === batchEditData.category_id;
                     })
                     .map((subcategory) => (
                       <MenuItem key={subcategory.id} value={subcategory.id.toString()}>
-                        <Checkbox 
-                          checked={batchEditData.subcategory_id ? batchEditData.subcategory_id.split(',').includes(subcategory.id.toString()) : false}
-                          size="small"
-                          sx={{ mr: 1, p: 0 }}
-                        />
                         {subcategory.name}
                       </MenuItem>
                     ))
