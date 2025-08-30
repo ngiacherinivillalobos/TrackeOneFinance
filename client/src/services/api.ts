@@ -5,7 +5,8 @@ const getBaseURL = () => {
   // Em produção, usar a URL do backend no Render sem '/api' no final
   if (import.meta.env.MODE === 'production') {
     console.log('Usando ambiente de produção');
-    return 'https://trackeone-finance-api.onrender.com';
+    // Usar a variável de ambiente VITE_API_URL se definida, senão usar padrão
+    return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com';
   }
   // Em desenvolvimento, usar localhost
   console.log('Usando ambiente de desenvolvimento');
