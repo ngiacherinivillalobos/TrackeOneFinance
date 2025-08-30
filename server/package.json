@@ -4,7 +4,7 @@
   "description": "Backend for TrackOne Finance management system",
   "main": "dist/server.js",
   "scripts": {
-    "start": "npm run build && node dist/server.js",
+    "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "test": "node test-server.js"
