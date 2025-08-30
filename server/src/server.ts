@@ -6,7 +6,12 @@ import mainRouter from './routes'; // Importa o roteador principal
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://tracke-one-finance.vercel.app', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Rota de teste

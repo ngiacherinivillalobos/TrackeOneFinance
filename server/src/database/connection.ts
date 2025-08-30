@@ -74,14 +74,31 @@ const initializeDatabase = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     if (isProduction) {
       // Em produção, usa PostgreSQL
-      db = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-          rejectUnauthorized: false
-        }
-      });
-      console.log('Connected to PostgreSQL database');
-      resolve();
+      console.log('Iniciando conexão com PostgreSQL...');
+      console.log('DATABASE_URL configurada:', process.env.DATABASE_URL ? 'Sim' : 'Não');
+      
+      try {
+        db = new Pool({
+          connectionString: process.env.DATABASE_URL,
+          ssl: {
+            rejectUnauthorized: false
+          }
+        });
+        
+        // Testar a conexão com o banco
+        (db as Pool).query('SELECT NOW()', [])
+          .then(result => {
+            console.log('Conexão com PostgreSQL testada com sucesso:', result.rows[0]);
+            resolve();
+          })
+          .catch(error => {
+            console.error('Erro ao testar conexão com PostgreSQL:', error);
+            reject(error);
+          });
+      } catch (error) {
+        console.error('Erro ao criar pool de conexão PostgreSQL:', error);
+        reject(error);
+      }
     } else {
       // Em desenvolvimento, usa SQLite
       // Usar caminho absoluto para o banco de dados
