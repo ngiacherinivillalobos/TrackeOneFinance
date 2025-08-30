@@ -14,48 +14,21 @@ let db: Database;
 let sqliteDb: sqlite3.Database;
 
 // Funções wrapper para abstrair as diferenças entre SQLite e PostgreSQL
-const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    if (isProduction) {
-      // PostgreSQL
-      console.log(`Executando query PostgreSQL [all]: ${query}`);
-      console.log('Parâmetros:', params);
-      
-      (db as Pool).query(query, params)
-        .then((result: QueryResult) => {
-          console.log(`Query PostgreSQL [all] bem-sucedida, retornando ${result.rows.length} registros`);
-          resolve(result.rows);
-        })
-        .catch(err => {
-          console.error('Erro ao executar query PostgreSQL [all]:', err);
-          reject(err);
-        });
-    } else {
-      // SQLite
-      console.log(`Executando query SQLite [all]: ${query}`);
-      console.log('Parâmetros:', params);
-      
-      (db as sqlite3.Database).all(query, params, (err, rows) => {
-        if (err) {
-          console.error('Erro ao executar query SQLite [all]:', err);
-          reject(err);
-        } else {
-          console.log(`Query SQLite [all] bem-sucedida, retornando ${rows?.length || 0} registros`);
-          resolve(rows || []);
-        }
-      });
-    }
-  });
-};
-
 const dbGet = (db: Database, query: string, params: any[] = []): Promise<any> => {
   return new Promise((resolve, reject) => {
     if (isProduction) {
-      // PostgreSQL
-      console.log(`Executando query PostgreSQL [get]: ${query}`);
+      // PostgreSQL - convert ? placeholders to $1, $2, etc.
+      const pgQuery = query.replace(/\?/g, (match, offset, str) => {
+        // Count number of ? characters before this one
+        const upToOffset = str.substring(0, offset);
+        const questionMarkCount = (upToOffset.match(/\?/g) || []).length;
+        return `$${questionMarkCount + 1}`;
+      });
+      
+      console.log(`Executando query PostgreSQL [get]: ${pgQuery}`);
       console.log('Parâmetros:', params);
       
-      (db as Pool).query(query, params)
+      (db as Pool).query(pgQuery, params)
         .then((result: QueryResult) => {
           console.log(`Query PostgreSQL [get] bem-sucedida, retornando ${result.rows.length > 0 ? '1' : '0'} registro`);
           resolve(result.rows[0]);
@@ -85,8 +58,15 @@ const dbGet = (db: Database, query: string, params: any[] = []): Promise<any> =>
 const dbRun = (db: Database, query: string, params: any[] = []): Promise<{ lastID?: number, changes?: number }> => {
   return new Promise((resolve, reject) => {
     if (isProduction) {
-      // PostgreSQL
-      (db as Pool).query(query, params)
+      // PostgreSQL - convert ? placeholders to $1, $2, etc.
+      const pgQuery = query.replace(/\?/g, (match, offset, str) => {
+        // Count number of ? characters before this one
+        const upToOffset = str.substring(0, offset);
+        const questionMarkCount = (upToOffset.match(/\?/g) || []).length;
+        return `$${questionMarkCount + 1}`;
+      });
+      
+      (db as Pool).query(pgQuery, params)
         .then((result: QueryResult) => {
           resolve({ 
             lastID: result.rows.length > 0 ? result.rows[0].id : undefined,
@@ -99,6 +79,47 @@ const dbRun = (db: Database, query: string, params: any[] = []): Promise<{ lastI
       (db as sqlite3.Database).run(query, params, function(err) {
         if (err) reject(err);
         else resolve({ lastID: this.lastID, changes: this.changes });
+      });
+    }
+  });
+};
+
+const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    if (isProduction) {
+      // PostgreSQL - convert ? placeholders to $1, $2, etc.
+      const pgQuery = query.replace(/\?/g, (match, offset, str) => {
+        // Count number of ? characters before this one
+        const upToOffset = str.substring(0, offset);
+        const questionMarkCount = (upToOffset.match(/\?/g) || []).length;
+        return `$${questionMarkCount + 1}`;
+      });
+      
+      console.log(`Executando query PostgreSQL [all]: ${pgQuery}`);
+      console.log('Parâmetros:', params);
+      
+      (db as Pool).query(pgQuery, params)
+        .then((result: QueryResult) => {
+          console.log(`Query PostgreSQL [all] bem-sucedida, retornando ${result.rows.length} registros`);
+          resolve(result.rows);
+        })
+        .catch(err => {
+          console.error('Erro ao executar query PostgreSQL [all]:', err);
+          reject(err);
+        });
+    } else {
+      // SQLite
+      console.log(`Executando query SQLite [all]: ${query}`);
+      console.log('Parâmetros:', params);
+      
+      (db as sqlite3.Database).all(query, params, (err, rows) => {
+        if (err) {
+          console.error('Erro ao executar query SQLite [all]:', err);
+          reject(err);
+        } else {
+          console.log(`Query SQLite [all] bem-sucedida, retornando ${rows?.length || 0} registros`);
+          resolve(rows || []);
+        }
       });
     }
   });
