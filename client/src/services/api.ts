@@ -31,9 +31,13 @@ api.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Certificar-se de que a URL comece com /api para todas as requisições
-    if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http')) {
-      config.url = `/api${config.url}`;
+    // Remover a adição automática de /api pois o backend já o inclui
+    // Apenas garantir que URLs absolutas não sejam modificadas
+    if (config.url && config.url.startsWith('http')) {
+      // Não modificar URLs absolutas
+    } else if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('/')) {
+      // Adicionar barra inicial se não houver
+      config.url = `/${config.url}`;
     }
     
     console.log(`🚀 Axios Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
