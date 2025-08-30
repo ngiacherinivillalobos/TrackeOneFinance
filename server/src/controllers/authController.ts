@@ -26,17 +26,31 @@ export const authController = {
 
   async login(req: Request, res: Response) {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios.' });
+    if (!email || !password) {
+      console.log('Email ou senha não fornecidos');
+      return res.status(400).json({ error: 'Email e senha obrigatórios.' });
+    }
+    
+    console.log(`Tentativa de login para o email: ${email}`);
     const { db, get } = getDatabase();
     
     try {
       const row = await get(db, 'SELECT * FROM users WHERE email = ?', [email]);
-      if (!row) return res.status(401).json({ error: 'Usuário não encontrado.' });
+      if (!row) {
+        console.log(`Usuário não encontrado para o email: ${email}`);
+        return res.status(401).json({ error: 'Usuário não encontrado.' });
+      }
       
+      console.log(`Usuário encontrado para o email: ${email}`);
       const user = row as { id: number; email: string; password: string; cost_center_id?: number };
       const valid = await bcrypt.compare(password, user.password);
-      if (!valid) return res.status(401).json({ error: 'Senha incorreta.' });
       
+      if (!valid) {
+        console.log(`Senha incorreta para o email: ${email}`);
+        return res.status(401).json({ error: 'Senha incorreta.' });
+      }
+      
+      console.log(`Login bem-sucedido para o email: ${email}`);
       const token = jwt.sign({ 
         id: user.id, 
         email: user.email, 

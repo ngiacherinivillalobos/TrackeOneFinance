@@ -18,14 +18,31 @@ const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> 
   return new Promise((resolve, reject) => {
     if (isProduction) {
       // PostgreSQL
+      console.log(`Executando query PostgreSQL [all]: ${query}`);
+      console.log('Parâmetros:', params);
+      
       (db as Pool).query(query, params)
-        .then((result: QueryResult) => resolve(result.rows))
-        .catch(reject);
+        .then((result: QueryResult) => {
+          console.log(`Query PostgreSQL [all] bem-sucedida, retornando ${result.rows.length} registros`);
+          resolve(result.rows);
+        })
+        .catch(err => {
+          console.error('Erro ao executar query PostgreSQL [all]:', err);
+          reject(err);
+        });
     } else {
       // SQLite
+      console.log(`Executando query SQLite [all]: ${query}`);
+      console.log('Parâmetros:', params);
+      
       (db as sqlite3.Database).all(query, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
+        if (err) {
+          console.error('Erro ao executar query SQLite [all]:', err);
+          reject(err);
+        } else {
+          console.log(`Query SQLite [all] bem-sucedida, retornando ${rows?.length || 0} registros`);
+          resolve(rows || []);
+        }
       });
     }
   });
@@ -35,14 +52,31 @@ const dbGet = (db: Database, query: string, params: any[] = []): Promise<any> =>
   return new Promise((resolve, reject) => {
     if (isProduction) {
       // PostgreSQL
+      console.log(`Executando query PostgreSQL [get]: ${query}`);
+      console.log('Parâmetros:', params);
+      
       (db as Pool).query(query, params)
-        .then((result: QueryResult) => resolve(result.rows[0]))
-        .catch(reject);
+        .then((result: QueryResult) => {
+          console.log(`Query PostgreSQL [get] bem-sucedida, retornando ${result.rows.length > 0 ? '1' : '0'} registro`);
+          resolve(result.rows[0]);
+        })
+        .catch(err => {
+          console.error('Erro ao executar query PostgreSQL [get]:', err);
+          reject(err);
+        });
     } else {
       // SQLite
+      console.log(`Executando query SQLite [get]: ${query}`);
+      console.log('Parâmetros:', params);
+      
       (db as sqlite3.Database).get(query, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
+        if (err) {
+          console.error('Erro ao executar query SQLite [get]:', err);
+          reject(err);
+        } else {
+          console.log(`Query SQLite [get] bem-sucedida, retornando ${row ? '1' : '0'} registro`);
+          resolve(row);
+        }
       });
     }
   });

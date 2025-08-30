@@ -2,11 +2,13 @@ import axios from 'axios';
 
 // Detectar a URL base automaticamente com base no ambiente
 const getBaseURL = () => {
-  // Em produção, usar a URL do backend no Render
+  // Em produção, usar a URL do backend no Render sem '/api' no final
   if (import.meta.env.MODE === 'production') {
+    console.log('Usando ambiente de produção');
     return 'https://trackeone-finance-api.onrender.com';
   }
   // Em desenvolvimento, usar localhost
+  console.log('Usando ambiente de desenvolvimento');
   return 'http://localhost:3001';
 };
 
