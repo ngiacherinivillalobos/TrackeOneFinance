@@ -2,12 +2,12 @@ import axios from 'axios';
 
 // Detectar a URL base automaticamente com base no ambiente
 const getBaseURL = () => {
-  // Em produção, usar a URL do backend no Render
+  // Em produção, usar a URL do backend no Render sem '/api' no final
   if (import.meta.env.MODE === 'production') {
-    return 'https://trackeone-finance-api.onrender.com/api';
+    return 'https://trackeone-finance-api.onrender.com';
   }
   // Em desenvolvimento, usar localhost
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001';
 };
 
 const baseURL = getBaseURL();
@@ -38,7 +38,7 @@ api.interceptors.request.use(
         if (exp - now < 86400) {
           console.log('Token próximo da expiração, tentando renovar...');
           try {
-            const response = await axios.post(`${config.baseURL}/auth/refresh`, {}, {
+            const response = await axios.post(`${config.baseURL}/api/auth/refresh`, {}, {
               headers: {
                 'Authorization': `Bearer ${token}`
               }
@@ -58,6 +58,12 @@ api.interceptors.request.use(
         console.error('Erro ao decodificar token:', error);
       }
     }
+    
+    // Certificar-se de que a URL comece com /api para todas as requisições
+    if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http')) {
+      config.url = `/api${config.url}`;
+    }
+    
     console.log(`🚀 Axios Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
@@ -86,7 +92,7 @@ api.interceptors.response.use(
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await axios.post(`${error.config?.baseURL || baseURL}/auth/refresh`, {}, {
+          const response = await axios.post(`${error.config?.baseURL || baseURL}/api/auth/refresh`, {}, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
