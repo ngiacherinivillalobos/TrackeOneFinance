@@ -4,16 +4,10 @@ import { getDatabase } from '../database/connection';
 export const categoryTypesController = {
   // Listar todos os tipos de categoria
   async list(req: Request, res: Response) {
-    const db = getDatabase();
+    const { db, all } = getDatabase();
     
     try {
-      const types = await new Promise((resolve, reject) => {
-        db.all('SELECT * FROM category_types ORDER BY name', (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
-      
+      const types = await all(db, 'SELECT * FROM category_types ORDER BY name');
       res.json(types);
     } catch (error) {
       console.error('Error fetching category types:', error);
@@ -24,21 +18,11 @@ export const categoryTypesController = {
   // Criar novo tipo de categoria
   async create(req: Request, res: Response) {
     const { name } = req.body;
-    const db = getDatabase();
+    const { db, run } = getDatabase();
 
     try {
-      const result: any = await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO category_types (name) VALUES (?)',
-          [name],
-          function(err) {
-            if (err) reject(err);
-            else resolve({ id: this.lastID });
-          }
-        );
-      });
-
-      res.status(201).json({ id: result.id, name });
+      const result: any = await run(db, 'INSERT INTO category_types (name) VALUES (?)', [name]);
+      res.status(201).json({ id: result.lastID, name });
     } catch (error) {
       console.error('Error creating category type:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -49,20 +33,10 @@ export const categoryTypesController = {
   async update(req: Request, res: Response) {
     const { id } = req.params;
     const { name } = req.body;
-    const db = getDatabase();
+    const { db, run } = getDatabase();
 
     try {
-      await new Promise((resolve, reject) => {
-        db.run(
-          'UPDATE category_types SET name = ? WHERE id = ?',
-          [name, id],
-          (err) => {
-            if (err) reject(err);
-            else resolve(true);
-          }
-        );
-      });
-
+      await run(db, 'UPDATE category_types SET name = ? WHERE id = ?', [name, id]);
       res.json({ id, name });
     } catch (error) {
       console.error('Error updating category type:', error);
@@ -73,20 +47,11 @@ export const categoryTypesController = {
   // Deletar tipo de categoria
   async delete(req: Request, res: Response) {
     const { id } = req.params;
-    const db = getDatabase();
+    const { db, get, run } = getDatabase();
 
     try {
       // Check if this type is being used by any category
-      const usageCount: any = await new Promise((resolve, reject) => {
-        db.get(
-          'SELECT COUNT(*) as count FROM categories WHERE category_type_id = ?',
-          [id],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      const usageCount: any = await get(db, 'SELECT COUNT(*) as count FROM categories WHERE category_type_id = ?', [id]);
 
       if (usageCount.count > 0) {
         return res.status(400).json({ 
@@ -94,13 +59,7 @@ export const categoryTypesController = {
         });
       }
 
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM category_types WHERE id = ?', [id], (err) => {
-          if (err) reject(err);
-          else resolve(true);
-        });
-      });
-
+      await run(db, 'DELETE FROM category_types WHERE id = ?', [id]);
       res.status(204).send();
     } catch (error) {
       console.error('Error deleting category type:', error);

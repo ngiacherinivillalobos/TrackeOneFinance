@@ -4,15 +4,9 @@ import { getDatabase } from '../database/connection';
 class CostCenterController {
   async index(req: Request, res: Response) {
     try {
-      const db = getDatabase();
-      db.all('SELECT * FROM cost_centers ORDER BY name', (err: Error | null, rows: any[]) => {
-        if (err) {
-          console.error('Database error:', err);
-          res.status(500).json({ error: 'Internal server error' });
-        } else {
-          res.json(rows);
-        }
-      });
+      const { db, all } = getDatabase();
+      const costCenters = await all(db, 'SELECT * FROM cost_centers ORDER BY name');
+      res.json(costCenters);
     } catch (error) {
       console.error('Error listing cost centers:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -22,18 +16,14 @@ class CostCenterController {
   async show(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const db = getDatabase();
+      const { db, get } = getDatabase();
       
-      db.get('SELECT * FROM cost_centers WHERE id = ?', [id], (err: Error | null, row: any) => {
-        if (err) {
-          console.error('Database error:', err);
-          res.status(500).json({ error: 'Internal server error' });
-        } else if (!row) {
-          res.status(404).json({ error: 'Cost center not found' });
-        } else {
-          res.json(row);
-        }
-      });
+      const costCenter = await get(db, 'SELECT * FROM cost_centers WHERE id = ?', [id]);
+      if (!costCenter) {
+        res.status(404).json({ error: 'Cost center not found' });
+      } else {
+        res.json(costCenter);
+      }
     } catch (error) {
       console.error('Error showing cost center:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -43,24 +33,14 @@ class CostCenterController {
   async create(req: Request, res: Response) {
     try {
       const { name, number } = req.body;
-      const db = getDatabase();
+      const { db, run } = getDatabase();
       
-      db.run(
-        'INSERT INTO cost_centers (name, number) VALUES (?, ?)',
-        [name, number || null],
-        function(err: Error | null) {
-          if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: 'Internal server error' });
-          } else {
-            res.status(201).json({ 
-              id: this.lastID, 
-              name, 
-              number: number || null
-            });
-          }
-        }
-      );
+      const result: any = await run(db, 'INSERT INTO cost_centers (name, number) VALUES (?, ?)', [name, number || null]);
+      res.status(201).json({ 
+        id: result.lastID, 
+        name, 
+        number: number || null
+      });
     } catch (error) {
       console.error('Error creating cost center:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -71,24 +51,14 @@ class CostCenterController {
     try {
       const { id } = req.params;
       const { name, number } = req.body;
-      const db = getDatabase();
+      const { db, run } = getDatabase();
       
-      db.run(
-        'UPDATE cost_centers SET name = ?, number = ? WHERE id = ?',
-        [name, number || null, id],
-        function(err: Error | null) {
-          if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: 'Internal server error' });
-          } else {
-            res.json({ 
-              id, 
-              name, 
-              number: number || null
-            });
-          }
-        }
-      );
+      await run(db, 'UPDATE cost_centers SET name = ?, number = ? WHERE id = ?', [name, number || null, id]);
+      res.json({ 
+        id, 
+        name, 
+        number: number || null
+      });
     } catch (error) {
       console.error('Error updating cost center:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -98,16 +68,10 @@ class CostCenterController {
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const db = getDatabase();
+      const { db, run } = getDatabase();
       
-      db.run('DELETE FROM cost_centers WHERE id = ?', [id], function(err: Error | null) {
-        if (err) {
-          console.error('Database error:', err);
-          res.status(500).json({ error: 'Internal server error' });
-        } else {
-          res.status(204).send();
-        }
-      });
+      await run(db, 'DELETE FROM cost_centers WHERE id = ?', [id]);
+      res.status(204).send();
     } catch (error) {
       console.error('Error deleting cost center:', error);
       res.status(500).json({ error: 'Internal server error' });

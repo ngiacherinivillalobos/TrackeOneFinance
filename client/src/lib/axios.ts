@@ -1,7 +1,19 @@
 import axios from 'axios';
 
+// Detectar a URL base automaticamente com base no ambiente
+const getBaseURL = () => {
+  // Em produção, usar a URL do backend no Render
+  if (import.meta.env.MODE === 'production') {
+    return 'https://trackeone-finance-api.onrender.com/api';
+  }
+  // Em desenvolvimento, usar localhost
+  return 'http://localhost:3001/api';
+};
+
+const baseURL = getBaseURL();
+
 export const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -74,7 +86,7 @@ api.interceptors.response.use(
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await axios.post(`${error.config?.baseURL || 'http://localhost:3001/api'}/auth/refresh`, {}, {
+          const response = await axios.post(`${error.config?.baseURL || baseURL}/auth/refresh`, {}, {
             headers: {
               'Authorization': `Bearer ${token}`
             }

@@ -65,15 +65,8 @@ const transactionController = {
         ORDER BY t.transaction_date ASC, t.created_at DESC
       `;
 
-      const transactions = await new Promise<any[]>((resolve, reject) => {
-        db.all(query, [], (err: any, rows: any[]) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows || []);
-          }
-        });
-      });
+      const dbWrapper = getDatabase();
+      const transactions = await dbWrapper.all(dbWrapper.db, query, []);
 
       res.json(transactions);
     } catch (error) {
@@ -84,7 +77,7 @@ const transactionController = {
 
   async getById(req: Request, res: Response): Promise<void> {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       const { id } = req.params;
 
       const query = `
@@ -99,18 +92,10 @@ const transactionController = {
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
         LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
         LEFT JOIN contacts cont ON t.contact_id = cont.id
-        WHERE t.id = ?
+        WHERE t.id = $1
       `;
 
-      const transaction = await new Promise<any>((resolve, reject) => {
-        db.get(query, [id], (err: any, row: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
+      const transaction = await dbWrapper.get(dbWrapper.db, query, [id]);
 
       if (!transaction) {
         res.status(404).json({ error: 'Transaction not found' });
@@ -126,7 +111,7 @@ const transactionController = {
 
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       const {
         description,
         amount,
@@ -163,7 +148,8 @@ const transactionController = {
           description, amount, type, category_id, subcategory_id, 
           payment_status_id, contact_id, transaction_date,
           is_recurring, recurrence_type, recurrence_count, recurrence_end_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id
       `;
 
       const values = [
@@ -181,15 +167,7 @@ const transactionController = {
         recurrence_end_date || null
       ];
 
-      const result = await new Promise<any>((resolve, reject) => {
-        db.run(query, values, function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ id: this.lastID });
-          }
-        });
-      });
+      const result = await dbWrapper.run(dbWrapper.db, query, values);
 
       // Fetch the created transaction with all related data
       const selectQuery = `
@@ -204,18 +182,10 @@ const transactionController = {
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
         LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
         LEFT JOIN contacts cont ON t.contact_id = cont.id
-        WHERE t.id = ?
+        WHERE t.id = $1
       `;
 
-      const createdTransaction = await new Promise<any>((resolve, reject) => {
-        db.get(selectQuery, [result.id], (err: any, row: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
+      const createdTransaction = await dbWrapper.get(dbWrapper.db, selectQuery, [result.lastID]);
 
       res.status(201).json(createdTransaction);
     } catch (error) {
@@ -226,7 +196,7 @@ const transactionController = {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       const { id } = req.params;
       const {
         description,
@@ -261,10 +231,10 @@ const transactionController = {
 
       const query = `
         UPDATE transactions SET
-          description = ?, amount = ?, type = ?, category_id = ?,
-          subcategory_id = ?, payment_status_id = ?, contact_id = ?,
-          transaction_date = ?
-        WHERE id = ?
+          description = $1, amount = $2, type = $3, category_id = $4,
+          subcategory_id = $5, payment_status_id = $6, contact_id = $7,
+          transaction_date = $8
+        WHERE id = $9
       `;
 
       const values = [
@@ -279,15 +249,7 @@ const transactionController = {
         id
       ];
 
-      await new Promise<void>((resolve, reject) => {
-        db.run(query, values, function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      await dbWrapper.run(dbWrapper.db, query, values);
 
       // Fetch the updated transaction with all related data
       const selectQuery = `
@@ -302,18 +264,10 @@ const transactionController = {
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
         LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
         LEFT JOIN contacts cont ON t.contact_id = cont.id
-        WHERE t.id = ?
+        WHERE t.id = $1
       `;
 
-      const updatedTransaction = await new Promise<any>((resolve, reject) => {
-        db.get(selectQuery, [id], (err: any, row: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
+      const updatedTransaction = await dbWrapper.get(dbWrapper.db, selectQuery, [id]);
 
       if (!updatedTransaction) {
         res.status(404).json({ error: 'Transaction not found' });
@@ -329,20 +283,12 @@ const transactionController = {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       const { id } = req.params;
 
-      const query = 'DELETE FROM transactions WHERE id = ?';
+      const query = 'DELETE FROM transactions WHERE id = $1';
 
-      await new Promise<void>((resolve, reject) => {
-        db.run(query, [id], function(this: any, err: any) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      await dbWrapper.run(dbWrapper.db, query, [id]);
 
       res.status(204).send();
     } catch (error) {

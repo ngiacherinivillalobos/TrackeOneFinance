@@ -23,7 +23,7 @@ export const CashFlowController = {
   // Listar todos os registros de cash flow
   getAll: async (req: Request, res: Response) => {
     try {
-      const db = getDatabase();
+      const { db, all } = getDatabase();
       const { month, year } = req.query;
       const userCostCenterId = (req as any).user?.cost_center_id;
 
@@ -79,13 +79,8 @@ export const CashFlowController = {
 
       query += ` ORDER BY cf.date DESC, cf.created_at DESC`;
 
-      db.all(query, params, (err, rows) => {
-        if (err) {
-          console.error('Error fetching cash flow records:', err);
-          return res.status(500).json({ error: 'Failed to fetch cash flow records' });
-        }
-        res.json(rows);
-      });
+      const rows = await all(db, query, params);
+      res.json(rows);
     } catch (error) {
       console.error('Error in getAll cash flow:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -95,7 +90,7 @@ export const CashFlowController = {
   // Obter um registro específico
   getById: async (req: Request, res: Response) => {
     try {
-      const db = getDatabase();
+      const { db, get } = getDatabase();
       const { id } = req.params;
 
       const query = `
@@ -121,16 +116,11 @@ export const CashFlowController = {
         WHERE cf.id = ?
       `;
 
-      db.get(query, [id], (err, row) => {
-        if (err) {
-          console.error('Error fetching cash flow record:', err);
-          return res.status(500).json({ error: 'Failed to fetch cash flow record' });
-        }
-        if (!row) {
-          return res.status(404).json({ error: 'Cash flow record not found' });
-        }
-        res.json(row);
-      });
+      const row = await get(db, query, [id]);
+      if (!row) {
+        return res.status(404).json({ error: 'Cash flow record not found' });
+      }
+      res.json(row);
     } catch (error) {
       console.error('Error in getById cash flow:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -140,7 +130,7 @@ export const CashFlowController = {
   // Criar novo registro
   create: async (req: Request, res: Response) => {
     try {
-      const db = getDatabase();
+      const { db, run, get } = getDatabase();
       const { date, description, amount, record_type, category_id, subcategory_id, cost_center_id }: CashFlow = req.body;
       const userCostCenterId = (req as any).user?.cost_center_id;
 
@@ -179,170 +169,150 @@ export const CashFlowController = {
         effectiveCostCenterId
       ];
 
-      db.run(query, params, function(err) {
-        if (err) {
-          console.error('Error creating cash flow record:', err);
-          return res.status(500).json({ error: 'Failed to create cash flow record' });
-        }
-        
-        // Retornar o registro criado
-        const selectQuery = `
-          SELECT
-            cf.id,
-            cf.date,
-            cf.description,
-            cf.amount,
-            cf.record_type,
-            cf.category_id,
-            cf.subcategory_id,
-            cf.cost_center_id,
-            c.name as category_name,
-            sc.name as subcategory_name,
-            cc.name as cost_center_name,
-            cc.number as cost_center_number,
-            cf.created_at,
-            cf.updated_at
-          FROM cash_flow cf
-          LEFT JOIN categories c ON cf.category_id = c.id
-          LEFT JOIN subcategories sc ON cf.subcategory_id = sc.id
-          LEFT JOIN cost_centers cc ON cf.cost_center_id = cc.id
-          WHERE cf.id = ?
-        `;
-
-        db.get(selectQuery, [this.lastID], (err, row) => {
-          if (err) {
-            console.error('Error fetching created record:', err);
-            return res.status(500).json({ error: 'Record created but failed to fetch' });
-          }
-          res.status(201).json(row);
-        });
-      });
+      const result: any = await run(db, query, params);
+      
+      // Retornar o registro criado
+      const selectQuery = `
+        SELECT
+          cf.id,
+          cf.date,
+          cf.description,
+          cf.amount,
+          cf.record_type,
+          cf.category_id,
+          cf.subcategory_id,
+          cf.cost_center_id,
+          c.name as category_name,
+          sc.name as subcategory_name,
+          cc.name as cost_center_name,
+          cc.number as cost_center_number,
+          cf.created_at,
+          cf.updated_at
+        FROM cash_flow cf
+        LEFT JOIN categories c ON cf.category_id = c.id
+        LEFT JOIN subcategories sc ON cf.subcategory_id = sc.id
+        LEFT JOIN cost_centers cc ON cf.cost_center_id = cc.id
+        WHERE cf.id = ?
+      `;
+      
+      const createdRecord = await get(db, selectQuery, [result.lastID]);
+      res.status(201).json(createdRecord);
     } catch (error) {
-      console.error('Error in create cash flow:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('Error creating cash flow record:', error);
+      res.status(500).json({ error: 'Failed to create cash flow record' });
     }
   },
 
   // Atualizar registro
   update: async (req: Request, res: Response) => {
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       const { id } = req.params;
-      const { date, description, amount, record_type, category_id, subcategory_id, cost_center_id }: CashFlow = req.body;
-      const userCostCenterId = (req as any).user?.cost_center_id;
+      const { date, description, amount, record_type, category_id, subcategory_id, cost_center_id }: Partial<CashFlow> = req.body;
 
       // Verificar se o registro existe
-      db.get('SELECT id FROM cash_flow WHERE id = ?', [id], (err, row) => {
-        if (err) {
-          console.error('Error checking cash flow record:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        if (!row) {
-          return res.status(404).json({ error: 'Cash flow record not found' });
-        }
+      const existingRecord = await get(db, 'SELECT id FROM cash_flow WHERE id = ?', [id]);
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Cash flow record not found' });
+      }
 
-        // Validações
-        if (record_type && !['Despesa', 'Receita'].includes(record_type)) {
+      // Construir query de atualização dinamicamente
+      const fields: string[] = [];
+      const params: any[] = [];
+
+      if (date !== undefined) {
+        fields.push('date = ?');
+        params.push(date);
+      }
+      if (description !== undefined) {
+        fields.push('description = ?');
+        params.push(description);
+      }
+      if (amount !== undefined) {
+        fields.push('amount = ?');
+        params.push(amount);
+      }
+      if (record_type !== undefined) {
+        if (!['Despesa', 'Receita'].includes(record_type)) {
           return res.status(400).json({ error: 'record_type must be "Despesa" or "Receita"' });
         }
+        fields.push('record_type = ?');
+        params.push(record_type);
+      }
+      if (category_id !== undefined) {
+        fields.push('category_id = ?');
+        params.push(category_id || null);
+      }
+      if (subcategory_id !== undefined) {
+        fields.push('subcategory_id = ?');
+        params.push(subcategory_id || null);
+      }
+      if (cost_center_id !== undefined) {
+        fields.push('cost_center_id = ?');
+        params.push(cost_center_id || null);
+      }
 
-        // Garantir que sempre haja um centro de custo (do usuário se não for especificado)
-        let effectiveCostCenterId = userCostCenterId;
-        if (cost_center_id !== undefined && cost_center_id !== null && String(cost_center_id) !== '') {
-          effectiveCostCenterId = Number(cost_center_id);
-        }
+      // Sempre atualizar o campo updated_at
+      fields.push('updated_at = CURRENT_TIMESTAMP');
 
-        const query = `
-          UPDATE cash_flow
-          SET date = ?, description = ?, amount = ?, record_type = ?,
-              category_id = ?, subcategory_id = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `;
+      if (fields.length === 1) { // Apenas updated_at
+        return res.status(400).json({ error: 'No fields to update' });
+      }
 
-        const params = [
-          date,
-          description,
-          amount,
-          record_type,
-          category_id || null,
-          subcategory_id || null,
-          effectiveCostCenterId || null,
-          id
-        ];
+      const query = `UPDATE cash_flow SET ${fields.join(', ')} WHERE id = ?`;
+      params.push(id);
 
-        db.run(query, params, function(err) {
-          if (err) {
-            console.error('Error updating cash flow record:', err);
-            return res.status(500).json({ error: 'Failed to update cash flow record' });
-          }
+      await run(db, query, params);
 
-          // Retornar o registro atualizado
-          const selectQuery = `
-            SELECT
-              cf.id,
-              cf.date,
-              cf.description,
-              cf.amount,
-              cf.record_type,
-              cf.category_id,
-              cf.subcategory_id,
-              cf.cost_center_id,
-              c.name as category_name,
-              sc.name as subcategory_name,
-              cc.name as cost_center_name,
-              cc.number as cost_center_number,
-              cf.created_at,
-              cf.updated_at
-            FROM cash_flow cf
-            LEFT JOIN categories c ON cf.category_id = c.id
-            LEFT JOIN subcategories sc ON cf.subcategory_id = sc.id
-            LEFT JOIN cost_centers cc ON cf.cost_center_id = cc.id
-            WHERE cf.id = ?
-          `;
+      // Retornar o registro atualizado
+      const selectQuery = `
+        SELECT
+          cf.id,
+          cf.date,
+          cf.description,
+          cf.amount,
+          cf.record_type,
+          cf.category_id,
+          cf.subcategory_id,
+          cf.cost_center_id,
+          c.name as category_name,
+          sc.name as subcategory_name,
+          cc.name as cost_center_name,
+          cc.number as cost_center_number,
+          cf.created_at,
+          cf.updated_at
+        FROM cash_flow cf
+        LEFT JOIN categories c ON cf.category_id = c.id
+        LEFT JOIN subcategories sc ON cf.subcategory_id = sc.id
+        LEFT JOIN cost_centers cc ON cf.cost_center_id = cc.id
+        WHERE cf.id = ?
+      `;
 
-          db.get(selectQuery, [id], (err, row) => {
-            if (err) {
-              console.error('Error fetching updated record:', err);
-              return res.status(500).json({ error: 'Record updated but failed to fetch' });
-            }
-            res.json(row);
-          });
-        });
-      });
+      const updatedRecord = await get(db, selectQuery, [id]);
+      res.json(updatedRecord);
     } catch (error) {
-      console.error('Error in update cash flow:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('Error updating cash flow record:', error);
+      res.status(500).json({ error: 'Failed to update cash flow record' });
     }
   },
 
-  // Excluir registro
+  // Deletar registro
   delete: async (req: Request, res: Response) => {
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       const { id } = req.params;
 
       // Verificar se o registro existe
-      db.get('SELECT id FROM cash_flow WHERE id = ?', [id], (err, row) => {
-        if (err) {
-          console.error('Error checking cash flow record:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-        if (!row) {
-          return res.status(404).json({ error: 'Cash flow record not found' });
-        }
+      const existingRecord = await get(db, 'SELECT id FROM cash_flow WHERE id = ?', [id]);
+      if (!existingRecord) {
+        return res.status(404).json({ error: 'Cash flow record not found' });
+      }
 
-        // Excluir o registro
-        db.run('DELETE FROM cash_flow WHERE id = ?', [id], function(err) {
-          if (err) {
-            console.error('Error deleting cash flow record:', err);
-            return res.status(500).json({ error: 'Failed to delete cash flow record' });
-          }
-          res.json({ message: 'Cash flow record deleted successfully', id: parseInt(id) });
-        });
-      });
+      await run(db, 'DELETE FROM cash_flow WHERE id = ?', [id]);
+      res.status(204).send();
     } catch (error) {
-      console.error('Error in delete cash flow:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('Error deleting cash flow record:', error);
+      res.status(500).json({ error: 'Failed to delete cash flow record' });
     }
   }
 };

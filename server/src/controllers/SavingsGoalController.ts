@@ -10,13 +10,8 @@ export const savingsGoalController = {
         return res.status(401).json({ error: 'Usuário não autenticado.' });
       }
       
-      const db = getDatabase();
-      const goal = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM savings_goals WHERE user_id = ?', [userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const { db, get } = getDatabase();
+      const goal = await get(db, 'SELECT * FROM savings_goals WHERE user_id = ?', [userId]);
       
       if (!goal) {
         return res.status(404).json({ message: 'Meta de economia não encontrada.' });
@@ -52,53 +47,38 @@ export const savingsGoalController = {
       // Sempre usar o centro de custo do usuário logado
       const effectiveCostCenterId = userCostCenterId;
       
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       
       // Verificar se já existe uma meta para este usuário
-      const existingGoal = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM savings_goals WHERE user_id = ?', [userId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const existingGoal = await get(db, 'SELECT * FROM savings_goals WHERE user_id = ?', [userId]);
       
       let result;
       if (existingGoal) {
         // Atualizar meta existente
-        result = await new Promise<any>((resolve, reject) => {
-          const query = effectiveCostCenterId !== undefined
-            ? 'UPDATE savings_goals SET target_amount = ?, target_date = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
-            : 'UPDATE savings_goals SET target_amount = ?, target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
-          const params = effectiveCostCenterId !== undefined
-            ? [target_amount, target_date, effectiveCostCenterId, userId]
-            : [target_amount, target_date, userId];
+        const query = effectiveCostCenterId !== undefined
+          ? 'UPDATE savings_goals SET target_amount = ?, target_date = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
+          : 'UPDATE savings_goals SET target_amount = ?, target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
+        const params = effectiveCostCenterId !== undefined
+          ? [target_amount, target_date, effectiveCostCenterId, userId]
+          : [target_amount, target_date, userId];
             
-          db.run(query, params, function(err) {
-            if (err) reject(err);
-            else resolve({ id: this.lastID });
-          });
-        });
+        await run(db, query, params);
       } else {
         // Criar nova meta
-        result = await new Promise<any>((resolve, reject) => {
-          const query = effectiveCostCenterId !== undefined
-            ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
-            : 'INSERT INTO savings_goals (user_id, target_amount, target_date) VALUES (?, ?, ?)';
-          const params = effectiveCostCenterId !== undefined
-            ? [userId, target_amount, target_date, effectiveCostCenterId]
-            : [userId, target_amount, target_date];
+        const query = effectiveCostCenterId !== undefined
+          ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
+          : 'INSERT INTO savings_goals (user_id, target_amount, target_date) VALUES (?, ?, ?)';
+        const params = effectiveCostCenterId !== undefined
+          ? [userId, target_amount, target_date, effectiveCostCenterId]
+          : [userId, target_amount, target_date];
             
-          db.run(query, params, function(err) {
-            if (err) reject(err);
-            else resolve({ id: this.lastID });
-          });
-        });
+        result = await run(db, query, params);
       }
       
       res.json({ 
         message: 'Meta de economia salva com sucesso.',
         goal: { 
-          id: result.id, 
+          id: result?.lastID, 
           user_id: userId, 
           target_amount, 
           target_date, 

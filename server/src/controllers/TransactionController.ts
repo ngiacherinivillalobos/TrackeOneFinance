@@ -23,25 +23,16 @@ const createSingleTransaction = async (db: any, params: {
       description, amount, type, category_id, subcategory_id,
       payment_status_id, bank_account_id, card_id, contact_id, 
       transaction_date, cost_center_id, is_installment, installment_number, total_installments
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  return new Promise<any>((resolve, reject) => {
-    db.run(query, [
-      params.description, params.amount, params.dbType, params.category_id, params.subcategory_id,
-      params.currentPaymentStatusId, params.bank_account_id, params.card_id, params.contact_id, 
-      params.formattedDate, params.cost_center_id, params.is_installment || false, 
-      params.installment_number || null, params.total_installments || null
-    ], function(this: any, err: any) {
-      if (err) {
-        console.error('Database error:', err);
-        reject(err);
-      } else {
-        console.log('Transaction created with ID:', this.lastID);
-        resolve({ lastID: this.lastID });
-      }
-    });
-  });
+  const { db: database, run } = getDatabase();
+  return run(database, query, [
+    params.description, params.amount, params.dbType, params.category_id, params.subcategory_id,
+    params.currentPaymentStatusId, params.bank_account_id, params.card_id, params.contact_id, 
+    params.formattedDate, params.cost_center_id, params.is_installment || false, 
+    params.installment_number || null, params.total_installments || null
+  ]);
 };
 
 const list = async (req: Request, res: Response) => {
@@ -49,7 +40,7 @@ const list = async (req: Request, res: Response) => {
   console.log('Query params:', req.query);
   
   try {
-    const db = getDatabase();
+    const { db, all } = getDatabase();
     const userId = (req as any).user?.id;
     const userCostCenterId = (req as any).user?.cost_center_id;
     
@@ -161,15 +152,7 @@ const list = async (req: Request, res: Response) => {
     console.log('Executing query:', query);
     console.log('With params:', queryParams);
 
-    const transactions = await new Promise<any[]>((resolve, reject) => {
-      db.all(query, queryParams, (err: any, rows: any[]) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows || []);
-        }
-      });
-    });
+    const transactions = await all(db, query, queryParams);
 
     console.log('Found transactions:', transactions.length);
     res.json(transactions);
@@ -184,7 +167,7 @@ const getById = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, get } = getDatabase();
     const transactionId = req.params.id;
 
     if (!transactionId) {
@@ -205,31 +188,26 @@ const getById = async (req: Request, res: Response) => {
         ps.name as payment_status_name,
         cont.name as contact_name,
         cc.name as cost_center_name,
-        cc.number as cost_center_number
+        cc.number as cost_center_number,
+        card.name as card_name,
+        ba.name as bank_account_name
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN subcategories s ON t.subcategory_id = s.id
       LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
       LEFT JOIN contacts cont ON t.contact_id = cont.id
       LEFT JOIN cost_centers cc ON t.cost_center_id = cc.id
+      LEFT JOIN cards card ON t.card_id = card.id
+      LEFT JOIN bank_accounts ba ON t.bank_account_id = ba.id
       WHERE t.id = ?
     `;
 
-    const transaction = await new Promise<any>((resolve, reject) => {
-      db.get(query, [transactionId], (err: any, row: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const transaction = await get(db, query, [transactionId]);
 
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    console.log('Found transaction:', transaction);
     res.json(transaction);
   } catch (error) {
     console.error('Error fetching transaction:', error);
@@ -242,7 +220,8 @@ const create = async (req: Request, res: Response) => {
   console.log('Request body:', req.body);
   
   try {
-    const db = getDatabase();
+    const { db, run } = getDatabase();
+    
     const {
       description,
       amount,
@@ -261,7 +240,6 @@ const create = async (req: Request, res: Response) => {
       recurrence_count,
       recurrence_end_date,
       recurrence_weekday,
-      recurrence_days, // Para recorrência personalizada (a cada X dias)
       is_paid,
       is_installment,
       total_installments
@@ -295,31 +273,26 @@ const create = async (req: Request, res: Response) => {
     // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
-    // Se is_paid for verdadeiro, define como "Pago" (id: 2)
     if (is_paid === true) {
-      finalPaymentStatusId = 2;
+      finalPaymentStatusId = 2; // Pago
     }
-    // Se payment_status_id for 2, considera como pago
     else if (payment_status_id === 2) {
-      finalPaymentStatusId = 2;
+      finalPaymentStatusId = 2; // Mantém como Pago
     }
-    // Se não for informado payment_status_id e não está marcado como pago
     else if (!payment_status_id && !is_paid) {
-      const today = new Date().toISOString().split('T')[0]; // Data de hoje no formato YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       
-      // Se a data da transação é anterior a hoje e não está marcada como pago, define como "Vencido" (id: 4)
       if (transaction_date < today) {
-        finalPaymentStatusId = 4; // Vencido
+        finalPaymentStatusId = 374; // Vencido
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
-    // Se não for informado, padrão é "Em aberto" (id: 1)
     else if (!payment_status_id) {
-      finalPaymentStatusId = 1;
+      finalPaymentStatusId = 1; // Em aberto
     }
 
-    console.log('Calculated payment status:', {
+    console.log('Creating transaction with payment status:', {
       original_payment_status_id: payment_status_id,
       is_paid,
       transaction_date,
@@ -327,300 +300,92 @@ const create = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
-    console.log('Parameters for insertion:', {
-      description, amount, dbType, category_id, subcategory_id,
-      finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-      transaction_date, cost_center_id
-    });
-
-    // Validate mandatory fields: category, contact, and cost center
-    if (!category_id && category_id !== 0) {
-      return res.status(400).json({ error: 'Categoria é obrigatória' });
-    }
-    if (!contact_id && contact_id !== 0) {
-      return res.status(400).json({ error: 'Contato é obrigatório' });
-    }
-    if (!cost_center_id && cost_center_id !== 0) {
-      return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
-    }
-
-    console.log('Recurrence parameters:', {
-      is_recurring, 
-      recurrence_type, 
-      recurrence_count,
-      recurrence_end_date,
-      recurrence_weekday,
-      recurrence_count_type: typeof recurrence_count,
-      condition_check_count: is_recurring && (recurrence_type === 'mensal' || recurrence_type === 'semanal') && recurrence_count > 1,
-      condition_check_fixed: is_recurring && recurrence_type === 'fixo' && recurrence_end_date
-    });
-
-    console.log('Installment parameters:', {
-      is_installment, 
-      total_installments,
-      condition_check: is_installment && total_installments > 1
-    });
-
-    // Se for transação parcelada
-    if (is_installment && total_installments > 1) {
-      console.log('=== INSTALLMENT DEBUG ===');
-      console.log('is_installment:', is_installment, typeof is_installment);
-      console.log('total_installments:', total_installments, typeof total_installments);
-      console.log('Creating installment transactions:', { total_installments });
+    // Lógica de recorrência
+    if (is_recurring) {
+      console.log('Creating recurring transactions');
+      let createdTransactions: any[] = [];
       
-      const createdTransactions = [];
+      // Determinar a data de início e fim
+      const startDate = new Date(transaction_date);
+      let endDate: Date;
       
-      for (let i = 1; i <= total_installments; i++) {
-        // Calcular a data de cada parcela (mensalmente)
-        const installmentDate = new Date(transaction_date);
-        installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
-        
-        // Corrigir overflow de dias no mês
-        const originalDay = new Date(transaction_date).getDate();
-        const lastDayOfMonth = new Date(installmentDate.getFullYear(), installmentDate.getMonth() + 1, 0).getDate();
-        if (originalDay > lastDayOfMonth) {
-          installmentDate.setDate(lastDayOfMonth);
-        } else {
-          installmentDate.setDate(originalDay);
-        }
-        
-        const formattedDate = installmentDate.toISOString().split('T')[0];
-        
-        // Calcular payment_status_id para cada parcela baseado na sua data
-        let currentPaymentStatusId = finalPaymentStatusId;
-        if (!is_paid && payment_status_id !== 2) {
-          const today = new Date().toISOString().split('T')[0];
-          if (formattedDate < today) {
-            currentPaymentStatusId = 4; // Vencido
-          } else {
-            currentPaymentStatusId = 1; // Em aberto
-          }
-        }
-
-        const result = await createSingleTransaction(db, {
-          description, amount, dbType, category_id, subcategory_id,
-          currentPaymentStatusId, bank_account_id, card_id, contact_id, 
-          formattedDate, cost_center_id, is_installment: true,
-          installment_number: i, total_installments
-        });
-        
-        createdTransactions.push({
-          id: result.lastID,
-          description,
-          amount,
-          type: dbType,
-          category_id,
-          subcategory_id,
-          payment_status_id: currentPaymentStatusId,
-          bank_account_id,
-          card_id,
-          contact_id,
-          transaction_date: formattedDate,
-          cost_center_id,
-          is_installment: true,
-          installment_number: i,
-          total_installments
-        });
-      }
-      
-      if (createdTransactions.length > 0) {
-        return res.status(201).json({ 
-          message: `${createdTransactions.length} installment transactions created successfully`,
-          transactions: createdTransactions,
-          count: createdTransactions.length
-        });
-      }
-    }
-
-    // Se for transação recorrente
-    if (is_recurring && recurrence_type) {
-      console.log('=== RECURRENCE DEBUG ===');
-      console.log('is_recurring:', is_recurring, typeof is_recurring);
-      console.log('recurrence_type:', recurrence_type, typeof recurrence_type);
-      console.log('recurrence_count:', recurrence_count, typeof recurrence_count);
-      console.log('Creating recurring transactions:', { recurrence_type, recurrence_count, recurrence_end_date });
-      
-      const createdTransactions = [];
-      let currentDate = new Date(transaction_date);
-      let count = 0;
-      const maxTransactions = 100; // limitador de segurança
-      
-      // Tipo "fixo" - criar até a data de finalização
       if (recurrence_type === 'fixo' && recurrence_end_date) {
-        const endDate = new Date(recurrence_end_date);
-        
-        while (currentDate <= endDate && count < maxTransactions) {
-          const formattedDate = currentDate.toISOString().split('T')[0];
-          
-          // Calcular payment_status_id para cada transação baseado na sua data
-          let currentPaymentStatusId = finalPaymentStatusId;
-          if (!is_paid && payment_status_id !== 2) {
-            const today = new Date().toISOString().split('T')[0];
-            if (formattedDate < today) {
-              currentPaymentStatusId = 4; // Vencido
-            } else {
-              currentPaymentStatusId = 1; // Em aberto
-            }
-          }
-
-          const result = await createSingleTransaction(db, {
-            description, amount, dbType, category_id, subcategory_id,
-            currentPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id
-          });
-          
-          createdTransactions.push({
-            id: result.lastID,
-            description,
-            amount,
-            type: dbType,
-            category_id,
-            subcategory_id,
-            payment_status_id: currentPaymentStatusId,
-            bank_account_id,
-            card_id,
-            contact_id,
-            transaction_date: formattedDate,
-            cost_center_id
-          });
-
-          // Avançar para o próximo mês com correção de overflow
-          const originalDay = currentDate.getDate();
-          const nextMonth = currentDate.getMonth() + 1;
-          const nextYear = currentDate.getFullYear();
-          
-          // Criar data do próximo mês
-          const nextDate = new Date(nextYear, nextMonth, 1);
-          const maxDayInNextMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
-          
-          if (originalDay > maxDayInNextMonth) {
-            // Se o dia original não existe no próximo mês, usar o último dia
-            currentDate = new Date(nextYear, nextMonth, maxDayInNextMonth);
-          } else {
-            // Se o dia existe, usar o dia original
-            currentDate = new Date(nextYear, nextMonth, originalDay);
-          }
-          count++;
+        endDate = new Date(recurrence_end_date);
+      } else if (recurrence_type === 'personalizado' && recurrence_count) {
+        endDate = new Date(startDate);
+        if (recurrence_weekday) {
+          // Para recorrência semanal
+          endDate.setDate(startDate.getDate() + (recurrence_count * 7));
+        } else {
+          // Para recorrência mensal
+          endDate.setMonth(startDate.getMonth() + recurrence_count);
         }
+      } else {
+        // Default para 12 meses se não especificado
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 12);
       }
-      // Tipos com quantidade definida (mensal, semanal e personalizado)
-      else if ((recurrence_type === 'mensal' || recurrence_type === 'semanal' || recurrence_type === 'personalizado') && recurrence_count > 1) {
-        // Calcular a data base para começar as recorrências usando construção explícita para evitar problemas de timezone
-        const dateParts = transaction_date.split('-').map((part: string) => parseInt(part));
-        let startDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]); // month is 0-indexed
-        
-        // Para semanal, armazenar o dia da semana especificado para as próximas recorrências
-        let targetWeekday = null;
-        if (recurrence_type === 'semanal' && recurrence_weekday) {
-          targetWeekday = parseInt(recurrence_weekday);
-          
-          console.log('Semanal debug:', {
-            originalDate: transaction_date,
-            targetWeekday,
-            currentDay: startDate.getDay(),
-            startDateBefore: startDate.toISOString().split('T')[0]
-          });
-        }
-        
-        for (let i = 0; i < recurrence_count; i++) {
-          // Calcular a data para cada transação
-          currentDate = new Date(startDate);
-          
-          if (recurrence_type === 'mensal') {
-            // Para mensal, avançar i meses
-            const originalDay = startDate.getUTCDate();
-            currentDate = new Date(startDate);
-            
-            // Calcular o mês e ano alvo
-            const targetMonth = startDate.getUTCMonth() + i;
-            const targetYear = startDate.getUTCFullYear() + Math.floor(targetMonth / 12);
-            const adjustedMonth = targetMonth % 12;
-            
-            // Tentar criar a data com o dia original
-            currentDate = new Date(Date.UTC(targetYear, adjustedMonth, originalDay));
-            
-            // Se o dia mudou (overflow), usar o último dia do mês
-            if (currentDate.getUTCDate() !== originalDay) {
-              currentDate = new Date(Date.UTC(targetYear, adjustedMonth + 1, 0));
-            }
-          } else if (recurrence_type === 'semanal') {
-            if (i === 0) {
-              // Primeira transação: usar a data original do registro
-              currentDate = new Date(startDate);
-            } else {
-              // Próximas transações: usar o dia da semana especificado
-              if (targetWeekday !== null) {
-                // Para a segunda transação e subsequentes, 
-                // calcular a próxima ocorrência do dia da semana especificado
-                if (i === 1) {
-                  // Segunda transação: encontrar a próxima ocorrência do dia alvo após a data inicial
-                  const currentWeekDay = startDate.getDay();
-                  let daysToAdd = (targetWeekday - currentWeekDay + 7) % 7;
-                  
-                  // Se o dia alvo é o mesmo dia da semana da data inicial, avançar uma semana
-                  if (daysToAdd === 0) {
-                    daysToAdd = 7;
-                  }
-                  
-                  currentDate = new Date(startDate);
-                  currentDate.setDate(startDate.getDate() + daysToAdd);
-                } else {
-                  // Terceira transação em diante: avançar semanas a partir da segunda transação
-                  const secondTransactionWeekDay = startDate.getDay();
-                  let daysToSecondTransaction = (targetWeekday - secondTransactionWeekDay + 7) % 7;
-                  if (daysToSecondTransaction === 0) {
-                    daysToSecondTransaction = 7;
-                  }
-                  
-                  currentDate = new Date(startDate);
-                  currentDate.setDate(startDate.getDate() + daysToSecondTransaction + (7 * (i - 1)));
-                }
-                
-                console.log(`Semana ${i}: result=${currentDate.toISOString().split('T')[0]}`);
-              } else {
-                // Se não tem dia da semana especificado, usar a lógica antiga
-                currentDate.setDate(currentDate.getDate() + (7 * i));
-              }
-            }
-          } else if (recurrence_type === 'personalizado' && recurrence_days) {
-            // Para personalizado, adicionar recurrence_days dias * i
-            const daysToAdd = parseInt(recurrence_days) * i;
-            currentDate.setDate(currentDate.getDate() + daysToAdd);
-          }
-          
-          const formattedDate = currentDate.toISOString().split('T')[0];
-          
-          // Calcular payment_status_id para cada transação baseado na sua data
-          let currentPaymentStatusId = finalPaymentStatusId;
-          if (!is_paid && payment_status_id !== 2) {
-            const today = new Date().toISOString().split('T')[0];
-            if (formattedDate < today) {
-              currentPaymentStatusId = 4; // Vencido
-            } else {
-              currentPaymentStatusId = 1; // Em aberto
-            }
-          }
 
-          const result = await createSingleTransaction(db, {
+      console.log('Recurrence dates:', { startDate, endDate });
+
+      // Criar transações recorrentes
+      let currentDate = new Date(startDate);
+      let installmentNumber = 1;
+      const totalInstallments = recurrence_type === 'personalizado' && recurrence_count ? recurrence_count : 
+                               Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)); // Aproximadamente meses
+
+      while (currentDate <= endDate) {
+        console.log('Creating transaction for date:', currentDate.toISOString().split('T')[0]);
+        
+        const formattedDate = currentDate.toISOString().split('T')[0];
+        
+        try {
+          const result: any = await run(db, `
+            INSERT INTO transactions (
+              description, amount, type, category_id, subcategory_id,
+              payment_status_id, bank_account_id, card_id, contact_id, 
+              transaction_date, cost_center_id, is_recurring, recurrence_type,
+              is_installment, installment_number, total_installments
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
             description, amount, dbType, category_id, subcategory_id,
-            currentPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id
-          });
-          
+            finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+            formattedDate, cost_center_id, true, recurrence_type,
+            is_installment || false, installmentNumber, totalInstallments
+          ]);
+
           createdTransactions.push({
             id: result.lastID,
-            description,
-            amount,
-            type: dbType,
-            category_id,
-            subcategory_id,
-            payment_status_id: currentPaymentStatusId,
-            bank_account_id,
-            card_id,
-            contact_id,
             transaction_date: formattedDate,
-            cost_center_id
+            installment_number: installmentNumber,
+            total_installments: totalInstallments
           });
+
+          installmentNumber++;
+
+          // Avançar para a próxima data
+          if (recurrence_type === 'mensal' || recurrence_type === 'fixo') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          } else if (recurrence_type === 'personalizado') {
+            if (recurrence_weekday) {
+              // Avançar uma semana
+              currentDate.setDate(currentDate.getDate() + 7);
+            } else {
+              // Avançar um mês
+              currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+          } else {
+            // Default: avançar um mês
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          }
+        } catch (err) {
+          console.error('Error creating recurring transaction:', err);
+          if (createdTransactions.length === 0) {
+            throw err; // Se falhar na primeira, retornar erro
+          } else {
+            // Se já criou algumas, retornar as que foram criadas
+            break;
+          }
         }
       }
       
@@ -634,30 +399,18 @@ const create = async (req: Request, res: Response) => {
     }
 
     // Transação única
-    const query = `
+    const result: any = await run(db, `
       INSERT INTO transactions (
         description, amount, type, category_id, subcategory_id,
         payment_status_id, bank_account_id, card_id, contact_id, 
         transaction_date, cost_center_id, is_installment, installment_number, total_installments
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const result = await new Promise<any>((resolve, reject) => {
-      db.run(query, [
-        description, amount, dbType, category_id, subcategory_id,
-        finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-        transaction_date, cost_center_id, is_installment || false, 
-        is_installment ? 1 : null, total_installments || null
-      ], function(this: any, err: any) {
-        if (err) {
-          console.error('Database error:', err);
-          reject(err);
-        } else {
-          console.log('Transaction created with ID:', this.lastID);
-          resolve({ lastID: this.lastID });
-        }
-      });
-    });
+    `, [
+      description, amount, dbType, category_id, subcategory_id,
+      finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+      transaction_date, cost_center_id, is_installment || false, 
+      is_installment ? 1 : null, total_installments || null
+    ]);
 
     res.status(201).json({ 
       id: result.lastID, 
@@ -688,7 +441,7 @@ const update = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, run } = getDatabase();
     const transactionId = req.params.id;
     
     const {
@@ -769,30 +522,18 @@ const update = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
-    const query = `
+    const result: any = await run(db, `
       UPDATE transactions SET
         description = ?, amount = ?, type = ?, category_id = ?, subcategory_id = ?,
         payment_status_id = ?, bank_account_id = ?, card_id = ?, contact_id = ?, 
         transaction_date = ?, cost_center_id = ?, is_installment = ?, total_installments = ?
       WHERE id = ?
-    `;
-
-    const result = await new Promise<any>((resolve, reject) => {
-      db.run(query, [
-        description, amount, dbType, category_id, subcategory_id,
-        finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-        transaction_date, cost_center_id, is_installment || false, 
-        total_installments || null, transactionId
-      ], function(this: any, err: any) {
-        if (err) {
-          console.error('Database error:', err);
-          reject(err);
-        } else {
-          console.log('Transaction updated, changes:', this.changes);
-          resolve({ changes: this.changes });
-        }
-      });
-    });
+    `, [
+      description, amount, dbType, category_id, subcategory_id,
+      finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+      transaction_date, cost_center_id, is_installment || false, 
+      total_installments || null, transactionId
+    ]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -814,7 +555,7 @@ const patchTransaction = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, run } = getDatabase();
     const transactionId = req.params.id;
     
     if (!transactionId) {
@@ -890,17 +631,7 @@ const patchTransaction = async (req: Request, res: Response) => {
     console.log('PATCH Query:', query);
     console.log('PATCH Values:', updateValues);
 
-    const result = await new Promise<any>((resolve, reject) => {
-      db.run(query, updateValues, function(this: any, err: any) {
-        if (err) {
-          console.error('Database error:', err);
-          reject(err);
-        } else {
-          console.log('Transaction patched, changes:', this.changes);
-          resolve({ changes: this.changes });
-        }
-      });
-    });
+    const result: any = await run(db, query, updateValues);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -922,7 +653,7 @@ const deleteTransaction = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, run } = getDatabase();
     const transactionId = req.params.id;
 
     // Validate transaction ID
@@ -930,19 +661,7 @@ const deleteTransaction = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Transaction ID is required' });
     }
 
-    const query = `DELETE FROM transactions WHERE id = ?`;
-
-    const result = await new Promise<any>((resolve, reject) => {
-      db.run(query, [transactionId], function(this: any, err: any) {
-        if (err) {
-          console.error('Database error:', err);
-          reject(err);
-        } else {
-          console.log('Transaction deleted, changes:', this.changes);
-          resolve({ changes: this.changes });
-        }
-      });
-    });
+    const result: any = await run(db, `DELETE FROM transactions WHERE id = ?`, [transactionId]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -964,7 +683,7 @@ const markAsPaid = async (req: Request, res: Response) => {
   console.log('Payment data:', req.body);
   
   try {
-    const db = getDatabase();
+    const { db, get, run } = getDatabase();
     const transactionId = req.params.id;
     const {
       payment_date,
@@ -997,78 +716,41 @@ const markAsPaid = async (req: Request, res: Response) => {
     }
 
     // Buscar a transação original
-    const transaction = await new Promise<any>((resolve, reject) => {
-      db.get('SELECT * FROM transactions WHERE id = ?', [transactionId], (err: any, row: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const transaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
 
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
     // Iniciar transação do banco
-    await new Promise<void>((resolve, reject) => {
-      db.run('BEGIN TRANSACTION', (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    await run(db, 'BEGIN TRANSACTION');
 
     try {
       // 1. Atualizar status da transação para "Pago" (id: 2)
-      await new Promise<void>((resolve, reject) => {
-        const updateQuery = 'UPDATE transactions SET payment_status_id = ? WHERE id = ?';
-        db.run(updateQuery, [2, transactionId], (err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      await run(db, 'UPDATE transactions SET payment_status_id = ? WHERE id = ?', [2, transactionId]);
 
       // 2. Inserir detalhes do pagamento
-      await new Promise<void>((resolve, reject) => {
-        const insertQuery = `
-          INSERT INTO payment_details (
-            transaction_id, payment_date, paid_amount, original_amount,
-            payment_type, bank_account_id, card_id, discount_amount,
-            interest_amount, observations
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        
-        db.run(insertQuery, [
-          transactionId,
-          payment_date,
-          paid_amount,
-          transaction.amount,
-          payment_type,
-          payment_type === 'bank_account' ? bank_account_id : null,
-          payment_type === 'credit_card' ? card_id : null,
-          discount || 0,
-          interest || 0,
-          observations || ''
-        ], (err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      await run(db, `
+        INSERT INTO payment_details (
+          transaction_id, payment_date, paid_amount, original_amount,
+          payment_type, bank_account_id, card_id, discount_amount,
+          interest_amount, observations
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        transactionId,
+        payment_date,
+        paid_amount,
+        transaction.amount,
+        payment_type,
+        payment_type === 'bank_account' ? bank_account_id : null,
+        payment_type === 'credit_card' ? card_id : null,
+        discount || 0,
+        interest || 0,
+        observations || ''
+      ]);
 
       // Confirmar transação
-      await new Promise<void>((resolve, reject) => {
-        db.run('COMMIT', (err: any) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      await run(db, 'COMMIT');
 
       console.log('Transaction marked as paid successfully');
       res.json({ 
@@ -1084,9 +766,7 @@ const markAsPaid = async (req: Request, res: Response) => {
       });
     } catch (error) {
       // Rollback em caso de erro
-      await new Promise<void>((resolve) => {
-        db.run('ROLLBACK', () => resolve());
-      });
+      await run(db, 'ROLLBACK');
       throw error;
     }
   } catch (error) {
@@ -1100,7 +780,7 @@ const getPaymentDetails = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, all } = getDatabase();
     const transactionId = req.params.id;
 
     if (!transactionId) {
@@ -1119,19 +799,74 @@ const getPaymentDetails = async (req: Request, res: Response) => {
       ORDER BY pd.created_at DESC
     `;
 
-    const paymentDetails = await new Promise<any[]>((resolve, reject) => {
-      db.all(query, [transactionId], (err: any, rows: any[]) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows || []);
-        }
-      });
-    });
+    const paymentDetails = await all(db, query, [transactionId]);
 
     res.json(paymentDetails);
   } catch (error) {
     console.error('Error fetching payment details:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const updatePaymentStatus = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - UPDATE PAYMENT STATUS =====');
+  console.log('Transaction ID:', req.params.id);
+  console.log('New status ID:', req.body.status_id);
+  
+  try {
+    const { db, get, run } = getDatabase();
+    const transactionId = req.params.id;
+    const { status_id: newStatusId } = req.body;
+
+    if (!transactionId || !newStatusId) {
+      return res.status(400).json({ error: 'Transaction ID and status ID are required' });
+    }
+
+    // Buscar a transação original
+    const transaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
+
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    // Iniciar transação do banco
+    await run(db, 'BEGIN TRANSACTION');
+
+    try {
+      // 1. Atualizar status da transação
+      await run(db, 'UPDATE transactions SET payment_status_id = ? WHERE id = ?', [newStatusId, transactionId]);
+
+      // 2. Se estiver marcando como "Pago", inserir detalhes do pagamento
+      if (newStatusId == 2) { // Pago
+        // Inserir registro básico de pagamento
+        await run(db, `
+          INSERT INTO payment_details (
+            transaction_id, payment_date, paid_amount, original_amount,
+            payment_type
+          ) VALUES (?, DATE('now'), ?, ?, 'manual')
+        `, [
+          transactionId,
+          transaction.amount,
+          transaction.amount
+        ]);
+      }
+
+      // Confirmar transação
+      await run(db, 'COMMIT');
+
+      console.log('Transaction status updated successfully');
+      res.json({ 
+        message: 'Transaction status updated successfully',
+        transaction_id: transactionId,
+        new_status_id: newStatusId
+      });
+    } catch (error) {
+      // Rollback em caso de erro
+      await run(db, 'ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error updating transaction status:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -1141,7 +876,7 @@ const reversePayment = async (req: Request, res: Response) => {
   console.log('Transaction ID:', req.params.id);
   
   try {
-    const db = getDatabase();
+    const { db, get, run } = getDatabase();
     const transactionId = req.params.id;
 
     if (!transactionId) {
@@ -1149,90 +884,37 @@ const reversePayment = async (req: Request, res: Response) => {
     }
 
     // Buscar a transação original
-    const transaction = await new Promise<any>((resolve, reject) => {
-      db.get('SELECT * FROM transactions WHERE id = ?', [transactionId], (err: any, row: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const transaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
 
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Verificar se a transação está paga
-    if (transaction.payment_status_id !== 2) {
-      return res.status(400).json({ error: 'Transaction is not paid, cannot reverse payment' });
-    }
-
     // Iniciar transação do banco
-    await new Promise<void>((resolve, reject) => {
-      db.run('BEGIN TRANSACTION', (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    await run(db, 'BEGIN TRANSACTION');
 
     try {
-      // 1. Determinar o novo status baseado na data da transação
-      const today = new Date().toISOString().split('T')[0];
-      const transactionDate = transaction.transaction_date;
-      let newStatusId = 1; // Em aberto (padrão)
-      
-      if (transactionDate < today) {
-        newStatusId = 4; // Vencido
-      }
+      // 1. Atualizar status da transação para "Em aberto" (id: 1)
+      await run(db, 'UPDATE transactions SET payment_status_id = ? WHERE id = ?', [1, transactionId]);
 
-      // 2. Atualizar status da transação
-      await new Promise<void>((resolve, reject) => {
-        const updateQuery = 'UPDATE transactions SET payment_status_id = ? WHERE id = ?';
-        db.run(updateQuery, [newStatusId, transactionId], (err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      // 3. Remover detalhes do pagamento
-      await new Promise<void>((resolve, reject) => {
-        const deleteQuery = 'DELETE FROM payment_details WHERE transaction_id = ?';
-        db.run(deleteQuery, [transactionId], (err: any) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      // 2. Remover detalhes do pagamento
+      await run(db, 'DELETE FROM payment_details WHERE transaction_id = ?', [transactionId]);
 
       // Confirmar transação
-      await new Promise<void>((resolve, reject) => {
-        db.run('COMMIT', (err: any) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      await run(db, 'COMMIT');
 
-      console.log('Payment reversed successfully');
+      console.log('Transaction payment reversed successfully');
       res.json({ 
-        message: 'Payment reversed successfully',
-        transaction_id: transactionId,
-        new_status_id: newStatusId
+        message: 'Transaction payment reversed successfully',
+        transaction_id: transactionId
       });
     } catch (error) {
       // Rollback em caso de erro
-      await new Promise<void>((resolve) => {
-        db.run('ROLLBACK', () => resolve());
-      });
+      await run(db, 'ROLLBACK');
       throw error;
     }
   } catch (error) {
-    console.error('Error reversing payment:', error);
+    console.error('Error reversing transaction payment:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -1245,6 +927,7 @@ export default {
   delete: deleteTransaction,
   markAsPaid,
   getPaymentDetails,
+  updatePaymentStatus,
   reversePayment,
   patch: patchTransaction  // Nova função para edição em lote
 };

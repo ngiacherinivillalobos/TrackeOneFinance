@@ -4,34 +4,19 @@ import { getDatabase } from '../database/connection';
 export const DashboardController = {
   async getOverview(req: Request, res: Response) {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       
       // Get total accounts
       const accountsQuery = 'SELECT COUNT(*) as count FROM bank_accounts';
-      const accountsResult = await new Promise<any>((resolve, reject) => {
-        db.get(accountsQuery, (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const accountsResult = await dbWrapper.get(dbWrapper.db, accountsQuery);
 
       // Get total transactions
       const transactionsQuery = 'SELECT COUNT(*) as count FROM transactions';
-      const transactionsResult = await new Promise<any>((resolve, reject) => {
-        db.get(transactionsQuery, (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const transactionsResult = await dbWrapper.get(dbWrapper.db, transactionsQuery);
 
       // Get balance (sum of transaction amounts)
       const balanceQuery = 'SELECT SUM(amount) as balance FROM transactions';
-      const balanceResult = await new Promise<any>((resolve, reject) => {
-        db.get(balanceQuery, (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const balanceResult = await dbWrapper.get(dbWrapper.db, balanceQuery);
 
       res.json({
         totalAccounts: accountsResult.count || 0,
@@ -46,7 +31,7 @@ export const DashboardController = {
 
   async getRecentTransactions(req: Request, res: Response) {
     try {
-      const db = getDatabase();
+      const dbWrapper = getDatabase();
       const limit = parseInt(req.query.limit as string) || 10;
       
       const query = `
@@ -55,15 +40,10 @@ export const DashboardController = {
         LEFT JOIN bank_accounts ba ON t.bank_account_id = ba.id
         LEFT JOIN categories c ON t.category_id = c.id
         ORDER BY t.date DESC
-        LIMIT ?
+        LIMIT $1
       `;
       
-      const transactions = await new Promise<any[]>((resolve, reject) => {
-        db.all(query, [limit], (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
+      const transactions = await dbWrapper.all(dbWrapper.db, query, [limit]);
 
       res.json(transactions);
     } catch (error) {

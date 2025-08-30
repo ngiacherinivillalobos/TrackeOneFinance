@@ -5,33 +5,24 @@ const categoriesController = {
   // Listar todas as categorias
   async list(req: Request, res: Response) {
     console.log('List categories route hit');
-    const db = getDatabase();
+    const { db, all } = getDatabase();
     
     try {
       console.log('Executing categories query...');
-      const categories = await new Promise((resolve, reject) => {
-        const query = `
-          SELECT 
-            c.id,
-            c.name,
-            ct.name as source_type,
-            c.category_type_id,
-            c.created_at
-          FROM categories c
-          LEFT JOIN category_types ct ON c.category_type_id = ct.id
-          ORDER BY c.name
-        `;
-        console.log('Query:', query);
-        db.all(query, [], (err, rows) => {
-          if (err) {
-            console.error('Database error:', err);
-            reject(err);
-          } else {
-            console.log('Found categories:', rows);
-            resolve(rows);
-          }
-        });
-      });
+      const query = `
+        SELECT 
+          c.id,
+          c.name,
+          ct.name as source_type,
+          c.category_type_id,
+          c.created_at
+        FROM categories c
+        LEFT JOIN category_types ct ON c.category_type_id = ct.id
+        ORDER BY c.name
+      `;
+      console.log('Query:', query);
+      const categories = await all(db, query);
+      console.log('Found categories:', categories);
       
       console.log('Sending response:', categories);
       res.json(categories);
@@ -44,30 +35,18 @@ const categoriesController = {
   // Criar nova categoria
   async create(req: Request, res: Response) {
     const { name, source_type } = req.body;
-    const db = getDatabase();
+    const { db, get, run } = getDatabase();
 
     try {
       // First, get the category_type_id
-      const categoryType: any = await new Promise((resolve, reject) => {
-        db.get('SELECT id FROM category_types WHERE name = ?', [source_type], (err, row) => {
-          if (err) reject(err);
-          else if (!row) reject(new Error(`Invalid category type: ${source_type}`));
-          else resolve(row);
-        });
-      });
+      const categoryType: any = await get(db, 'SELECT id FROM category_types WHERE name = ?', [source_type]);
+      if (!categoryType) {
+        throw new Error(`Invalid category type: ${source_type}`);
+      }
 
-      const result: any = await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO categories (name, category_type_id) VALUES (?, ?)',
-          [name, categoryType.id],
-          function(err) {
-            if (err) reject(err);
-            else resolve({ id: this.lastID });
-          }
-        );
-      });
+      const result: any = await run(db, 'INSERT INTO categories (name, category_type_id) VALUES (?, ?)', [name, categoryType.id]);
 
-      res.status(201).json({ id: result.id, name, source_type });
+      res.status(201).json({ id: result.lastID, name, source_type });
     } catch (error) {
       console.error('Error creating category:', error);
       if (error instanceof Error && error.message.includes('Invalid category type')) {
@@ -82,28 +61,16 @@ const categoriesController = {
   async update(req: Request, res: Response) {
     const { id } = req.params;
     const { name, source_type } = req.body;
-    const db = getDatabase();
+    const { db, get, run } = getDatabase();
 
     try {
       // First, get the category_type_id
-      const categoryType: any = await new Promise((resolve, reject) => {
-        db.get('SELECT id FROM category_types WHERE name = ?', [source_type], (err, row) => {
-          if (err) reject(err);
-          else if (!row) reject(new Error(`Invalid category type: ${source_type}`));
-          else resolve(row);
-        });
-      });
+      const categoryType: any = await get(db, 'SELECT id FROM category_types WHERE name = ?', [source_type]);
+      if (!categoryType) {
+        throw new Error(`Invalid category type: ${source_type}`);
+      }
 
-      await new Promise((resolve, reject) => {
-        db.run(
-          'UPDATE categories SET name = ?, category_type_id = ? WHERE id = ?',
-          [name, categoryType.id, id],
-          (err) => {
-            if (err) reject(err);
-            else resolve(true);
-          }
-        );
-      });
+      await run(db, 'UPDATE categories SET name = ?, category_type_id = ? WHERE id = ?', [name, categoryType.id, id]);
 
       res.json({ id, name, source_type });
     } catch (error) {
@@ -119,26 +86,21 @@ const categoriesController = {
   // Buscar uma categoria por id
   async show(req: Request, res: Response) {
     const { id } = req.params;
-    const db = getDatabase();
+    const { db, get } = getDatabase();
 
     try {
-      const category: any = await new Promise((resolve, reject) => {
-        const query = `
-          SELECT
-            c.id,
-            c.name,
-            ct.name as source_type,
-            c.category_type_id,
-            c.created_at
-          FROM categories c
-          LEFT JOIN category_types ct ON c.category_type_id = ct.id
-          WHERE c.id = ?
-        `;
-        db.get(query, [id], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const query = `
+        SELECT
+          c.id,
+          c.name,
+          ct.name as source_type,
+          c.category_type_id,
+          c.created_at
+        FROM categories c
+        LEFT JOIN category_types ct ON c.category_type_id = ct.id
+        WHERE c.id = ?
+      `;
+      const category: any = await get(db, query, [id]);
 
       if (!category) return res.status(404).json({ error: 'Category not found' });
 
@@ -152,15 +114,10 @@ const categoriesController = {
   // Deletar categoria
   async delete(req: Request, res: Response) {
     const { id } = req.params;
-    const db = getDatabase();
+    const { db, run } = getDatabase();
 
     try {
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM categories WHERE id = ?', [id], (err) => {
-          if (err) reject(err);
-          else resolve(true);
-        });
-      });
+      await run(db, 'DELETE FROM categories WHERE id = ?', [id]);
 
       res.status(204).send();
     } catch (error) {

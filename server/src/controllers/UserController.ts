@@ -6,13 +6,8 @@ export const userController = {
   // Listar todos os usuários
   async list(req: Request, res: Response) {
     try {
-      const db = getDatabase();
-      const users = await new Promise<any[]>((resolve, reject) => {
-        db.all('SELECT id, email, cost_center_id, created_at FROM users', (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
+      const { db, all } = getDatabase();
+      const users = await all(db, 'SELECT id, email, cost_center_id, created_at FROM users');
       res.json(users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -41,15 +36,10 @@ export const userController = {
     }
     
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       
       // Verificar se usuário já existe
-      const existingUser = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const existingUser = await get(db, 'SELECT * FROM users WHERE email = ?', [email]);
       
       if (existingUser) {
         return res.status(409).json({ error: 'Usuário já existe.' });
@@ -59,23 +49,18 @@ export const userController = {
       const hash = await bcrypt.hash(password, 10);
       
       // Inserir novo usuário
-      const result = await new Promise<any>((resolve, reject) => {
-        const query = cost_center_id 
-          ? 'INSERT INTO users (email, password, cost_center_id) VALUES (?, ?, ?)'
-          : 'INSERT INTO users (email, password) VALUES (?, ?)';
-        const params = cost_center_id 
-          ? [email, hash, cost_center_id]
-          : [email, hash];
+      const query = cost_center_id 
+        ? 'INSERT INTO users (email, password, cost_center_id) VALUES (?, ?, ?)'
+        : 'INSERT INTO users (email, password) VALUES (?, ?)';
+      const params = cost_center_id 
+        ? [email, hash, cost_center_id]
+        : [email, hash];
           
-        db.run(query, params, function(err) {
-          if (err) reject(err);
-          else resolve({ id: this.lastID });
-        });
-      });
+      const result: any = await run(db, query, params);
       
       res.status(201).json({ 
         message: 'Usuário criado com sucesso.',
-        user: { id: result.id, email, cost_center_id, created_at: new Date().toISOString() }
+        user: { id: result.lastID, email, cost_center_id, created_at: new Date().toISOString() }
       });
     } catch (error) {
       console.error('Error creating user:', error);
@@ -94,27 +79,17 @@ export const userController = {
     }
     
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       
       // Verificar se usuário existe
-      const existingUser = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const existingUser = await get(db, 'SELECT * FROM users WHERE id = ?', [id]);
       
       if (!existingUser) {
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
       
       // Excluir usuário
-      await new Promise<void>((resolve, reject) => {
-        db.run('DELETE FROM users WHERE id = ?', [id], (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      await run(db, 'DELETE FROM users WHERE id = ?', [id]);
       
       res.json({ message: 'Usuário excluído com sucesso.' });
     } catch (error) {
@@ -138,15 +113,10 @@ export const userController = {
     }
     
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       
       // Verificar se usuário existe
-      const existingUser = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+      const existingUser = await get(db, 'SELECT * FROM users WHERE id = ?', [id]);
       
       if (!existingUser) {
         return res.status(404).json({ error: 'Usuário não encontrado.' });
@@ -156,19 +126,14 @@ export const userController = {
       const hash = await bcrypt.hash(password, 10);
       
       // Atualizar senha e centro de custo (se fornecido)
-      await new Promise<void>((resolve, reject) => {
-        const query = cost_center_id !== undefined
-          ? 'UPDATE users SET password = ?, cost_center_id = ? WHERE id = ?'
-          : 'UPDATE users SET password = ? WHERE id = ?';
-        const params = cost_center_id !== undefined
-          ? [hash, cost_center_id, id]
-          : [hash, id];
+      const query = cost_center_id !== undefined
+        ? 'UPDATE users SET password = ?, cost_center_id = ? WHERE id = ?'
+        : 'UPDATE users SET password = ? WHERE id = ?';
+      const params = cost_center_id !== undefined
+        ? [hash, cost_center_id, id]
+        : [hash, id];
           
-        db.run(query, params, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      await run(db, query, params);
       
       res.json({ message: 'Senha redefinida com sucesso.' });
     } catch (error) {
@@ -185,37 +150,17 @@ export const userController = {
     console.log(`Atualizando centro de custo para usuário ${id}:`, { cost_center_id });
     
     try {
-      const db = getDatabase();
+      const { db, get, run } = getDatabase();
       
       // Verificar se usuário existe
-      const existingUser = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-          if (err) {
-            console.error('Erro ao buscar usuário:', err);
-            reject(err);
-          } else {
-            console.log('Usuário encontrado:', row);
-            resolve(row);
-          }
-        });
-      });
+      const existingUser = await get(db, 'SELECT * FROM users WHERE id = ?', [id]);
       
       if (!existingUser) {
         return res.status(404).json({ error: 'Usuário não encontrado.' });
       }
       
       // Atualizar centro de custo
-      await new Promise<void>((resolve, reject) => {
-        db.run('UPDATE users SET cost_center_id = ? WHERE id = ?', [cost_center_id, id], (err) => {
-          if (err) {
-            console.error('Erro ao atualizar centro de custo:', err);
-            reject(err);
-          } else {
-            console.log(`Centro de custo atualizado para usuário ${id}`);
-            resolve();
-          }
-        });
-      });
+      await run(db, 'UPDATE users SET cost_center_id = ? WHERE id = ?', [cost_center_id, id]);
       
       res.json({ message: 'Centro de custo atualizado com sucesso.' });
     } catch (error) {

@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { initializeDatabase } from './database/connection';
+import { initializeDatabase, getDatabase } from './database/connection';
 import { runMigrations } from './database/migrations';
 import mainRouter from './routes'; // Importa o roteador principal
 
@@ -35,12 +35,11 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 const PORT = process.env.PORT || 3001;
 
-
 // Initialize database and start server
 const start = async () => {
   try {
     await initializeDatabase();
-    await runMigrations();
+    // await runMigrations(); // Comentado pois as migrações agora são feitas via script
     console.log('Database initialized successfully');
 
     app.listen(PORT, () => {
