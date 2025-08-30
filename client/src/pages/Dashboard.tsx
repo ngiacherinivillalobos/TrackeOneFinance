@@ -170,10 +170,10 @@ export default function Dashboard() {
       // Se não houver centro de custo selecionado, mas o usuário tem um associado, usar o do usuário
       if (selectedCostCenter) {
         params.cost_center_id = selectedCostCenter.id;
-      } else if (user?.cost_center_id) {
+      } else if (user?.cost_center_id && !showAllCenters) {
         params.cost_center_id = user.cost_center_id;
-      } else {
-        // Se não houver centro de custo selecionado e o usuário não tem um associado, mostrar todos
+      } else if (showAllCenters) {
+        // Se "Ver todos" estiver ativo, mostrar todos os centros de custo
         params.cost_center_id = 'all';
       }
       
@@ -204,15 +204,15 @@ export default function Dashboard() {
     // Calcular totais por tipo de transação
     const totalReceitas = transactionsData
       .filter(t => t.transaction_type === 'Receita')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
       
     const totalDespesas = transactionsData
       .filter(t => t.transaction_type === 'Despesa')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
       
     const totalInvestimentos = transactionsData
       .filter(t => t.transaction_type === 'Investimento')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
     
     // Calcular saldo atual (Receitas - Despesas - Investimentos)
     const saldoAtual = totalReceitas - totalDespesas - totalInvestimentos;
