@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, TextField, Button, Snackbar, Alert } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
@@ -9,14 +9,17 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
   // Redirecionar se já estiver autenticado
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/');
+      // Verificar se há um estado com redirecionamento
+      const from = location.state?.from?.pathname || '/dashboard';
+      navigate(from);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,11 +27,18 @@ const Login: React.FC = () => {
     try {
       await login(email, password);
       setSnackbar({ open: true, message: 'Login realizado com sucesso!', severity: 'success' });
+      
+      // Redirecionar após login bem-sucedido
       setTimeout(() => {
-        navigate('/'); // Redireciona para página principal
+        navigate('/dashboard');
       }, 1000);
     } catch (error: any) {
-      setSnackbar({ open: true, message: error.message || 'Erro ao autenticar.', severity: 'error' });
+      console.error('Erro de login:', error);
+      setSnackbar({ 
+        open: true, 
+        message: error.message || 'Erro ao autenticar. Verifique suas credenciais.', 
+        severity: 'error' 
+      });
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import modernTheme from './theme/modernTheme';
@@ -19,21 +19,22 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/*" element={
+            <Route element={
               <ProtectedRoute>
                 <Layout>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/monthly-control" element={<MonthlyControl />} />
-                    <Route path="/cash-flow" element={<CashFlow />} />
-                    <Route path="/credit-card" element={<CreditCard />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
+                  <Outlet />
                 </Layout>
               </ProtectedRoute>
-            } />
+            }>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/monthly-control" element={<MonthlyControl />} />
+              <Route path="/cash-flow" element={<CashFlow />} />
+              <Route path="/credit-card" element={<CreditCard />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
       </AuthProvider>

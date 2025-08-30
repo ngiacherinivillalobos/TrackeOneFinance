@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Detectar a URL base automaticamente com base no ambiente
 const getBaseURL = () => {
-  // Em produção, usar a URL do backend no Render sem '/api' no final
+  // Em produção, usar a URL do backend no Render
   if (import.meta.env.MODE === 'production') {
     return 'https://trackeone-finance-api.onrender.com';
   }
@@ -27,6 +27,12 @@ api.interceptors.request.use(
       config.headers = config.headers || {};
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    // Certificar-se de que a URL comece com /api para todas as requisições
+    if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http')) {
+      config.url = `/api${config.url}`;
+    }
+    
     console.log(`🚀 Axios Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
