@@ -42,16 +42,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Função para validar o token com o servidor
   const validateToken = async (tokenToValidate: string) => {
     try {
-      await api.get('/auth/validate');
+      // Abordagem simplificada que usa a API configurada
+      const response = await api.get('/auth/validate');
+      console.log('Validação de token bem-sucedida:', response.data);
       return true;
-    } catch (error) {
-      return false;
+    } catch (error: any) {
+      console.error('Erro na validação do token:', error.message);
+      // Se o erro for 401 ou 403, o token é inválido
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        return false;
+      }
+      // Para outros erros (como de conexão), vamos assumir que o token é válido para evitar logout desnecessário
+      // O próximo ciclo de verificação irá tentar novamente
+      return true;
     }
   };
 
   // Função para renovar o token
   const renewToken = async () => {
     try {
+      // Abordagem simplificada que usa a API configurada
       const response = await api.post('/auth/refresh');
       const { token: newToken } = response.data;
       
@@ -138,6 +148,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<void> => {
     try {
+      // Abordagem simplificada que usa a API configurada
       const response = await api.post('/auth/login', { email, password });
       const { token: newToken } = response.data;
       

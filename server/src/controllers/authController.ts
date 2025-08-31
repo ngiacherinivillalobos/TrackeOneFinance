@@ -3,7 +3,8 @@ import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import { getDatabase } from '../database/connection';
 
-const SECRET = process.env.JWT_SECRET || 'supersecret';
+// Usar uma chave secreta forte do ambiente ou uma padrão para desenvolvimento
+const SECRET = process.env.JWT_SECRET || 'trackeone_finance_secret_key_2025';
 
 export const authController = {
   async register(req: Request, res: Response) {

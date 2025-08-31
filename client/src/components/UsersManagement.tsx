@@ -59,24 +59,33 @@ export const UsersManagement: React.FC = () => {
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
-  // Carregar centros de custo
+  // Carregar centros de custo e usuários
   useEffect(() => {
-    const loadCostCenters = async () => {
+    const loadData = async () => {
       try {
-        const response = await api.get('/cost-centers');
-        setCostCenters(response.data);
+        const [costCentersResponse, usersResponse] = await Promise.all([
+          api.get('/cost-centers'),
+          api.get('/users')
+        ]);
+        
+        setCostCenters(costCentersResponse.data);
+        setUsers(usersResponse.data);
       } catch (error) {
-        console.error('Erro ao carregar centros de custo:', error);
+        console.error('Erro ao carregar dados:', error);
+        showSnackbar('Erro ao carregar dados', 'error');
+      } finally {
+        setLoading(false);
       }
     };
     
-    loadCostCenters();
+    setLoading(true);
+    loadData();
   }, []);
   
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      // Corrigido: usando o endpoint correto para listar usuários
       const response = await api.get('/users');
       setUsers(response.data);
     } catch (error) {
@@ -86,10 +95,6 @@ export const UsersManagement: React.FC = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -130,7 +135,13 @@ export const UsersManagement: React.FC = () => {
     if (!valid) return;
 
     try {
-      await api.post('/users', newUser);
+      // Garantir que o centro de custo seja um número ou null
+      const userData = {
+        ...newUser,
+        cost_center_id: newUser.cost_center_id || null
+      };
+      
+      await api.post('/users', userData);
       showSnackbar('Usuário adicionado com sucesso!', 'success');
       setOpenAddDialog(false);
       setNewUser({ email: '', password: '' });
@@ -218,6 +229,7 @@ export const UsersManagement: React.FC = () => {
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                 <TableCell sx={{ fontWeight: 600 }}>ID</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Centro de Custo</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Data de Criação</TableCell>
                 <TableCell sx={{ fontWeight: 600, textAlign: 'right' }}>Ações</TableCell>
               </TableRow>
@@ -227,6 +239,16 @@ export const UsersManagement: React.FC = () => {
                 <TableRow key={user.id} hover>
                   <TableCell>{user.id}</TableCell>
                   <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    {user.cost_center_id ? 
+                      (() => {
+                        const costCenter = costCenters.find(cc => cc.id === user.cost_center_id);
+                        return costCenter ? 
+                          (costCenter.number ? `${costCenter.number} - ${costCenter.name}` : costCenter.name) : 
+                          `ID: ${user.cost_center_id}`;
+                      })() : 
+                      'Nenhum'}
+                  </TableCell>
                   <TableCell>
                     {new Date(user.created_at).toLocaleDateString('pt-BR')}
                   </TableCell>
@@ -316,6 +338,9 @@ export const UsersManagement: React.FC = () => {
           <DialogContent sx={{ minWidth: 400 }}>
             <Typography variant="body1" sx={{ mb: 2 }}>
               Redefinindo senha para: <strong>{selectedUser.email}</strong>
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+              Aqui você também pode alterar o centro de custo associado ao usuário.
             </Typography>
             <TextField
               autoFocus

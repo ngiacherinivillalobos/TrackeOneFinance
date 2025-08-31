@@ -5,7 +5,14 @@
   "scripts": {
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently --kill-others-on-fail false \"npm run server\" \"npm run client\"",
+    "check-env": "node check_env_config.js",
+    "generate-secret": "node generate_jwt_secret.js",
+    "init-db": "node init_dev_db.js",
+    "test-api": "node test_api.js",
+    "test-jwt": "node test_jwt.js",
+    "check-db": "node check_db_structure.js",
+    "check-server": "node check_server.js"
   },
   "dependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -16,6 +23,7 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
-    "@types/node": "^24.3.0"
+    "@types/node": "^24.3.0",
+    "axios": "^1.11.0"
   }
 }

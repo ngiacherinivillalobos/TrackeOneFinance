@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const SECRET = process.env.JWT_SECRET || 'supersecret';
+// Usar uma chave secreta forte do ambiente ou uma padrão para desenvolvimento
+const SECRET = process.env.JWT_SECRET || 'trackeone_finance_secret_key_2025';
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;

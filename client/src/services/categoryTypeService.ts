@@ -3,6 +3,7 @@ import api from '../services/api';
 export interface CategoryType {
   id?: number;
   name: string;
+  description?: string;
   created_at?: string;
 }
 

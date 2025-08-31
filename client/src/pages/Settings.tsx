@@ -1,13 +1,5 @@
 import { useState } from 'react';
 import { Paper, Typography, Tabs, Tab, Box } from '@mui/material';
-import { Categories } from '../components/Categories';
-import Subcategories from './Subcategories';
-import CategoryTypes from './CategoryTypes';
-import PaymentStatuses from './PaymentStatuses';
-import BankAccounts from './BankAccounts';
-import Cards from './Cards';
-import Contacts from './Contacts';
-import CostCenters from './CostCenters';
 import { UsersManagement } from '../components/UsersManagement';
 import { SavingsGoalSettings } from '../components/SavingsGoalSettings';
 import { ModernHeader } from '../components/modern/ModernComponents';
@@ -79,46 +71,14 @@ export default function Settings() {
               }
             }}
           >
-            <Tab label="Categorias" />
-            <Tab label="Subcategorias" />
-            <Tab label="Tipos de Registro" />
-            <Tab label="Status de Pagamento" />
-            <Tab label="Contas Bancárias" />
-            <Tab label="Cartões" />
-            <Tab label="Contatos" />
-            <Tab label="Centro de Custo" />
             <Tab label="Usuários" />
             <Tab label="Meta de Economia" />
           </Tabs>
 
           <TabPanel value={activeTab} index={0}>
-            <Categories />
-          </TabPanel>
-          <TabPanel value={activeTab} index={1}>
-            <Subcategories />
-          </TabPanel>
-          <TabPanel value={activeTab} index={2}>
-            <CategoryTypes />
-          </TabPanel>
-          <TabPanel value={activeTab} index={3}>
-            <PaymentStatuses />
-          </TabPanel>
-          <TabPanel value={activeTab} index={4}>
-            <BankAccounts />
-          </TabPanel>
-          <TabPanel value={activeTab} index={5}>
-            <Cards />
-          </TabPanel>
-          <TabPanel value={activeTab} index={6}>
-            <Contacts />
-          </TabPanel>
-          <TabPanel value={activeTab} index={7}>
-            <CostCenters />
-          </TabPanel>
-          <TabPanel value={activeTab} index={8}>
             <UsersManagement />
           </TabPanel>
-          <TabPanel value={activeTab} index={9}>
+          <TabPanel value={activeTab} index={1}>
             <SavingsGoalSettings />
           </TabPanel>
         </Paper>

@@ -27,9 +27,11 @@ A comprehensive financial management system designed to help users manage person
 ### Backend
 - **Node.js** with TypeScript
 - **Express** 5.1.0 for REST API
-- **SQLite3** for database
+- **SQLite3** for development database
+- **PostgreSQL** for production database
 - **CORS** enabled
 - **dotenv** for environment configuration
+- **JWT** for authentication
 
 ## 📁 Project Structure
 
@@ -86,6 +88,53 @@ TrackeOneFinance/
    cd ..
    ```
 
+### Environment Configuration
+
+#### Server Environment (.env)
+Create a `.env` file in the `server` directory:
+
+```env
+# Para desenvolvimento (SQLite)
+DATABASE_PATH=database/track_one_finance.db
+
+# Segredo JWT para autenticação
+JWT_SECRET=trackeone_finance_secret_key_2025
+
+# Porta do servidor
+PORT=3001
+
+# Ambiente (development ou production)
+NODE_ENV=development
+```
+
+#### Client Environment (.env)
+Create a `.env` file in the `client` directory:
+
+```env
+# URL da API em desenvolvimento
+VITE_API_URL=http://localhost:3001
+```
+
+### Database Setup
+
+1. **Initialize the database**
+   ```bash
+   # Navigate to the server directory
+   cd server
+   
+   # The database will be automatically created when you first run the server
+   ```
+
+2. **(Optional) Create a test user**
+   ```bash
+   # Run the test user creation script
+   node ../create_test_user.js
+   
+   # This will generate a SQL script to create a test user
+   # Email: admin@trackone.com
+   # Password: admin123
+   ```
+
 ### Development
 
 #### Run both client and server simultaneously
@@ -94,7 +143,7 @@ npm run dev
 ```
 
 This command runs both the frontend and backend in development mode:
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:3000
 - **Backend**: http://localhost:3001
 
 #### Run individually
@@ -125,9 +174,9 @@ npm run build
 
 ## 💾 Database
 
-The application uses SQLite for data storage. The database schema is automatically created when you first run the server.
+The application uses SQLite for development and PostgreSQL for production.
 
-**Database location:** `database/track_one_finance.db`
+**Development Database location:** `database/track_one_finance.db`
 
 **Schema files:**
 - `database/initial.sql` - Complete schema
@@ -136,6 +185,12 @@ The application uses SQLite for data storage. The database schema is automatical
 ## 📊 API Endpoints
 
 The backend provides REST API endpoints at `http://localhost:3001/api/`
+
+### Authentication endpoints:
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `GET /api/auth/validate` - Token validation
+- `POST /api/auth/refresh` - Token refresh
 
 ### Main endpoints:
 - `GET /api/transactions` - List transactions
@@ -159,12 +214,25 @@ For complete API documentation, see the controllers in `server/src/controllers/`
 
 ### Environment Variables
 
-Create a `.env` file in the server directory:
-
+#### Server (.env in server directory):
 ```env
+DATABASE_PATH=database/track_one_finance.db
+JWT_SECRET=trackeone_finance_secret_key_2025
 PORT=3001
-DATABASE_PATH=../database/track_one_finance.db
+NODE_ENV=development
 ```
+
+#### Client (.env in client directory):
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+### Production Deployment
+
+For production deployment instructions, see:
+- [DEPLOY_INSTRUCTIONS.md](DEPLOY_INSTRUCTIONS.md)
+- [DEPLOY_RENDER_GUIA.md](DEPLOY_RENDER_GUIA.md)
+- [DEPLOY_VERCEL_GUIA.md](DEPLOY_VERCEL_GUIA.md)
 
 ## 🤝 Contributing
 
@@ -181,12 +249,11 @@ This project is licensed under the ISC License.
 ## 🐛 Known Issues
 
 - Recurring transactions are under development
-- No authentication/authorization system implemented yet
 - Testing framework needs to be configured
 
 ## 🗺 Roadmap
 
-- [ ] Add user authentication
+- [x] Add user authentication
 - [ ] Implement recurring transactions
 - [ ] Add data export/import functionality
 - [ ] Create mobile responsive design

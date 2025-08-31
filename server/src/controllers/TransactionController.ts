@@ -113,9 +113,39 @@ const list = async (req: Request, res: Response) => {
     
     // Filtro por centro de custo - sempre aplicar, mesmo que seja 'all'
     if (req.query.cost_center_id && req.query.cost_center_id !== 'all') {
-      console.log('Adding cost_center_id filter from query:', req.query.cost_center_id);
-      whereConditions.push('t.cost_center_id = ?');
-      queryParams.push(req.query.cost_center_id);
+      console.log('======= PROCESSAMENTO DE FILTRO DE CENTRO DE CUSTO =======');
+      console.log('Valor original:', req.query.cost_center_id);
+      console.log('Tipo do valor:', typeof req.query.cost_center_id);
+
+      // Verificar se tem vírgula, indicando múltiplos valores
+      if (req.query.cost_center_id.toString().includes(',')) {
+        // Múltiplos centros de custo separados por vírgula
+        const costCenterIds = req.query.cost_center_id.toString().split(',').map(id => id.trim());
+        
+        // Converter IDs para números e filtrar valores inválidos
+        const numericIds = costCenterIds
+          .map(id => parseInt(id, 10))
+          .filter(id => !isNaN(id));
+        
+        console.log('IDs originais:', costCenterIds);
+        console.log('IDs numéricos:', numericIds);
+        
+        if (numericIds.length > 0) {
+          // Construir cláusula IN diretamente na condição
+          whereConditions.push(`t.cost_center_id IN (${numericIds.join(',')})`);
+          
+          // Não adiciona parâmetros já que os IDs estão diretamente na cláusula SQL
+          console.log('Cláusula SQL para múltiplos centros:', `t.cost_center_id IN (${numericIds.join(',')})`);
+        }
+      } else {
+        // Único centro de custo
+        const costCenterId = parseInt(req.query.cost_center_id.toString(), 10);
+        if (!isNaN(costCenterId)) {
+          whereConditions.push('t.cost_center_id = ?');
+          queryParams.push(costCenterId);
+          console.log('Cláusula SQL para centro único:', 't.cost_center_id = ?', costCenterId);
+        }
+      }
     } else if (userCostCenterId && (!req.query.cost_center_id || req.query.cost_center_id === '')) {
       console.log('Adding cost_center_id filter from user:', userCostCenterId);
       whereConditions.push('t.cost_center_id = ?');
@@ -149,8 +179,22 @@ const list = async (req: Request, res: Response) => {
       ORDER BY t.transaction_date ASC, t.created_at DESC
     `;
 
-    console.log('Executing query:', query);
-    console.log('With params:', queryParams);
+    console.log('SQL query antes de executar:', query);
+    console.log('SQL params antes de executar:', queryParams);
+          
+    // Imprimir a consulta com parâmetros substituídos para depuração
+    let debugSql = query;
+    for (const param of queryParams) {
+      if (typeof param === 'string') {
+        debugSql = debugSql.replace('?', `'${param}'`);
+      } else if (param === null) {
+        debugSql = debugSql.replace('?', 'NULL');
+      } else {
+        debugSql = debugSql.replace('?', param);
+      }
+    }
+          
+    console.log('SQL COMPLETA COM PARÂMETROS:', debugSql);
 
     const transactions = await all(db, query, queryParams);
 

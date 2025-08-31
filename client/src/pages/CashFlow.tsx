@@ -124,12 +124,25 @@ export default function CashFlowPage() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState('date');
-  const [filters, setFilters] = useState({
-    record_type: [] as string[],
-    category_id: [] as string[],
-    subcategory_id: [] as string[],
-    cost_center_id: [] as string[]
+  const [filters, setFilters] = useState(() => {
+    // Inicializa os filtros com valores padrão
+    const defaultFilters = {
+      record_type: [] as string[],
+      category_id: [] as string[],
+      subcategory_id: [] as string[],
+      cost_center_id: [] as string[]
+    };
+    
+    // Se o usuário tem um centro de custo associado, adiciona-o ao filtro por padrão
+    if (user?.cost_center_id) {
+      defaultFilters.cost_center_id = [user.cost_center_id.toString()];
+    }
+    
+    return defaultFilters;
   });
+
+  // O filtro já é inicializado com o centro de custo do usuário, se existir
+  // Não estamos mais utilizando useEffect para atualizar o filtro depois
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -202,7 +215,7 @@ export default function CashFlowPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentDate, filters, dateFilterType, customStartDate, customEndDate, selectedYear]);
 
   const loadData = async () => {
     try {
@@ -217,14 +230,16 @@ export default function CashFlowPage() {
         params.year = currentDate.getFullYear().toString();
       }
       
-      // Sempre aplicar filtro de centro de custo - usar o do usuário se não houver filtro específico
+      // Aplicar filtro de centro de custo
       if (filters.cost_center_id.length > 0) {
-        params.cost_center_id = filters.cost_center_id[0];
-      } else if (user?.cost_center_id) {
-        params.cost_center_id = user.cost_center_id;
+        // Converter para string separada por vírgula para o backend
+        params.cost_center_id = filters.cost_center_id.join(',');
+        console.log('Centro de custo selecionados (CashFlow) - array:', JSON.stringify(filters.cost_center_id));
+        console.log('Centro de custo selecionados (CashFlow) - string:', filters.cost_center_id.join(','));
       } else {
-        // Se não houver centro de custo definido, mostrar todos
+        // Se nenhum filtro estiver selecionado, mostrar todos os registros
         params.cost_center_id = 'all';
+        console.log('Mostrando todos os centros de custo (sem filtro)');
       }
       
       const [recordsData, categoriesData, subcategoriesData, costCentersData] = await Promise.all([
@@ -233,6 +248,11 @@ export default function CashFlowPage() {
         subcategoryService.list(),
         costCenterService.list()
       ]);
+      
+      console.log('Parâmetros enviados para cashFlowService:', params);
+      console.log('Filtro de centro de custo atual (CashFlow):', filters.cost_center_id);
+      console.log('Registros retornados:', recordsData.length);
+      
       
       setCashFlowRecords(recordsData.map(record => ({
         id: record.id!,
@@ -259,17 +279,7 @@ export default function CashFlowPage() {
       setSubcategories(subcategoriesData.map(sub => ({ id: sub.id!, name: sub.name, category_id: sub.category_id })));
       setCostCenters(costCentersData.map(cc => ({ id: cc.id!, name: cc.name, number: cc.number })));
       
-      // Se o usuário tiver um centro de custo associado, selecioná-lo automaticamente nos filtros
-      if (user?.cost_center_id && filters.cost_center_id.length === 0) {
-        const userCostCenter = costCentersData.find((cc: any) => cc.id === user.cost_center_id);
-        if (userCostCenter && userCostCenter.id !== undefined) {
-          const costCenterId = userCostCenter.id.toString();
-          setFilters(prev => ({
-            ...prev,
-            cost_center_id: [costCenterId]
-          }));
-        }
-      }
+      // Não precisamos mais definir o filtro aqui pois já está sendo feito no useEffect separado
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

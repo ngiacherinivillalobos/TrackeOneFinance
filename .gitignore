@@ -86,3 +86,8 @@ backups/
 *_backup.*
 *.backup.*
 TrackeOneFinance_backup_*/
+
+# Arquivos de ambiente específicos
+server/.env
+client/.env
+.env.*

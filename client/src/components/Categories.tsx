@@ -1,40 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
+  Fab,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import { BaseTable } from './shared/BaseTable';
+import { BaseForm } from './shared/BaseForm';
 import { Category, categoryService } from '../services/categoryService';
 import { CategoryType, categoryTypeService } from '../services/categoryTypeService';
 
 export function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryTypes, setCategoryTypes] = useState<CategoryType[]>([]);
-  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [openForm, setOpenForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState<Omit<Category, 'id'>>({
     name: '',
     source_type: ''
   });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
 
   const loadData = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const [categoriesData, typesData] = await Promise.all([
         categoryService.list(),
@@ -42,9 +34,16 @@ export function Categories() {
       ]);
       setCategories(categoriesData);
       setCategoryTypes(typesData);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      // TODO: Adicionar notificação de erro
+      
+      // Definir tipo padrão se houver
+      if (typesData.length > 0 && !formData.source_type) {
+        setFormData(prev => ({ ...prev, source_type: typesData[0].name }));
+      }
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      setError(err?.response?.data?.error || 'Erro ao carregar dados');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,128 +51,164 @@ export function Categories() {
     loadData();
   }, []);
 
-  const handleOpen = () => {
-    if (categoryTypes.length > 0) {
-      setFormData(prev => ({ ...prev, source_type: categoryTypes[0].name }));
-    }
-    setOpen(true);
+  const handleOpenCreate = () => {
+    setEditingCategory(null);
+    setOpenForm(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
+  const handleCloseForm = () => {
+    setOpenForm(false);
     setEditingCategory(null);
     setFormData({ name: '', source_type: categoryTypes[0]?.name || '' });
+    setFormError(null);
   };
+
+  useEffect(() => {
+    if (openForm && editingCategory) {
+      setFormData({ 
+        name: editingCategory.name, 
+        source_type: editingCategory.source_type 
+      });
+    } else if (openForm && categoryTypes.length > 0) {
+      setFormData({ 
+        name: '', 
+        source_type: categoryTypes[0].name 
+      });
+    }
+  }, [openForm, editingCategory, categoryTypes]);
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
-    setFormData({ name: category.name, source_type: category.source_type });
-    setOpen(true);
+    setOpenForm(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (category: Category) => {
+    if (!category.id) return;
+    
     if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
       try {
-        await categoryService.delete(id);
+        await categoryService.delete(category.id);
         await loadData();
-      } catch (error) {
-        console.error('Error deleting category:', error);
-        // TODO: Adicionar notificação de erro
+      } catch (err: any) {
+        console.error('Error deleting category:', err);
+        alert(err?.response?.data?.error || 'Erro ao excluir categoria');
       }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFormChange = (name: string, value: any) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      setFormError('Nome é obrigatório');
+      return;
+    }
+
+    setFormLoading(true);
+    setFormError(null);
+
     try {
+      const categoryData = {
+        name: formData.name.trim(),
+        source_type: formData.source_type
+      };
+
       if (editingCategory) {
-        await categoryService.update(editingCategory.id!, formData);
+        await categoryService.update(editingCategory.id!, categoryData);
       } else {
-        await categoryService.create(formData);
+        await categoryService.create(categoryData);
       }
-      await loadData();
-      handleClose();
+
+      handleCloseForm();
+      loadData();
     } catch (error) {
-      console.error('Error saving category:', error);
-      // TODO: Adicionar notificação de erro
+      console.error('Erro ao salvar categoria:', error);
+      setFormError('Erro ao salvar categoria. Por favor, tente novamente.');
+    } finally {
+      setFormLoading(false);
     }
   };
+
+  // Definir colunas para a tabela
+  const columns = [
+    { key: 'name', title: 'Nome' },
+    { key: 'source_type', title: 'Tipo' },
+  ];
+
+  // Definir campos para o formulário
+  const fields = [
+    { 
+      name: 'name', 
+      label: 'Nome', 
+      type: 'text' as const, 
+      required: true 
+    },
+    { 
+      name: 'source_type', 
+      label: 'Tipo', 
+      type: 'select' as const, 
+      required: true,
+      options: categoryTypes.map(type => ({
+        value: type.name,
+        label: type.name
+      }))
+    }
+  ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-        <Button variant="contained" color="primary" onClick={handleOpen}>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <h1>Categorias</h1>
+        <Button 
+          variant="contained" 
+          color="primary" 
+          startIcon={<AddIcon />} 
+          onClick={handleOpenCreate}
+        >
           Nova Categoria
         </Button>
-      </div>
+      </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Tipo</TableCell>
-              <TableCell align="right">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {categories.map((category) => (
-              <TableRow key={category.id}>
-                <TableCell>{category.name}</TableCell>
-                <TableCell>{category.source_type}</TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => handleEdit(category)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(category.id!)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {error && (
+        <Box sx={{ mb: 2 }}>
+          <div style={{ color: 'red' }}>{error}</div>
+        </Box>
+      )}
 
-      <Dialog open={open} onClose={handleClose}>
-        <form onSubmit={handleSubmit}>
-          <DialogTitle>{editingCategory ? 'Editar Categoria' : 'Nova Categoria'}</DialogTitle>
-          <DialogContent>
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Nome"
-              type="text"
-              fullWidth
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-              sx={{ mb: 2 }}
-            />
-            <FormControl fullWidth margin="dense" required>
-              <InputLabel>Tipo</InputLabel>
-              <Select
-                value={formData.source_type}
-                label="Tipo"
-                onChange={(e) => setFormData({ ...formData, source_type: e.target.value })}
-                required
-              >
-                {categoryTypes.map((type) => (
-                  <MenuItem key={type.id} value={type.name}>
-                    {type.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Cancelar</Button>
-            <Button type="submit" color="primary">
-              Salvar
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-    </div>
+      <BaseTable
+        data={categories}
+        columns={columns}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        loading={loading}
+        emptyMessage="Nenhuma categoria encontrada"
+      />
+
+      {openForm && (
+        <BaseForm
+          title="Categoria"
+          fields={fields}
+          values={formData}
+          onChange={handleFormChange}
+          onSubmit={handleSubmit}
+          onCancel={handleCloseForm}
+          isEditing={!!editingCategory}
+          loading={formLoading}
+          error={formError}
+        />
+      )}
+
+      <Fab
+        color="primary"
+        aria-label="adicionar"
+        onClick={handleOpenCreate}
+        sx={{ position: 'fixed', bottom: 16, right: 16 }}
+      >
+        <AddIcon />
+      </Fab>
+    </Box>
   );
 }
+

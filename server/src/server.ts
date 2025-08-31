@@ -1,21 +1,26 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { initializeDatabase, getDatabase } from './database/connection';
-import { runMigrations } from './database/migrations';
-import mainRouter from './routes'; // Importa o roteador principal
+import { initializeDatabase } from './database/connection';
+import mainRouter from './routes';
+import dotenv from 'dotenv';
+
+// Carregar variáveis de ambiente do arquivo .env
+dotenv.config();
 
 const app = express();
 
+// Configuração extremamente permissiva do CORS para ambiente de desenvolvimento
 app.use(cors({
-  origin: '*', // Permite qualquer origem em ambiente de desenvolvimento/teste
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  origin: function(origin, callback) {
+    // Permitir qualquer origem
+    callback(null, true);
+  },
   credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin']
 }));
 
-// Adiciona headers para garantir que CORS funcione
+// Middleware adicional para garantir que o CORS funcione
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
@@ -28,23 +33,19 @@ app.use((req, res, next) => {
   
   next();
 });
-app.use(express.json());
+
+app.use(express.json({ limit: '10mb' }));
 
 // Rota de teste
 app.get('/api/test', (req: Request, res: Response) => {
-  res.json({ message: 'Server is working!' });
-});
-
-// Rota de teste do Cash Flow diretamente
-app.get('/api/cash-flow-test', (req: Request, res: Response) => {
-  res.json({ message: 'Cash Flow direct route working!' });
+  res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
 });
 
 // Monta o roteador principal
 app.use('/api', mainRouter);
 
 // Middleware para lidar com rotas não encontradas
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Rota não encontrada' });
 });
 
@@ -60,12 +61,26 @@ const PORT = process.env.PORT || 3001;
 const start = async () => {
   try {
     await initializeDatabase();
-    // await runMigrations(); // Comentado pois as migrações agora são feitas via script
     console.log('Database initialized successfully');
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`API available at http://localhost:${PORT}/api`);
+    });
+    
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received, shutting down gracefully');
+      server.close(() => {
+        console.log('Process terminated');
+      });
+    });
+    
+    process.on('SIGINT', () => {
+      console.log('SIGINT received, shutting down gracefully');
+      server.close(() => {
+        console.log('Process terminated');
+      });
     });
   } catch (error) {
     console.error('Failed to start server:', error);

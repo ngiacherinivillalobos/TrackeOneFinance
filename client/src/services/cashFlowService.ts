@@ -1,4 +1,4 @@
-import axios from '../lib/axios';
+import api from './api';
 
 export interface CashFlow {
   id?: number;
@@ -44,7 +44,7 @@ class CashFlowService {
         params.append('cost_center_id', filters.cost_center_id.toString());
       }
 
-      const response = await axios.get(`${this.baseURL}?${params.toString()}`);
+      const response = await api.get(`${this.baseURL}?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching cash flow records:', error);
@@ -55,7 +55,7 @@ class CashFlowService {
   // Obter registro por ID
   async getById(id: number): Promise<CashFlow> {
     try {
-      const response = await axios.get(`${this.baseURL}/${id}`);
+      const response = await api.get(`${this.baseURL}/${id}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching cash flow record:', error);
@@ -66,7 +66,7 @@ class CashFlowService {
   // Criar novo registro
   async create(cashFlow: Omit<CashFlow, 'id' | 'created_at' | 'updated_at' | 'category_name' | 'subcategory_name'>): Promise<CashFlow> {
     try {
-      const response = await axios.post(this.baseURL, cashFlow);
+      const response = await api.post(this.baseURL, cashFlow);
       return response.data;
     } catch (error) {
       console.error('Error creating cash flow record:', error);
@@ -77,7 +77,7 @@ class CashFlowService {
   // Atualizar registro
   async update(id: number, cashFlow: Omit<CashFlow, 'id' | 'created_at' | 'updated_at' | 'category_name' | 'subcategory_name'>): Promise<CashFlow> {
     try {
-      const response = await axios.put(`${this.baseURL}/${id}`, cashFlow);
+      const response = await api.put(`${this.baseURL}/${id}`, cashFlow);
       return response.data;
     } catch (error) {
       console.error('Error updating cash flow record:', error);
@@ -88,7 +88,7 @@ class CashFlowService {
   // Excluir registro
   async delete(id: number): Promise<void> {
     try {
-      await axios.delete(`${this.baseURL}/${id}`);
+      await api.delete(`${this.baseURL}/${id}`);
     } catch (error) {
       console.error('Error deleting cash flow record:', error);
       throw error;

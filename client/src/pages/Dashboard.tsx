@@ -90,7 +90,6 @@ export default function Dashboard() {
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [dateFilterType, setDateFilterType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
   const [showFilters, setShowFilters] = useState(false);
-  const [showAllCenters, setShowAllCenters] = useState(false);
   
   // Estados para dados
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -170,10 +169,11 @@ export default function Dashboard() {
       // Se não houver centro de custo selecionado, mas o usuário tem um associado, usar o do usuário
       if (selectedCostCenter) {
         params.cost_center_id = selectedCostCenter.id;
-      } else if (user?.cost_center_id && !showAllCenters) {
+      } else if (user?.cost_center_id) {
+        // Se o usuário tem um centro de custo associado, usar o dele por padrão
         params.cost_center_id = user.cost_center_id;
-      } else if (showAllCenters) {
-        // Se "Ver todos" estiver ativo, mostrar todos os centros de custo
+      } else {
+        // Se não houver filtro específico e nem usuário com centro de custo, mostrar todos
         params.cost_center_id = 'all';
       }
       
@@ -359,7 +359,7 @@ export default function Dashboard() {
   const handleClearFilters = () => {
     setSelectedCostCenter(null);
     setDateFilterType('month');
-    setShowAllCenters(false);
+    // Remover showAllCenters pois não estamos mais usando esse estado
   };
   
   // Formatar o nome do período
@@ -455,10 +455,6 @@ export default function Dashboard() {
             value={selectedCostCenter}
             onChange={(event, newValue) => {
               setSelectedCostCenter(newValue);
-              if (newValue) {
-                // Se um centro de custo específico foi selecionado, desative "Ver todos"
-                setShowAllCenters(false);
-              }
             }}
             renderInput={(params) => (
               <TextField 

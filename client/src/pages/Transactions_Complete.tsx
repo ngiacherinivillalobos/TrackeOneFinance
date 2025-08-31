@@ -47,7 +47,7 @@ import {
   FilterList as FilterListIcon,
   Clear as ClearIcon
 } from '@mui/icons-material';
-import api from '../lib/axios';
+import api from '../services/api';
 
 // Interfaces
 interface Transaction {

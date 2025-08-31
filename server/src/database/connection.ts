@@ -3,6 +3,7 @@ import sqlite3 from 'sqlite3';
 import path from 'path';
 import dotenv from 'dotenv';
 
+// Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
 
 // Verifica se estamos em ambiente de produção (Render)

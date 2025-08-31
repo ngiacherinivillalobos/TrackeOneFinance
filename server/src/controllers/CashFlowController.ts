@@ -60,12 +60,43 @@ export const CashFlowController = {
 
       // Filtro por centro de custo do usuário
       if (req.query.cost_center_id) {
+        console.log('======= FILTRO DE CENTRO DE CUSTO (CashFlow) =======');
+        console.log('Tipo do cost_center_id:', typeof req.query.cost_center_id);
+        console.log('Valor do cost_center_id:', req.query.cost_center_id);
+        
         // Se o valor for 'all', não aplicar filtro de centro de custo
         if (req.query.cost_center_id === 'all') {
-          console.log('Showing all cost centers');
+          console.log('Mostrando todos os centros de custo no CashFlow');
         } else {
-          whereConditions.push("cf.cost_center_id = ?");
-          params.push(req.query.cost_center_id);
+          // Verificar se tem vírgula, indicando múltiplos valores
+          if (req.query.cost_center_id.toString().includes(',')) {
+            // Múltiplos centros de custo separados por vírgula
+            const costCenterIds = req.query.cost_center_id.toString().split(',').map(id => id.trim());
+            
+            // Converter IDs para números e filtrar valores inválidos
+            const numericIds = costCenterIds
+              .map(id => parseInt(id, 10))
+              .filter(id => !isNaN(id));
+            
+            console.log('IDs originais (CashFlow):', costCenterIds);
+            console.log('IDs numéricos (CashFlow):', numericIds);
+            
+            if (numericIds.length > 0) {
+              // Construir cláusula IN diretamente na condição
+              whereConditions.push(`cf.cost_center_id IN (${numericIds.join(',')})`);
+              
+              // Não adiciona parâmetros já que os IDs estão diretamente na cláusula SQL
+              console.log('Cláusula SQL para múltiplos centros (CashFlow):', `cf.cost_center_id IN (${numericIds.join(',')})`);
+            }
+          } else {
+            // Único centro de custo
+            const costCenterId = parseInt(req.query.cost_center_id.toString(), 10);
+            if (!isNaN(costCenterId)) {
+              whereConditions.push("cf.cost_center_id = ?");
+              params.push(costCenterId);
+              console.log('Cláusula SQL para centro único (CashFlow):', 'cf.cost_center_id = ?', costCenterId);
+            }
+          }
         }
       } else if (userCostCenterId && req.query.show_all_centers !== 'true') {
         whereConditions.push("cf.cost_center_id = ?");
@@ -79,6 +110,23 @@ export const CashFlowController = {
 
       query += ` ORDER BY cf.date DESC, cf.created_at DESC`;
 
+      console.log('SQL query antes de executar (CashFlow):', query);
+      console.log('SQL params antes de executar (CashFlow):', params);
+      
+      // Imprimir a consulta com parâmetros substituídos para depuração
+      let debugSql = query;
+      for (const param of params) {
+        if (typeof param === 'string') {
+          debugSql = debugSql.replace('?', `'${param}'`);
+        } else if (param === null) {
+          debugSql = debugSql.replace('?', 'NULL');
+        } else {
+          debugSql = debugSql.replace('?', param);
+        }
+      }
+      
+      console.log('SQL COMPLETA COM PARÂMETROS (CashFlow):', debugSql);
+
       const rows = await all(db, query, params);
       res.json(rows);
     } catch (error) {
@@ -86,8 +134,8 @@ export const CashFlowController = {
       res.status(500).json({ error: 'Internal server error' });
     }
   },
-
-  // Obter um registro específico
+  
+// Obter um registro específico
   getById: async (req: Request, res: Response) => {
     try {
       const { db, get } = getDatabase();
