@@ -1,4 +1,7 @@
 import { Pool, QueryResult } from 'pg';
+// Adicionando declaração de módulo para resolver problema de tipos
+// @ts-ignore
+declare module 'pg';
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -143,7 +146,7 @@ const initializeDatabase = (): Promise<void> => {
         
         // Testar a conexão com o banco
         (db as Pool).query('SELECT NOW()', [])
-          .then(result => {
+          .then((result: QueryResult) => {
             console.log('Conexão com PostgreSQL testada com sucesso:', result.rows[0]);
             resolve();
           })
