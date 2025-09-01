@@ -1221,14 +1221,16 @@ export default function MonthlyControl() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        // Validar formato da data antes de criar o objeto Date
-        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-        if (!datePattern.test(transaction.transaction_date)) {
-          console.error('Formato de data inválido:', transaction.transaction_date);
-          return false;
-        }
+        // Processar a data da transação para garantir formato válido
+        let transactionDate;
         
-        const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        if (transaction.transaction_date.includes('T')) {
+          // Se já está no formato ISO completo com timestamp
+          transactionDate = new Date(transaction.transaction_date);
+        } else {
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        }
         
         // Verificar se a data é válida
         if (isNaN(transactionDate.getTime())) {
@@ -1254,14 +1256,16 @@ export default function MonthlyControl() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        // Validar formato da data antes de criar o objeto Date
-        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-        if (!datePattern.test(transaction.transaction_date)) {
-          console.error('Formato de data inválido:', transaction.transaction_date);
-          return false;
-        }
+        // Processar a data da transação para garantir formato válido
+        let transactionDate;
         
-        const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        if (transaction.transaction_date.includes('T')) {
+          // Se já está no formato ISO completo com timestamp
+          transactionDate = new Date(transaction.transaction_date);
+        } else {
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        }
         
         // Verificar se a data é válida
         if (isNaN(transactionDate.getTime())) {
@@ -2283,7 +2287,12 @@ export default function MonthlyControl() {
                     
                     <TableCell sx={{ minWidth: 90 }}>
                       <Typography variant="body2">
-                        {format(new Date(transaction.transaction_date + 'T00:00:00'), 'dd/MM/yyyy')}
+                        {format(
+                          transaction.transaction_date.includes('T') 
+                            ? new Date(transaction.transaction_date) 
+                            : new Date(transaction.transaction_date + 'T00:00:00'), 
+                          'dd/MM/yyyy'
+                        )}
                       </Typography>
                     </TableCell>
                     
