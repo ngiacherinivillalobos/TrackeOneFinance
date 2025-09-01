@@ -157,15 +157,15 @@ CREATE INDEX IF NOT EXISTS idx_cash_flow_record_type ON cash_flow(record_type);
 CREATE INDEX IF NOT EXISTS idx_cash_flow_cost_center ON cash_flow(cost_center_id);
 
 -- Inserindo apenas os tipos de categoria básicos para que o sistema funcione
-INSERT INTO category_types (name) VALUES 
-('Despesa'),
-('Receita'),
-('Transferência'),
-('Investimento')
-ON CONFLICT DO NOTHING;
+INSERT INTO category_types (id, name) VALUES 
+(1, 'Despesa'),
+(2, 'Receita'),
+(3, 'Transferência'),
+(4, 'Investimento')
+ON CONFLICT (id) DO NOTHING;
 
 -- Inserindo alguns status de pagamento básicos
-INSERT INTO payment_status (name) VALUES 
-('Pago'),
-('Pendente')
-ON CONFLICT DO NOTHING;
+INSERT INTO payment_status (id, name) VALUES 
+(1, 'Pago'),
+(2, 'Pendente')
+ON CONFLICT (id) DO NOTHING;
