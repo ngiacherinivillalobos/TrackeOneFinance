@@ -266,13 +266,20 @@ export default function MonthlyControl() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
+  // Garantir que os amounts sejam números válidos antes de somar
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
     
   const totalDespesas = transactions
     .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
@@ -293,9 +300,21 @@ export default function MonthlyControl() {
     return !t.is_paid && transactionDate > today;
   });
 
-  const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
+  const totalVencidos = vencidos.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
+  const totalVencemHoje = vencemHoje.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
+  const totalAVencer = aVencer.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
   const saldoPeriodo = totalReceitas - totalDespesas;
 
   // Carregar dados iniciais

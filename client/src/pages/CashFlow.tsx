@@ -133,10 +133,15 @@ export default function CashFlowPage() {
       cost_center_id: [] as string[]
     };
     
+    console.log('CashFlow - Usuário:', user);
+    
     // Se o usuário tem um centro de custo associado, adiciona-o ao filtro por padrão
     if (user?.cost_center_id) {
       defaultFilters.cost_center_id = [user.cost_center_id.toString()];
+      console.log('CashFlow - Centro de custo do usuário adicionado ao filtro:', user.cost_center_id);
     }
+    
+    console.log('CashFlow - Filtros iniciais:', defaultFilters);
     
     return defaultFilters;
   });
@@ -501,6 +506,88 @@ export default function CashFlowPage() {
       showSnackbar('Erro ao excluir registros', 'error');
     }
     setBatchActionsAnchor(null);
+  };
+
+  // Carregar dados para os filtros
+  const loadFilterData = async () => {
+    try {
+      console.log('CashFlow - Carregando dados para filtros...');
+      
+      // Carregar categorias
+      const categoryData = await categoryService.getAll();
+      console.log('CashFlow - Categorias carregadas:', categoryData);
+      setCategories(categoryData);
+      
+      // Carregar subcategorias
+      const subcategoryData = await subcategoryService.getAll();
+      console.log('CashFlow - Subcategorias carregadas:', subcategoryData);
+      setSubcategories(subcategoryData);
+      
+      // Carregar centros de custo
+      const costCenterData = await costCenterService.getAll();
+      console.log('CashFlow - Centros de custo carregados:', costCenterData);
+      setCostCenters(costCenterData);
+      
+    } catch (error) {
+      console.error('Erro ao carregar dados para filtros:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Erro ao carregar dados para filtros', 
+        severity: 'error' 
+      });
+    }
+  };
+
+  // Carregar dados iniciais
+  const loadCashFlowData = async () => {
+    setLoading(true);
+    try {
+      // Construir parâmetros de filtro
+      const params = new URLSearchParams();
+      
+      // Adicionar filtros de data com base no tipo selecionado
+      switch (dateFilterType) {
+        case 'month':
+          params.append('month', (currentDate.getMonth() + 1).toString().padStart(2, '0'));
+          params.append('year', currentDate.getFullYear().toString());
+          break;
+        case 'year':
+          params.append('year', selectedYear.toString());
+          break;
+        case 'custom':
+          if (customStartDate) {
+            params.append('start_date', customStartDate.toISOString().split('T')[0]);
+          }
+          if (customEndDate) {
+            params.append('end_date', customEndDate.toISOString().split('T')[0]);
+          }
+          break;
+      }
+      
+      // Adicionar filtro de centro de custo se especificado
+      if (filters.cost_center_id.length > 0) {
+        params.append('cost_center_id', filters.cost_center_id.join(','));
+      } else if (user?.cost_center_id) {
+        // Se o usuário tem um centro de custo associado, usar por padrão
+        params.append('cost_center_id', user.cost_center_id.toString());
+      }
+
+      console.log('CashFlow - Parâmetros da requisição:', Object.fromEntries(params));
+      
+      const data = await cashFlowService.getAll(Object.fromEntries(params));
+      console.log('CashFlow - Dados recebidos:', data);
+      setCashFlowRecords(data);
+      setSelectedRecords([]);
+    } catch (error) {
+      console.error('Erro ao carregar dados do fluxo de caixa:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Erro ao carregar dados do fluxo de caixa', 
+        severity: 'error' 
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
