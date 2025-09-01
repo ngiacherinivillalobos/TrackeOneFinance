@@ -158,7 +158,8 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   const resetForm = () => {
     if (transaction) {
       // Garantir que o amount seja um número antes de chamar toFixed
-      const amountValue = typeof transaction.amount === 'number' ? transaction.amount : parseFloat(transaction.amount) || 0;
+      const amountValue = typeof transaction.amount === 'number' ? transaction.amount : 
+                         (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0);
       const displayValue = isBatchMode ? '' : amountValue.toFixed(2).replace('.', ',');
       setFormData({
         payment_date: new Date().toISOString().split('T')[0],

@@ -968,7 +968,9 @@ export default function MonthlyControl() {
     setEditingTransaction(transaction);
     
     // Formatar o valor para o padrão brasileiro (substituir ponto por vírgula)
-    const formattedAmount = transaction.amount.toFixed(2).replace('.', ',');
+    const formattedAmount = (typeof transaction.amount === 'number' ? transaction.amount : 
+                           (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0))
+                           .toFixed(2).replace('.', ',');
     
     setFormData({
       description: transaction.description,

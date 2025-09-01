@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Paper,
   Typography,
@@ -16,21 +16,22 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import { ModernHeader } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
+import { cardService } from '../services/cardService';
 
 interface CreditCard {
   id: number;
   name: string;
-  limit: number;
-  available: number;
-  closingDay: number;
-  dueDay: number;
+  type: string;
+  limit_amount: string; // Vem como string do banco de dados
+  closing_day: number;
+  due_day: number;
 }
 
 interface CreditCardTransaction {
   id: number;
   date: string;
   description: string;
-  amount: number;
+  amount: number | string;
   installments: number;
   category: string;
   cardId: number;
@@ -39,6 +40,28 @@ interface CreditCardTransaction {
 export default function CreditCard() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<CreditCardTransaction[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const cardsData = await cardService.list();
+        // Mapear os dados para o formato esperado pelo frontend
+        const mappedCards = cardsData.map(card => ({
+          id: card.id!,
+          name: card.name,
+          type: card.brand || card.type || 'Crédito',
+          limit_amount: card.limit_amount || '0',
+          closing_day: card.closing_day || 15,
+          due_day: card.due_day || 10
+        }));
+        setCards(mappedCards);
+      } catch (error) {
+        console.error('Error loading cards:', error);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: colors.gray[50] }}>
@@ -98,16 +121,16 @@ export default function CreditCard() {
                       {card.name}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Limite: R$ {card.limit.toFixed(2)}
+                      Limite: R$ {parseFloat(card.limit_amount || '0').toFixed(2)}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Disponível: R$ {card.available.toFixed(2)}
+                      Disponível: R$ {parseFloat(card.limit_amount || '0').toFixed(2)}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Fechamento: Dia {card.closingDay}
+                      Fechamento: Dia {card.closing_day}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600] }}>
-                      Vencimento: Dia {card.dueDay}
+                      Vencimento: Dia {card.due_day}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -146,7 +169,9 @@ export default function CreditCard() {
                   <TableRow key={transaction.id} sx={{ '&:hover': { bgcolor: colors.gray[50] } }}>
                     <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
                     <TableCell>{transaction.description}</TableCell>
-                    <TableCell align="right">R$ {transaction.amount.toFixed(2)}</TableCell>
+                    <TableCell align="right">R$ {(typeof transaction.amount === 'number' ? transaction.amount : 
+                           (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0))
+                           .toFixed(2)}</TableCell>
                     <TableCell>{transaction.installments}x</TableCell>
                     <TableCell>{transaction.category}</TableCell>
                     <TableCell>

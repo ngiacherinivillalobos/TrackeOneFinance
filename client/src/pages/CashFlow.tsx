@@ -334,8 +334,9 @@ export default function CashFlowPage() {
 
   const handleEditRecord = (record: CashFlowRecord) => {
     setEditingRecord(record);
-    const formatValueForEdit = (value: number): string => {
-      return value.toFixed(2).replace('.', ',');
+    const formatValueForEdit = (value: number | string): string => {
+      const numericValue = typeof value === 'number' ? value : parseFloat(value) || 0;
+      return numericValue.toFixed(2).replace('.', ',');
     };
     
     setFormData({
