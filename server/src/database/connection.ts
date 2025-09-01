@@ -34,7 +34,7 @@ const dbGet = (db: Database, query: string, params: any[] = []): Promise<any> =>
           console.log(`Query PostgreSQL [get] bem-sucedida, retornando ${result.rows.length > 0 ? '1' : '0'} registro`);
           resolve(result.rows[0]);
         })
-        .catch(err => {
+        .catch((err: Error) => {
           console.error('Erro ao executar query PostgreSQL [get]:', err);
           reject(err);
         });
@@ -43,7 +43,7 @@ const dbGet = (db: Database, query: string, params: any[] = []): Promise<any> =>
       console.log(`Executando query SQLite [get]: ${query}`);
       console.log('Parâmetros:', params);
       
-      (db as sqlite3.Database).get(query, params, (err, row) => {
+      (db as sqlite3.Database).get(query, params, (err: Error | null, row: any) => {
         if (err) {
           console.error('Erro ao executar query SQLite [get]:', err);
           reject(err);
@@ -74,10 +74,10 @@ const dbRun = (db: Database, query: string, params: any[] = []): Promise<{ lastI
             changes: result.rowCount !== null ? result.rowCount : undefined
           });
         })
-        .catch(reject);
+        .catch((error: Error) => reject(error));
     } else {
       // SQLite
-      (db as sqlite3.Database).run(query, params, function(err) {
+      (db as sqlite3.Database).run(query, params, function(this: any, err: Error | null) {
         if (err) reject(err);
         else resolve({ lastID: this.lastID, changes: this.changes });
       });
@@ -104,7 +104,7 @@ const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> 
           console.log(`Query PostgreSQL [all] bem-sucedida, retornando ${result.rows.length} registros`);
           resolve(result.rows);
         })
-        .catch(err => {
+        .catch((err: Error) => {
           console.error('Erro ao executar query PostgreSQL [all]:', err);
           reject(err);
         });
@@ -113,7 +113,7 @@ const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> 
       console.log(`Executando query SQLite [all]: ${query}`);
       console.log('Parâmetros:', params);
       
-      (db as sqlite3.Database).all(query, params, (err, rows) => {
+      (db as sqlite3.Database).all(query, params, (err: Error | null, rows: any[]) => {
         if (err) {
           console.error('Erro ao executar query SQLite [all]:', err);
           reject(err);
@@ -147,7 +147,7 @@ const initializeDatabase = (): Promise<void> => {
             console.log('Conexão com PostgreSQL testada com sucesso:', result.rows[0]);
             resolve();
           })
-          .catch(error => {
+          .catch((error: Error) => {
             console.error('Erro ao testar conexão com PostgreSQL:', error);
             reject(error);
           });

@@ -14,24 +14,24 @@ const Login: React.FC = () => {
   const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
+  const checkServer = async () => {
+    try {
+      setServerStatus('checking');
+      await api.get('/api/test');
+      setServerStatus('online');
+    } catch (error) {
+      console.error('Erro ao verificar status do servidor:', error);
+      setServerStatus('offline');
+      setSnackbar({
+        open: true,
+        message: 'Não foi possível conectar ao servidor. Em ambientes de produção, o primeiro acesso pode demorar até 2 minutos para ativar o servidor.',
+        severity: 'error'
+      });
+    }
+  };
+
   // Verificar se o servidor está online
   useEffect(() => {
-    const checkServer = async () => {
-      try {
-        setServerStatus('checking');
-        await api.get('/api/test');
-        setServerStatus('online');
-      } catch (error) {
-        console.error('Erro ao verificar status do servidor:', error);
-        setServerStatus('offline');
-        setSnackbar({
-          open: true,
-          message: 'Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente mais tarde.',
-          severity: 'error'
-        });
-      }
-    };
-    
     checkServer();
   }, []);
 
@@ -51,7 +51,7 @@ const Login: React.FC = () => {
     if (serverStatus === 'offline') {
       setSnackbar({
         open: true,
-        message: 'Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente mais tarde.',
+        message: 'Não foi possível conectar ao servidor. Em ambientes de produção, o primeiro acesso pode demorar até 2 minutos para ativar o servidor.',
         severity: 'error'
       });
       return;
@@ -95,7 +95,16 @@ const Login: React.FC = () => {
         
         {serverStatus === 'offline' && (
           <Alert severity="error" sx={{ mb: 3 }}>
-            Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente mais tarde.
+            Não foi possível conectar ao servidor. Em ambientes de produção, o primeiro acesso pode demorar até 2 minutos para ativar o servidor.
+            <Button 
+              variant="outlined" 
+              size="small" 
+              color="error" 
+              sx={{ mt: 1, display: 'block', mx: 'auto' }} 
+              onClick={checkServer}
+            >
+              Tentar novamente
+            </Button>
           </Alert>
         )}
         
@@ -128,7 +137,10 @@ const Login: React.FC = () => {
             disabled={loading || serverStatus !== 'online'} 
             sx={{ mt: 2, mb: 2 }}
           >
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+              Entrando...
+            </Box> : 'Entrar'}
           </Button>
         </form>
         <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
