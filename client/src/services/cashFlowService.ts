@@ -44,7 +44,10 @@ class CashFlowService {
         params.append('cost_center_id', filters.cost_center_id.toString());
       }
 
+      console.log('CashFlow getAll - Params:', params.toString());
+      
       const response = await api.get(`${this.baseURL}?${params.toString()}`);
+      console.log('CashFlow getAll - Response data:', response.data.length, 'registros');
       return response.data;
     } catch (error) {
       console.error('Error fetching cash flow records:', error);

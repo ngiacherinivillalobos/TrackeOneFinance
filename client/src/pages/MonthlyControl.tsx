@@ -1213,22 +1213,68 @@ export default function MonthlyControl() {
 
   // Verificar se transação está vencida
   const isTransactionOverdue = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-    transactionDate.setHours(0, 0, 0, 0);
-    return transactionDate < today;
+      try {
+        // Verificamos se a data da transação é válida antes de criar a data
+        if (!transaction.transaction_date) return false;
+        
+        if (transaction.is_paid) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Validar formato da data antes de criar o objeto Date
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        if (!datePattern.test(transaction.transaction_date)) {
+          console.error('Formato de data inválido:', transaction.transaction_date);
+          return false;
+        }
+        
+        const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        
+        // Verificar se a data é válida
+        if (isNaN(transactionDate.getTime())) {
+          console.error('Data inválida:', transaction.transaction_date);
+          return false;
+        }
+        
+        transactionDate.setHours(0, 0, 0, 0);
+        return transactionDate < today;
+      } catch (error) {
+        console.error('Erro ao verificar se transação está vencida:', error);
+        return false;
+      }
   };
 
   // Verificar se transação vence hoje
   const isTransactionDueToday = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-    transactionDate.setHours(0, 0, 0, 0);
-    return transactionDate.getTime() === today.getTime();
+      try {
+        // Verificamos se a data da transação é válida antes de criar a data
+        if (!transaction.transaction_date) return false;
+        
+        if (transaction.is_paid) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Validar formato da data antes de criar o objeto Date
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        if (!datePattern.test(transaction.transaction_date)) {
+          console.error('Formato de data inválido:', transaction.transaction_date);
+          return false;
+        }
+        
+        const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        
+        // Verificar se a data é válida
+        if (isNaN(transactionDate.getTime())) {
+          console.error('Data inválida:', transaction.transaction_date);
+          return false;
+        }
+        
+        transactionDate.setHours(0, 0, 0, 0);
+        return transactionDate.getTime() === today.getTime();
+      } catch (error) {
+        console.error('Erro ao verificar se transação vence hoje:', error);
+        return false;
+      }
   };
 
   // Obter status da transação
