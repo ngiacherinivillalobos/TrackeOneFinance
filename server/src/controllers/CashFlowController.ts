@@ -54,8 +54,15 @@ export const CashFlowController = {
 
       // Filtro por mês/ano se fornecido
       if (month && year) {
-        whereConditions.push("strftime('%m', cf.date) = ? AND strftime('%Y', cf.date) = ?");
-        params.push(month.toString().padStart(2, '0'), year.toString());
+        // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
+        if (process.env.NODE_ENV === 'production') {
+          // PostgreSQL usa EXTRACT em vez de strftime
+          whereConditions.push("EXTRACT(MONTH FROM cf.date) = ? AND EXTRACT(YEAR FROM cf.date) = ?");
+        } else {
+          // SQLite usa strftime
+          whereConditions.push("strftime('%m', cf.date) = ? AND strftime('%Y', cf.date) = ?");
+        }
+        params.push(parseInt(month.toString(), 10), parseInt(year.toString(), 10));
       }
 
       // Filtro por centro de custo do usuário

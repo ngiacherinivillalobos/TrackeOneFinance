@@ -148,7 +148,14 @@ const initializeDatabase = (): Promise<void> => {
         (db as Pool).query('SELECT NOW()', [])
           .then((result: QueryResult) => {
             console.log('Conexão com PostgreSQL testada com sucesso:', result.rows[0]);
-            resolve();
+            
+            // Verificar se as tabelas existem e criá-las se necessário
+            initializePostgreSQLTables(db as Pool)
+              .then(() => resolve())
+              .catch((error: Error) => {
+                console.error('Erro ao inicializar tabelas PostgreSQL:', error);
+                reject(error);
+              });
           })
           .catch((error: Error) => {
             console.error('Erro ao testar conexão com PostgreSQL:', error);
@@ -176,6 +183,52 @@ const initializeDatabase = (): Promise<void> => {
       });
     }
   });
+};
+
+// Função para inicializar tabelas no PostgreSQL
+const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
+  console.log('Verificando e criando tabelas no PostgreSQL se necessário...');
+  
+  // Verificar se a tabela payment_details existe
+  try {
+    const result = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'payment_details'
+      )
+    `);
+    
+    const tableExists = result.rows[0].exists;
+    console.log('Tabela payment_details existe:', tableExists);
+    
+    if (!tableExists) {
+      console.log('Criando tabela payment_details...');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS payment_details (
+          id SERIAL PRIMARY KEY,
+          transaction_id INTEGER NOT NULL,
+          payment_date DATE NOT NULL,
+          paid_amount DECIMAL(10,2) NOT NULL,
+          original_amount DECIMAL(10,2) NOT NULL,
+          payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('bank_account', 'credit_card')),
+          bank_account_id INTEGER,
+          card_id INTEGER,
+          discount_amount DECIMAL(10,2) DEFAULT 0,
+          interest_amount DECIMAL(10,2) DEFAULT 0,
+          observations TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          
+          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+          FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id),
+          FOREIGN KEY (card_id) REFERENCES cards(id)
+        )
+      `);
+      console.log('Tabela payment_details criada com sucesso');
+    }
+  } catch (error) {
+    console.error('Erro ao verificar/criar tabela payment_details:', error);
+    throw error;
+  }
 };
 
 const getDatabase = () => {

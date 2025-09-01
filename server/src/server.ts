@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { initializeDatabase } from './database/connection';
+import { runMigrations } from './database/migrations';
 import mainRouter from './routes';
 import dotenv from 'dotenv';
 
@@ -62,6 +63,10 @@ const start = async () => {
   try {
     await initializeDatabase();
     console.log('Database initialized successfully');
+    
+    // Run migrations
+    await runMigrations();
+    console.log('Migrations applied successfully');
 
     const server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
