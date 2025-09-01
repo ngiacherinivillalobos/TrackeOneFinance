@@ -91,3 +91,6 @@ TrackeOneFinance_backup_*/
 server/.env
 client/.env
 .env.*
+
+# Scripts de diagnóstico temporários
+scripts/diagnostic/
