@@ -89,5 +89,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     FOREIGN KEY (contact_id) REFERENCES contacts(id)
 );
 
+-- Inserindo alguns status de pagamento básicos
+INSERT OR IGNORE INTO payment_status (id, name) VALUES 
+(1, 'Em aberto'),
+(2, 'Pago'),
+(3, 'Vencido');
+
 -- Tabelas criadas e prontas para uso
 -- Todas as tabelas estão vazias para cadastro manual dos seus próprios dados

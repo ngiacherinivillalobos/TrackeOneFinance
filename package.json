@@ -12,7 +12,12 @@
     "test-api": "node test_api.js",
     "test-jwt": "node test_jwt.js",
     "check-db": "node check_db_structure.js",
-    "check-server": "node check_server.js"
+    "check-server": "node check_server.js",
+    "deploy-check": "node scripts/deploy_check.js",
+    "generate-secure-jwt": "node scripts/generate_secure_jwt.js",
+    "deploy": "bash scripts/deploy_production.sh",
+    "check-deploy": "node scripts/check_deploy_status.js",
+    "project-report": "node scripts/generate_project_report.js"
   },
   "dependencies": {
     "@types/bcrypt": "^6.0.0",

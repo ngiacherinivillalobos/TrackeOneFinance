@@ -94,3 +94,4 @@ client/.env
 
 # Scripts de diagnóstico temporários
 scripts/diagnostic/
+.vercel

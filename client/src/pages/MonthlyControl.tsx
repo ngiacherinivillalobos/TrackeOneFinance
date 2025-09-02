@@ -311,45 +311,24 @@ export default function MonthlyControl() {
       return sum + amount;
     }, 0);
     
-  const totalSelected = totalSelectedReceitas + totalSelectedDespesas + totalSelectedInvestimentos;
-  const totalPeriodo = totalReceitas + totalDespesas + totalInvestimentos;
+  const totalSelected = totalSelectedReceitas - totalSelectedDespesas - totalSelectedInvestimentos;
+  const totalPeriodo = totalReceitas - totalDespesas - totalInvestimentos;
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
-    const transactionDate = (() => {
-      if (t.transaction_date.includes('T')) {
-        return new Date(t.transaction_date);
-      } else {
-        // Usar formato UTC para evitar problemas de fuso horário
-        return new Date(t.transaction_date + 'T00:00:00Z');
-      }
-    })();
+    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
     return t.is_paid !== undefined ? !t.is_paid && transactionDate < today : false;
   });
 
   const vencemHoje = transactions.filter(t => {
-    const transactionDate = (() => {
-      if (t.transaction_date.includes('T')) {
-        return new Date(t.transaction_date);
-      } else {
-        // Usar formato UTC para evitar problemas de fuso horário
-        return new Date(t.transaction_date + 'T00:00:00Z');
-      }
-    })();
+    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
     return t.is_paid !== undefined ? !t.is_paid && transactionDate.getTime() === today.getTime() : false;
   });
 
   const aVencer = transactions.filter(t => {
-    const transactionDate = (() => {
-      if (t.transaction_date.includes('T')) {
-        return new Date(t.transaction_date);
-      } else {
-        // Usar formato UTC para evitar problemas de fuso horário
-        return new Date(t.transaction_date + 'T00:00:00Z');
-      }
-    })();
+    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
     return t.is_paid !== undefined ? !t.is_paid && transactionDate > today : false;
   });
@@ -602,17 +581,7 @@ export default function MonthlyControl() {
         filteredTransactions = filteredTransactions.filter((t: any) => {
           if (filters.payment_status_id.includes('paid') && t.is_paid) return true;
           if (filters.payment_status_id.includes('unpaid') && !t.is_paid) return true;
-          if (filters.payment_status_id.includes('overdue') && !t.is_paid) {
-            const transactionDate = (() => {
-              if (t.transaction_date.includes('T')) {
-                return new Date(t.transaction_date);
-              } else {
-                // Usar formato UTC para evitar problemas de fuso horário
-                return new Date(t.transaction_date + 'T00:00:00Z');
-              }
-            })();
-            return transactionDate < new Date();
-          }
+          if (filters.payment_status_id.includes('overdue') && !t.is_paid && new Date(t.transaction_date) < new Date()) return true;
           if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
           return false;
         });
@@ -681,14 +650,7 @@ export default function MonthlyControl() {
           }));
           
           overdueTransactions = overdueData.filter((t: any) => {
-            const transactionDate = (() => {
-              if (t.transaction_date.includes('T')) {
-                return new Date(t.transaction_date);
-              } else {
-                // Usar formato UTC para evitar problemas de fuso horário
-                return new Date(t.transaction_date + 'T00:00:00Z');
-              }
-            })();
+            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
             transactionDate.setHours(0, 0, 0, 0);
             // Verificar se a transação está vencida (data < hoje) e não paga
             return !t.is_paid && transactionDate < today;
@@ -1299,22 +1261,8 @@ export default function MonthlyControl() {
 
     switch (orderBy) {
       case 'transaction_date':
-        aValue = (() => {
-          if (a.transaction_date.includes('T')) {
-            return new Date(a.transaction_date);
-          } else {
-            // Usar formato UTC para evitar problemas de fuso horário
-            return new Date(a.transaction_date + 'T00:00:00Z');
-          }
-        })();
-        bValue = (() => {
-          if (b.transaction_date.includes('T')) {
-            return new Date(b.transaction_date);
-          } else {
-            // Usar formato UTC para evitar problemas de fuso horário
-            return new Date(b.transaction_date + 'T00:00:00Z');
-          }
-        })();
+        aValue = new Date(a.transaction_date);
+        bValue = new Date(b.transaction_date);
         break;
       case 'description':
         aValue = a.description.toLowerCase();
@@ -1460,8 +1408,8 @@ export default function MonthlyControl() {
           // Se já está no formato ISO completo com timestamp
           transactionDate = new Date(transaction.transaction_date);
         } else {
-          // Se está apenas no formato YYYY-MM-DD, usar formato UTC para evitar problemas de fuso horário
-          transactionDate = new Date(transaction.transaction_date + 'T00:00:00Z');
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
         }
         
         // Verificar se a data é válida
@@ -1495,8 +1443,8 @@ export default function MonthlyControl() {
           // Se já está no formato ISO completo com timestamp
           transactionDate = new Date(transaction.transaction_date);
         } else {
-          // Se está apenas no formato YYYY-MM-DD, usar formato UTC para evitar problemas de fuso horário
-          transactionDate = new Date(transaction.transaction_date + 'T00:00:00Z');
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
         }
         
         // Verificar se a data é válida
@@ -2520,17 +2468,9 @@ export default function MonthlyControl() {
                     <TableCell sx={{ minWidth: 90 }}>
                       <Typography variant="body2">
                         {format(
-                          (() => {
-                            // Tratar datas de forma consistente entre ambientes
-                            if (transaction.transaction_date.includes('T')) {
-                              // Formato ISO completo
-                              return new Date(transaction.transaction_date);
-                            } else {
-                              // Formato YYYY-MM-DD, adicionar T00:00:00 para evitar problemas de fuso
-                              // Usar data no formato UTC para evitar conversões de fuso horário
-                              return new Date(transaction.transaction_date + 'T00:00:00Z');
-                            }
-                          })(),
+                          transaction.transaction_date.includes('T') 
+                            ? new Date(transaction.transaction_date) 
+                            : new Date(transaction.transaction_date + 'T00:00:00'), 
                           'dd/MM/yyyy'
                         )}
                       </Typography>

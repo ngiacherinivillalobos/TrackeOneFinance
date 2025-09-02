@@ -139,6 +139,7 @@ INSERT OR IGNORE INTO category_types (name) VALUES
 ('Investimento');
 
 -- Inserindo alguns status de pagamento básicos
-INSERT OR IGNORE INTO payment_status (name) VALUES 
-('Pago'),
-('Pendente');
+INSERT OR IGNORE INTO payment_status (id, name) VALUES 
+(1, 'Em aberto'),
+(2, 'Pago'),
+(3, 'Vencido');

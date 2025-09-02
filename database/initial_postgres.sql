@@ -166,6 +166,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Inserindo alguns status de pagamento básicos
 INSERT INTO payment_status (id, name) VALUES 
-(1, 'Pago'),
-(2, 'Pendente')
+(1, 'Em aberto'),
+(2, 'Pago'),
+(3, 'Vencido')
 ON CONFLICT (id) DO NOTHING;
