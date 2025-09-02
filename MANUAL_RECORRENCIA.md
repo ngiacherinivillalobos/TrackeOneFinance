@@ -226,8 +226,26 @@ const generateRecurrencePreview = () => {
         <TableBody>
           {recurrencePreview.map((item, index) => (
             <TableRow key={index}>
-              <TableCell>{new Date(item.creation_date).toLocaleDateString('pt-BR')}</TableCell>
-              <TableCell>{new Date(item.due_date).toLocaleDateString('pt-BR')}</TableCell>
+              <TableCell>
+                {(() => {
+                  if (item.creation_date.includes('T')) {
+                    return new Date(item.creation_date).toLocaleDateString('pt-BR');
+                  } else {
+                    // Usar formato UTC para evitar problemas de fuso horário
+                    return new Date(item.creation_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                  }
+                })()}
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  if (item.due_date.includes('T')) {
+                    return new Date(item.due_date).toLocaleDateString('pt-BR');
+                  } else {
+                    // Usar formato UTC para evitar problemas de fuso horário
+                    return new Date(item.due_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                  }
+                })()}
+              </TableCell>
               <TableCell>{item.description}</TableCell>
               <TableCell align="right">
                 {item.amount.toLocaleString('pt-BR', { 

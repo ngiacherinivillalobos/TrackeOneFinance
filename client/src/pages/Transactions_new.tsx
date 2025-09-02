@@ -315,7 +315,14 @@ export default function Transactions() {
 
     transactions.forEach(transaction => {
       const amount = Number(transaction.amount);
-      const dataVencimento = new Date(transaction.transaction_date);
+      const dataVencimento = (() => {
+        if (transaction.transaction_date.includes('T')) {
+          return new Date(transaction.transaction_date);
+        } else {
+          // Usar formato UTC para evitar problemas de fuso horário
+          return new Date(transaction.transaction_date + 'T00:00:00Z');
+        }
+      })();
       dataVencimento.setHours(0, 0, 0, 0);
       const isPago = transaction.payment_status_name === 'Pago';
       // Totais por tipo
@@ -730,7 +737,14 @@ export default function Transactions() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {new Date(transaction.transaction_date).toLocaleDateString('pt-BR')}
+                        {(() => {
+                          if (transaction.transaction_date.includes('T')) {
+                            return new Date(transaction.transaction_date).toLocaleDateString('pt-BR');
+                          } else {
+                            // Usar formato UTC para evitar problemas de fuso horário
+                            return new Date(transaction.transaction_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                          }
+                        })()}
                       </TableCell>
                       <TableCell>{transaction.category_name ?? ''}</TableCell>
                       <TableCell>

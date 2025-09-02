@@ -250,7 +250,14 @@ export const UsersManagement: React.FC = () => {
                       'Nenhum'}
                   </TableCell>
                   <TableCell>
-                    {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                    {(() => {
+                      if (user.created_at.includes('T')) {
+                        return new Date(user.created_at).toLocaleDateString('pt-BR');
+                      } else {
+                        // Usar formato UTC para evitar problemas de fuso horário
+                        return new Date(user.created_at + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                      }
+                    })()}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
                     <IconButton
