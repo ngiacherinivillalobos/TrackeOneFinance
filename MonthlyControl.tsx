@@ -73,6 +73,8 @@ import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
+import { useAuth } from '../contexts/AuthContext';
+
 
 interface Transaction {
   id: number;
@@ -96,7 +98,7 @@ interface Transaction {
   subcategory?: {
     id: number;
     name: string;
-  };
+  }
   cost_center?: {
     id: number;
     name: string;
@@ -163,14 +165,28 @@ export default function MonthlyControl() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Estados para filtros
-  const [filters, setFilters] = useState<Filters>({
-    transaction_type: [],
-    payment_status_id: [], // Mostrando todas as transações por padrão
-    category_id: [],
-    subcategory_id: '',
-    contact_id: [],
-    cost_center_id: []
+  const { user } = useAuth();
+  const [filters, setFilters] = useState<Filters>(() => {
+    // Inicializa os filtros com valores padrão
+    const defaultFilters: Filters = {
+      transaction_type: [],
+      payment_status_id: ['unpaid', 'overdue'], // 'unpaid' = 'Em aberto', 'overdue' = 'Vencido'
+      category_id: [],
+      subcategory_id: '',
+      contact_id: [],
+      cost_center_id: [] // Inicialmente vazio
+    };
+    
+    // Se o usuário tem um centro de custo associado, adiciona-o ao filtro por padrão
+    if (user?.cost_center_id) {
+      defaultFilters.cost_center_id = [user.cost_center_id.toString()];
+    }
+    
+    return defaultFilters;
   });
+  
+  // O filtro já é inicializado com o centro de custo do usuário, se existir
+  // Não estamos mais utilizando useEffect para atualizar o filtro depois
   
   // Estados para ordenação
   const [orderBy, setOrderBy] = useState<string>('transaction_date');
@@ -250,37 +266,94 @@ export default function MonthlyControl() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
+  // Garantir que os amounts sejam números válidos antes de somar
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
     
   const totalDespesas = transactions
     .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+  const totalInvestimentos = transactions
+    .filter(t => t.transaction_type === 'Investimento')
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
+
+  // Cálculo dos totalizadores das transações selecionadas
+  const selectedTransactionsData = transactions.filter(t => selectedTransactions.includes(t.id));
+  const totalSelectedReceitas = selectedTransactionsData
+    .filter(t => t.transaction_type === 'Receita')
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+  const totalSelectedDespesas = selectedTransactionsData
+    .filter(t => t.transaction_type === 'Despesa')
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+  const totalSelectedInvestimentos = selectedTransactionsData
+    .filter(t => t.transaction_type === 'Investimento')
+    .reduce((sum, t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+  const totalSelected = totalSelectedReceitas + totalSelectedDespesas + totalSelectedInvestimentos;
+  const totalPeriodo = totalReceitas + totalDespesas + totalInvestimentos;
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
     const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate < today;
+    return t.is_paid !== undefined ? !t.is_paid && transactionDate < today : false;
   });
 
   const vencemHoje = transactions.filter(t => {
     const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate.getTime() === today.getTime();
+    return t.is_paid !== undefined ? !t.is_paid && transactionDate.getTime() === today.getTime() : false;
   });
 
   const aVencer = transactions.filter(t => {
     const transactionDate = new Date(t.transaction_date + 'T00:00:00');
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate > today;
+    return t.is_paid !== undefined ? !t.is_paid && transactionDate > today : false;
   });
 
-  const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const saldoPeriodo = totalReceitas - totalDespesas;
+  const totalVencidos = vencidos.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
+  const totalVencemHoje = vencemHoje.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
+  const totalAVencer = aVencer.reduce((sum, t) => {
+    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
+    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  }, 0);
+  
+  // Cálculo do saldo do período (com investimentos)
+  // Quando há transações selecionadas, mostrar o saldo das transações selecionadas
+  // Caso contrário, mostrar o saldo de todas as transações
+  const saldoPeriodo = selectedTransactions.length > 0 
+    ? totalSelectedReceitas - totalSelectedDespesas - totalSelectedInvestimentos
+    : totalReceitas - totalDespesas - totalInvestimentos;
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -437,16 +510,28 @@ export default function MonthlyControl() {
           startDate = format(customStartDate, 'yyyy-MM-dd');
           endDate = format(customEndDate, 'yyyy-MM-dd');
         }
+      } else {
+        // Para "Todo o período", não aplicar filtros de data
+        startDate = undefined;
+        endDate = undefined;
       }
       
       // Preparar parâmetros de filtro
       const baseParams: any = {
         ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
           // Tratar filtros de array e payment_status_id separadamente
-          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
+          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'category_id') {
             return false; // Não incluir nos parâmetros da URL (serão aplicados no frontend)
           }
-          return value !== '';
+          // Tratar filtro de centro de custo separadamente
+          if (key === 'cost_center_id') {
+            return false; // Não incluir nos parâmetros da URL (será aplicado no frontend)
+          }
+          // Tratar filtro de subcategoria separadamente
+          if (key === 'subcategory_id') {
+            return false; // Não incluir nos parâmetros da URL (será aplicado no frontend)
+          }
+          return Array.isArray(value) ? value.length > 0 : value !== '';
         }))
       };
       
@@ -454,11 +539,30 @@ export default function MonthlyControl() {
       if (dateFilterType !== 'all' && startDate && endDate) {
         baseParams.start_date = startDate;
         baseParams.end_date = endDate;
+      } else if (dateFilterType === 'all') {
+        // Para "Todo o período", remover quaisquer filtros de data existentes
+        delete baseParams.start_date;
+        delete baseParams.end_date;
+      }
+      
+      // Adicionar filtro de centro de custo
+      if (filters.cost_center_id.length > 0) {
+        // Converter para string separada por vírgula para o backend
+        baseParams.cost_center_id = filters.cost_center_id.join(',');
+        console.log('Centro de custo selecionados - array:', JSON.stringify(filters.cost_center_id));
+        console.log('Centro de custo selecionados - string:', filters.cost_center_id.join(','));
+      } else {
+        // Se nenhum filtro estiver selecionado, mostrar todos os registros
+        baseParams.cost_center_id = 'all';
+        console.log('Mostrando todos os centros de custo (sem filtro)');
       }
       
       const params = new URLSearchParams(baseParams);
       
       console.log('Enviando requisição para /api/transactions com os parâmetros:', params.toString());
+      console.log('Parâmetros originais:', baseParams);
+      console.log('Filtro de centro de custo atual:', filters.cost_center_id);
+      
       
       const response = await api.get(`/transactions?${params}`);
       console.log("Resposta da API recebida:", response.data);
@@ -466,15 +570,24 @@ export default function MonthlyControl() {
       // Aplicar filtros no frontend
       let filteredTransactions = response.data;
       
+      // Converter o campo is_paid baseado no payment_status_id antes de aplicar filtros
+      filteredTransactions = filteredTransactions.map((t: any) => ({
+        ...t,
+        is_paid: t.payment_status_id === 2
+      }));
+      
       // Filtro de status de pagamento
       if (filters.payment_status_id.length > 0) {
         filteredTransactions = filteredTransactions.filter((t: any) => {
-          if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
-          if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && new Date(t.transaction_date) < new Date()) return true;
+          if (filters.payment_status_id.includes('paid') && t.is_paid) return true;
+          if (filters.payment_status_id.includes('unpaid') && !t.is_paid) return true;
+          if (filters.payment_status_id.includes('overdue') && !t.is_paid && new Date(t.transaction_date) < new Date()) return true;
           if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
           return false;
         });
+      } else {
+        // Se não houver filtro de status, mostrar apenas registros não pagos
+        filteredTransactions = filteredTransactions.filter((t: any) => !t.is_paid);
       }
       
       // Filtro de tipo de transação
@@ -505,7 +618,110 @@ export default function MonthlyControl() {
         );
       }
       
-      setTransactions(filteredTransactions.map((transaction: any) => ({
+      // Filtro de subcategoria
+      if (filters.subcategory_id) {
+        filteredTransactions = filteredTransactions.filter((t: any) => 
+          t.subcategory_id?.toString() === filters.subcategory_id
+        );
+      }
+      
+      // Sempre incluir registros vencidos (data < hoje e em aberto), independentemente dos filtros de data
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Buscar registros vencidos separadamente apenas se o filtro de situação incluir 'overdue' ou 'unpaid'
+      let overdueTransactions: any[] = [];
+      if (filters.payment_status_id.length === 0 || 
+          filters.payment_status_id.includes('overdue') || 
+          filters.payment_status_id.includes('unpaid')) {
+        
+        const overdueParams = { ...baseParams };
+        // Remover filtros de data para buscar todos os vencidos
+        delete overdueParams.start_date;
+        delete overdueParams.end_date;
+        
+        try {
+          // Garantir que estamos buscando apenas registros não pagos
+          const overdueResponse = await api.get(`/transactions?${new URLSearchParams(overdueParams)}`);
+          // Converter o campo is_paid baseado no payment_status_id
+          const overdueData = overdueResponse.data.map((t: any) => ({
+            ...t,
+            is_paid: t.payment_status_id === 2
+          }));
+          
+          overdueTransactions = overdueData.filter((t: any) => {
+            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+            transactionDate.setHours(0, 0, 0, 0);
+            // Verificar se a transação está vencida (data < hoje) e não paga
+            return !t.is_paid && transactionDate < today;
+          });
+          
+          // Aplicar os mesmos filtros aos registros vencidos (exceto data)
+          // Filtro de tipo de transação
+          if (filters.transaction_type.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.transaction_type.includes(t.transaction_type)
+            );
+          }
+          
+          // Filtro de contato
+          if (filters.contact_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.contact_id.includes(t.contact_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de categoria
+          if (filters.category_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.category_id.includes(t.category_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de centro de custo
+          if (filters.cost_center_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de subcategoria
+          if (filters.subcategory_id) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              t.subcategory_id?.toString() === filters.subcategory_id
+            );
+          }
+          
+          // Filtro de status de pagamento - aplicar também aos vencidos
+          if (filters.payment_status_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => {
+              // Para registros vencidos, verificar se 'overdue' ou 'unpaid' estão nos filtros
+              return (filters.payment_status_id.includes('overdue') || filters.payment_status_id.includes('unpaid')) && 
+                     !t.is_paid; // Garantir que registros vencidos não estão pagos
+            });
+          } else {
+            // Se não houver filtro de status, mostrar apenas vencidos não pagos
+            overdueTransactions = overdueTransactions.filter((t: any) => !t.is_paid);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar transações vencidas:', error);
+          // Se houver erro ao carregar transações vencidas, continuar com a lista filtrada normalmente
+          overdueTransactions = [];
+        }
+      }
+      
+      // Combinar transações filtradas com transações vencidas
+      const combinedTransactions = [...filteredTransactions, ...overdueTransactions];
+      
+      // Garantir que não há transações duplicadas baseado no ID
+      const uniqueTransactions = combinedTransactions.reduce((acc: any[], transaction: any) => {
+        if (!acc.some((t: any) => t.id === transaction.id)) {
+          acc.push(transaction);
+        }
+        return acc;
+      }, []);
+      
+      setTransactions(uniqueTransactions.map((transaction: any) => ({
         ...transaction,
         // Mapear os dados relacionados para o formato esperado pelo frontend
         contact: transaction.contact_name ? { 
@@ -525,8 +741,8 @@ export default function MonthlyControl() {
           name: transaction.cost_center_name,
           number: transaction.cost_center_number
         } : null,
-        // Converter o campo is_paid baseado no payment_status_id
-        is_paid: transaction.payment_status_id === 2,
+        // Garantir que o campo is_paid esteja corretamente definido
+        is_paid: transaction.is_paid !== undefined ? transaction.is_paid : transaction.payment_status_id === 2,
         // Campos de parcelamento
         is_installment: transaction.is_installment || false,
         installment_number: transaction.installment_number || null,
@@ -545,6 +761,8 @@ export default function MonthlyControl() {
           status: error.response?.status,
         });
       }
+      // Em caso de erro, definir transações como array vazio para evitar estado inconsistente
+      setTransactions([]);
     } finally {
       console.log("Finalizando loadTransactions.");
       setLoading(false);
@@ -911,9 +1129,7 @@ export default function MonthlyControl() {
     setEditingTransaction(transaction);
     
     // Formatar o valor para o padrão brasileiro (substituir ponto por vírgula)
-    const formattedAmount = (typeof transaction.amount === 'number' ? transaction.amount : 
-                           (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0))
-                           .toFixed(2).replace('.', ',');
+    const formattedAmount = transaction.amount.toFixed(2).replace('.', ',');
     
     setFormData({
       description: transaction.description,
@@ -1086,9 +1302,15 @@ export default function MonthlyControl() {
       : (a: any, b: any) => -descendingComparator(a, b, orderBy);
   };
 
-  // Aplicar ordenação às transações
+  // Aplicar ordenação às transações e remover possíveis duplicatas
   const sortedTransactions = React.useMemo(() => {
-    return [...transactions].sort(getComparator(order, orderBy));
+    // Primeiro, garantimos que não há duplicatas por ID
+    const uniqueTransactions = Array.from(
+      new Map(transactions.map(item => [item.id, item])).values()
+    );
+    
+    // Depois aplicamos a ordenação
+    return [...uniqueTransactions].sort(getComparator(order, orderBy));
   }, [transactions, order, orderBy]);
 
   // Componente para cabeçalho ordenável
@@ -1171,22 +1393,72 @@ export default function MonthlyControl() {
 
   // Verificar se transação está vencida
   const isTransactionOverdue = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-    transactionDate.setHours(0, 0, 0, 0);
-    return transactionDate < today;
+      try {
+        // Verificamos se a data da transação é válida antes de criar a data
+        if (!transaction.transaction_date) return false;
+        
+        if (transaction.is_paid) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Processar a data da transação para garantir formato válido
+        let transactionDate;
+        
+        if (transaction.transaction_date.includes('T')) {
+          // Se já está no formato ISO completo com timestamp
+          transactionDate = new Date(transaction.transaction_date);
+        } else {
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        }
+        
+        // Verificar se a data é válida
+        if (isNaN(transactionDate.getTime())) {
+          console.error('Data inválida:', transaction.transaction_date);
+          return false;
+        }
+        
+        transactionDate.setHours(0, 0, 0, 0);
+        return transactionDate < today;
+      } catch (error) {
+        console.error('Erro ao verificar se transação está vencida:', error);
+        return false;
+      }
   };
 
   // Verificar se transação vence hoje
   const isTransactionDueToday = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-    transactionDate.setHours(0, 0, 0, 0);
-    return transactionDate.getTime() === today.getTime();
+      try {
+        // Verificamos se a data da transação é válida antes de criar a data
+        if (!transaction.transaction_date) return false;
+        
+        if (transaction.is_paid) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Processar a data da transação para garantir formato válido
+        let transactionDate;
+        
+        if (transaction.transaction_date.includes('T')) {
+          // Se já está no formato ISO completo com timestamp
+          transactionDate = new Date(transaction.transaction_date);
+        } else {
+          // Se está apenas no formato YYYY-MM-DD
+          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+        }
+        
+        // Verificar se a data é válida
+        if (isNaN(transactionDate.getTime())) {
+          console.error('Data inválida:', transaction.transaction_date);
+          return false;
+        }
+        
+        transactionDate.setHours(0, 0, 0, 0);
+        return transactionDate.getTime() === today.getTime();
+      } catch (error) {
+        console.error('Erro ao verificar se transação vence hoje:', error);
+        return false;
+      }
   };
 
   // Obter status da transação
@@ -1799,11 +2071,11 @@ export default function MonthlyControl() {
                 onClick={() => {
                   setFilters({
                     transaction_type: [],
-                    payment_status_id: [],
+                    payment_status_id: ['unpaid', 'overdue'], // 'unpaid' = 'Em aberto', 'overdue' = 'Vencido'
                     category_id: [],
                     subcategory_id: '',
                     contact_id: [],
-                    cost_center_id: []
+                    cost_center_id: user?.cost_center_id ? [user.cost_center_id.toString()] : []
                   });
                   setDateFilterType('month');
                   setCustomStartDate(null);
@@ -2195,7 +2467,12 @@ export default function MonthlyControl() {
                     
                     <TableCell sx={{ minWidth: 90 }}>
                       <Typography variant="body2">
-                        {format(new Date(transaction.transaction_date + 'T00:00:00'), 'dd/MM/yyyy')}
+                        {format(
+                          transaction.transaction_date.includes('T') 
+                            ? new Date(transaction.transaction_date) 
+                            : new Date(transaction.transaction_date + 'T00:00:00'), 
+                          'dd/MM/yyyy'
+                        )}
                       </Typography>
                     </TableCell>
                     
@@ -2357,9 +2634,53 @@ export default function MonthlyControl() {
                     </TableCell>
                   </TableRow>
                 )}
+                
+                {/* Totalizador das transações filtradas */}
+                {transactions.length > 0 && (
+                  <TableRow sx={{ 
+                    bgcolor: colors.gray[50], 
+                    '& td': { 
+                      fontWeight: 'bold', 
+                      borderTop: `2px solid ${colors.gray[300]}`,
+                      borderBottom: 'none'
+                    } 
+                  }}>
+                    <TableCell colSpan={3} align="right">
+                      Total do Período:
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(totalPeriodo)}
+                    </TableCell>
+                    <TableCell colSpan={2} />
+                  </TableRow>
+                )}
+                
+                {/* Totalizador das transações selecionadas */}
+                {selectedTransactions.length > 0 && (
+                  <TableRow sx={{ 
+                    bgcolor: colors.primary[100], 
+                    '& td': { 
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem',
+                      fontStyle: 'italic',
+                      color: colors.primary[800],
+                      borderTop: `1px dashed ${colors.primary[300]}`,
+                      borderBottom: 'none'
+                    } 
+                  }}>
+                    <TableCell colSpan={3} align="right">
+                      Total Selecionado ({selectedTransactions.length} registro{selectedTransactions.length !== 1 ? 's' : ''}):
+                    </TableCell>
+                    <TableCell align="right">
+                      {formatCurrency(totalSelected)}
+                    </TableCell>
+                    <TableCell colSpan={2} />
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+          </Box>
           </Box>
 
         {/* Batch Actions Menu */}
@@ -3339,7 +3660,6 @@ export default function MonthlyControl() {
             </Button>
           </DialogActions>
         </Dialog>
-        </Box>
       </Box>
     </LocalizationProvider>
   );

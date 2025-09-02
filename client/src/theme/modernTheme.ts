@@ -79,11 +79,12 @@ export const colors = {
 // Gradientes modernos
 export const gradients = {
   primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+  success: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)', // Verde para Receita
   warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-  error: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+  error: 'linear-gradient(135deg, #f44336 0%, #c62828 100%)', // Vermelho para Despesa
   neutral: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
   card: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+  investment: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Azul para Investimento
 };
 
 // Sombras modernas

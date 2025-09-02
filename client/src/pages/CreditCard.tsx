@@ -16,15 +16,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import { ModernHeader } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
-import { cardService } from '../services/cardService';
+import { cardService, Card as CardType } from '../services/cardService';
 
-interface CreditCard {
-  id: number;
-  name: string;
-  type: string;
-  limit_amount: string; // Vem como string do banco de dados
-  closing_day: number;
-  due_day: number;
+interface CreditCard extends CardType {
+  type?: string;
+  limit_amount?: string;
+  closing_day?: number;
+  due_day?: number;
 }
 
 interface CreditCardTransaction {
@@ -47,12 +45,11 @@ export default function CreditCard() {
         const cardsData = await cardService.list();
         // Mapear os dados para o formato esperado pelo frontend
         const mappedCards = cardsData.map(card => ({
-          id: card.id!,
-          name: card.name,
-          type: card.brand || card.type || 'Crédito',
-          limit_amount: card.limit_amount || '0',
-          closing_day: card.closing_day || 15,
-          due_day: card.due_day || 10
+          ...card,
+          type: card.brand || 'Crédito',
+          limit_amount: '0',
+          closing_day: 15,
+          due_day: 10
         }));
         setCards(mappedCards);
       } catch (error) {
@@ -121,16 +118,13 @@ export default function CreditCard() {
                       {card.name}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Limite: R$ {parseFloat(card.limit_amount || '0').toFixed(2)}
+                      Bandeira: {card.brand}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Disponível: R$ {parseFloat(card.limit_amount || '0').toFixed(2)}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Fechamento: Dia {card.closing_day}
+                      Número: {card.card_number}
                     </Typography>
                     <Typography variant="body2" sx={{ color: colors.gray[600] }}>
-                      Vencimento: Dia {card.due_day}
+                      Validade: {card.expiry_date}
                     </Typography>
                   </CardContent>
                 </Card>

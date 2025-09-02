@@ -162,6 +162,7 @@ interface ModernStatsCardProps {
     value: number;
     isPositive: boolean;
   };
+  iconBgColor?: string;
 }
 
 export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
@@ -171,6 +172,7 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
   icon,
   color = 'primary',
   trend,
+  iconBgColor,
 }) => {
   const colorScheme = colors[color];
   
@@ -221,7 +223,7 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
           sx={{
             p: 1,
             borderRadius: 1.5,
-            bgcolor: `${colorScheme[50]}`,
+            bgcolor: iconBgColor || `${colorScheme[50]}`,
             color: colorScheme[600],
             display: 'flex',
             alignItems: 'center',

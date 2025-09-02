@@ -27,7 +27,7 @@ class CashFlowService {
   private baseURL = '/cash-flow';
 
   // Listar todos os registros
-  async getAll(filters?: CashFlowFilters): Promise<CashFlow[]> {
+  async list(filters?: CashFlowFilters): Promise<CashFlow[]> {
     try {
       const params = new URLSearchParams();
       
@@ -44,10 +44,10 @@ class CashFlowService {
         params.append('cost_center_id', filters.cost_center_id.toString());
       }
 
-      console.log('CashFlow getAll - Params:', params.toString());
+      console.log('CashFlow list - Params:', params.toString());
       
       const response = await api.get(`${this.baseURL}?${params.toString()}`);
-      console.log('CashFlow getAll - Response data:', response.data.length, 'registros');
+      console.log('CashFlow list - Response data:', response.data.length, 'registros');
       return response.data;
     } catch (error) {
       console.error('Error fetching cash flow records:', error);

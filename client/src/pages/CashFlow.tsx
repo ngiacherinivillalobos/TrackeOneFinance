@@ -62,12 +62,7 @@ import { subcategoryService } from '../services/subcategoryService';
 import { costCenterService } from '../services/costCenterService';
 import { useAuth } from '../contexts/AuthContext'; // Adicionado o import do useAuth
 
-interface CashFlowRecord {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  record_type: 'Despesa' | 'Receita';
+interface CashFlowRecord extends CashFlow {
   category?: { id: number; name: string; };
   subcategory?: { id: number; name: string; };
   cost_center?: { id: number; name: string; number?: string; };
@@ -77,18 +72,22 @@ interface CategoryData {
   id: number;
   name: string;
   source_type: string;
+  created_at?: string;
 }
 
 interface SubcategoryData {
   id: number;
   name: string;
   category_id: number;
+  category_name?: string;
+  created_at?: string;
 }
 
 interface CostCenterData {
   id: number;
   name: string;
   number?: string;
+  created_at?: string;
 }
 
 export default function CashFlowPage() {
@@ -248,7 +247,7 @@ export default function CashFlowPage() {
       }
       
       const [recordsData, categoriesData, subcategoriesData, costCentersData] = await Promise.all([
-        cashFlowService.getAll(params),
+        cashFlowService.list(params),
         categoryService.list(),
         subcategoryService.list(),
         costCenterService.list()
@@ -297,19 +296,29 @@ export default function CashFlowPage() {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleSelectRecord = (recordId: number) => {
+  const handleSelectRecord = (id: number | undefined) => {
+    if (id === undefined) return;
     setSelectedRecords(prev => 
-      prev.includes(recordId) ? prev.filter(id => id !== recordId) : [...prev, recordId]
+      prev.includes(id) 
+        ? prev.filter(recordId => recordId !== id)
+        : [...prev, id]
     );
   };
 
-  const handleSelectAllRecords = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedRecords(event.target.checked ? filteredRecords.map(r => r.id) : []);
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>, filteredRecords: CashFlowRecord[]) => {
+    const validRecords = filteredRecords.filter(record => record.id !== undefined);
+    setSelectedRecords(event.target.checked ? validRecords.map(r => r.id!) : []);
   };
 
-  const handleActionMenuOpen = (event: React.MouseEvent<HTMLElement>, recordId: number) => {
+  const handleSelectAllRecords = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const validRecords = filteredRecords.filter(record => record.id !== undefined);
+    setSelectedRecords(event.target.checked ? validRecords.map(r => r.id!) : []);
+  };
+
+  const handleActionMenuOpen = (event: React.MouseEvent<HTMLElement>, id: number | undefined) => {
+    if (id === undefined) return;
     setActionMenuAnchorEl(event.currentTarget);
-    setSelectedRecordId(recordId);
+    setSelectedRecordId(id);
   };
 
   const handleActionMenuClose = () => {
@@ -362,101 +371,41 @@ export default function CashFlowPage() {
   };
 
   const handleSaveRecord = async () => {
+    if (!editingRecord || editingRecord.id === undefined) {
+      setSnackbar({ 
+        open: true, 
+        message: 'Erro: ID do registro não encontrado', 
+        severity: 'error' 
+      });
+      return;
+    }
+    
     try {
-      // Validações básicas
-      if (!formData.description.trim()) {
-        showSnackbar('Descrição é obrigatória', 'error');
-        return;
-      }
-      
-      if (!formData.amount.trim()) {
-        showSnackbar('Valor é obrigatório', 'error');
-        return;
-      }
-      
-      if (!formData.record_type) {
-        showSnackbar('Tipo de registro é obrigatório', 'error');
-        return;
-      }
-      
-      if (!formData.date) {
-        showSnackbar('Data é obrigatória', 'error');
-        return;
-      }
-      
-      // Validar se o centro de custo foi informado
-      if (!formData.cost_center_id || formData.cost_center_id.trim() === '') {
-        showSnackbar('Centro de Custo é obrigatório', 'error');
-        return;
-      }
-      
-      // Função para converter formato brasileiro para número
-      const parseBrazilianNumber = (str: string): number => {
-        if (typeof str === 'number') return str;
-        
-        str = str.toString().trim();
-        
-        // Se não tem vírgula, trata como número inteiro
-        if (!str.includes(',')) {
-          // Remove pontos (milhares) e converte
-          return parseFloat(str.replace(/\./g, '')) || 0;
-        }
-        
-        // Divide em parte inteira e decimal
-        const parts = str.split(',');
-        const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
-        const decimalPart = parts[1] || '00'; // Parte decimal
-        
-        // Reconstrói o número no formato americano
-        const americanFormat = integerPart + '.' + decimalPart;
-        return parseFloat(americanFormat) || 0;
-      };
-      
-      const amount = parseBrazilianNumber(formData.amount);
-      if (amount <= 0) {
-        showSnackbar('Valor deve ser maior que zero', 'error');
-        return;
-      }
-      
       const recordData = {
-        description: formData.description.trim(),
-        amount: amount,
+        description: formData.description,
+        amount: parseFloat(formData.amount),
         date: formData.date,
         record_type: formData.record_type as 'Despesa' | 'Receita',
-        category_id: formData.category_id && formData.category_id.trim() !== '' ? parseInt(formData.category_id) : undefined,
-        subcategory_id: formData.subcategory_id && formData.subcategory_id.trim() !== '' ? parseInt(formData.subcategory_id) : undefined,
-        cost_center_id: formData.cost_center_id && formData.cost_center_id.trim() !== '' ? parseInt(formData.cost_center_id) : undefined
+        category_id: formData.category_id ? parseInt(formData.category_id) : undefined,
+        subcategory_id: formData.subcategory_id ? parseInt(formData.subcategory_id) : undefined,
+        cost_center_id: formData.cost_center_id ? parseInt(formData.cost_center_id) : undefined,
       };
 
-      // Validar se os IDs são números válidos quando fornecidos
-      if (recordData.category_id && isNaN(recordData.category_id)) {
-        showSnackbar('ID da categoria inválido', 'error');
-        return;
-      }
-      
-      if (recordData.subcategory_id && isNaN(recordData.subcategory_id)) {
-        showSnackbar('ID da subcategoria inválido', 'error');
-        return;
-      }
-      
-      if (recordData.cost_center_id && isNaN(recordData.cost_center_id)) {
-        showSnackbar('ID do centro de custo inválido', 'error');
-        return;
-      }
-
-      if (editingRecord) {
-        await cashFlowService.update(editingRecord.id, recordData);
-        showSnackbar('Registro atualizado com sucesso', 'success');
-      } else {
-        await cashFlowService.create(recordData);
-        showSnackbar('Registro criado com sucesso', 'success');
-      }
-      
-      loadData();
-      handleCloseDialog();
+      await cashFlowService.update(editingRecord.id!, recordData);
+      setRecordDialogOpen(false);
+      setSnackbar({ 
+        open: true, 
+        message: 'Registro atualizado com sucesso!', 
+        severity: 'success' 
+      });
+      loadCashFlowData();
     } catch (error) {
-      console.error('Erro ao salvar registro:', error);
-      showSnackbar('Erro ao salvar registro', 'error');
+      console.error('Erro ao atualizar registro:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Erro ao atualizar registro', 
+        severity: 'error' 
+      });
     }
   };
 
@@ -515,19 +464,28 @@ export default function CashFlowPage() {
       console.log('CashFlow - Carregando dados para filtros...');
       
       // Carregar categorias
-      const categoryData = await categoryService.getAll();
+      const categoryData = await categoryService.list();
       console.log('CashFlow - Categorias carregadas:', categoryData);
-      setCategories(categoryData);
+      setCategories(categoryData.filter(cat => cat.id !== undefined).map(cat => ({
+        ...cat,
+        id: cat.id!
+      })));
       
       // Carregar subcategorias
-      const subcategoryData = await subcategoryService.getAll();
+      const subcategoryData = await subcategoryService.list();
       console.log('CashFlow - Subcategorias carregadas:', subcategoryData);
-      setSubcategories(subcategoryData);
+      setSubcategories(subcategoryData.filter(sub => sub.id !== undefined).map(sub => ({
+        ...sub,
+        id: sub.id!
+      })));
       
       // Carregar centros de custo
-      const costCenterData = await costCenterService.getAll();
+      const costCenterData = await costCenterService.list();
       console.log('CashFlow - Centros de custo carregados:', costCenterData);
-      setCostCenters(costCenterData);
+      setCostCenters(costCenterData.filter(cc => cc.id !== undefined).map(cc => ({
+        ...cc,
+        id: cc.id!
+      })));
       
     } catch (error) {
       console.error('Erro ao carregar dados para filtros:', error);
@@ -575,9 +533,14 @@ export default function CashFlowPage() {
 
       console.log('CashFlow - Parâmetros da requisição:', Object.fromEntries(params));
       
-      const data = await cashFlowService.getAll(Object.fromEntries(params));
+      const data = await cashFlowService.list(Object.fromEntries(params));
       console.log('CashFlow - Dados recebidos:', data);
-      setCashFlowRecords(data);
+      // Filtrar registros com id definido
+      const validData: CashFlowRecord[] = data.filter(record => record.id !== undefined).map(record => ({
+        ...record,
+        id: record.id!
+      }));
+      setCashFlowRecords(validData);
       setSelectedRecords([]);
     } catch (error) {
       console.error('Erro ao carregar dados do fluxo de caixa:', error);
@@ -1252,10 +1215,10 @@ export default function CashFlowPage() {
                   filteredRecords.map((record) => (
                     <TableRow key={record.id} hover>
                       <TableCell padding="checkbox">
-                        <Checkbox 
-                          checked={selectedRecords.includes(record.id)}
+                        <Checkbox
+                          checked={selectedRecords.includes(record.id!)}
                           onChange={() => handleSelectRecord(record.id)}
-                          sx={{ color: colors.primary[600] }}
+                          sx={{ color: colors.gray[400], '&.Mui-checked': { color: colors.primary[600] } }}
                         />
                       </TableCell>
                       <TableCell>

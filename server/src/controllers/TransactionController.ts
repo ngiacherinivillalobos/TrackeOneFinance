@@ -38,11 +38,15 @@ const createSingleTransaction = async (db: any, params: {
 const list = async (req: Request, res: Response) => {
   console.log('===== TRANSACTION CONTROLLER - LIST =====');
   console.log('Query params:', req.query);
+  console.log('User info:', (req as any).user);
   
   try {
     const { db, all } = getDatabase();
     const userId = (req as any).user?.id;
     const userCostCenterId = (req as any).user?.cost_center_id;
+    
+    console.log('User ID:', userId);
+    console.log('User Cost Center ID:', userCostCenterId);
     
     // Construir filtros dinamicamente
     let whereConditions: string[] = [];
@@ -146,7 +150,7 @@ const list = async (req: Request, res: Response) => {
           console.log('Cláusula SQL para centro único:', 't.cost_center_id = ?', costCenterId);
         }
       }
-    } else if (userCostCenterId && (!req.query.cost_center_id || req.query.cost_center_id === '')) {
+    } else if (userCostCenterId && (!req.query.cost_center_id || req.query.cost_center_id === '' || req.query.cost_center_id === 'all')) {
       console.log('Adding cost_center_id filter from user:', userCostCenterId);
       whereConditions.push('t.cost_center_id = ?');
       queryParams.push(userCostCenterId);
@@ -197,7 +201,6 @@ const list = async (req: Request, res: Response) => {
     console.log('SQL COMPLETA COM PARÂMETROS:', debugSql);
 
     const transactions = await all(db, query, queryParams);
-
     console.log('Found transactions:', transactions.length);
     res.json(transactions);
   } catch (error) {

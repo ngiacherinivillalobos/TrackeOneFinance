@@ -177,7 +177,9 @@ export default function Dashboard() {
         params.cost_center_id = 'all';
       }
       
+      console.log('Carregando transações com params:', params);
       const response = await api.get('/transactions', { params });
+      console.log('Resposta da API para transações:', response.data);
       
       // Mapear os dados para incluir informações do centro de custo
       const mappedTransactions = response.data.map((transaction: any) => ({
@@ -189,10 +191,11 @@ export default function Dashboard() {
         } : null
       }));
       
+      console.log('Transações mapeadas:', mappedTransactions);
       setTransactions(mappedTransactions);
       
       // Calcular dados para o dashboard após carregar as transações
-      calculateDashboardData(mappedTransactions);
+      calculateDashboardData(mappedTransactions, params);
     } catch (error) {
       console.error('Erro ao carregar transações:', error);
     } finally {
@@ -200,8 +203,11 @@ export default function Dashboard() {
     }
   };
   
-  const calculateDashboardData = (transactionsData: Transaction[]) => {
-    // Calcular totais por tipo de transação
+  const calculateDashboardData = (transactionsData: Transaction[], currentParams: any) => {
+    console.log('Calculando dashboard data com transactions:', transactionsData);
+    console.log('Current params:', currentParams);
+    
+    // Calcular totais por tipo de transação para o período filtrado (considerando apenas a data, não o status)
     const totalReceitas = transactionsData
       .filter(t => t.transaction_type === 'Receita')
       .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
@@ -217,20 +223,83 @@ export default function Dashboard() {
     // Calcular saldo atual (Receitas - Despesas - Investimentos)
     const saldoAtual = totalReceitas - totalDespesas - totalInvestimentos;
     
+    // Calcular "A Receber" e "Recebido" com base em transações de receita
+    const receitasPagas = transactionsData
+      .filter(t => t.transaction_type === 'Receita' && t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      
+    const receitasNaoPagas = transactionsData
+      .filter(t => t.transaction_type === 'Receita' && !t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+    
+    // Calcular "A Pagar" e "Pago" com base em transações de despesa e investimento
+    const despesasPagas = transactionsData
+      .filter(t => t.transaction_type === 'Despesa' && t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      
+    const despesasNaoPagas = transactionsData
+      .filter(t => t.transaction_type === 'Despesa' && !t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      
+    const investimentosPagos = transactionsData
+      .filter(t => t.transaction_type === 'Investimento' && t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      
+    const investimentosNaoPagos = transactionsData
+      .filter(t => t.transaction_type === 'Investimento' && !t.is_paid)
+      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+    
+    const totalPago = despesasPagas + investimentosPagos;
+    const totalAPagar = despesasNaoPagas + investimentosNaoPagos;
+    
+    console.log('Investimentos pagos no período filtrado:', investimentosPagos);
+    
+    // Calcular total de investimentos de todos os períodos (sem filtro de data) que estão pagos
+    loadTotalInvestmentsPaid(currentParams.cost_center_id);
+    
     // Atualizar estado com os novos valores
     setMonthSummary({
       income: totalReceitas,
       expenses: totalDespesas,
-      savings: totalInvestimentos,
+      savings: totalInvestimentos, // Agora mostra todos os investimentos do período, independentemente do status
       expectedBalance: saldoAtual,
-      received: totalReceitas, // Simplificação para este exemplo
-      paid: totalDespesas + totalInvestimentos, // Simplificação para este exemplo
-      toPay: 0, // Seria necessário calcular com base em transações não pagas
-      toReceive: 0 // Seria necessário calcular com base em transações não recebidas
+      received: receitasPagas,
+      paid: totalPago,
+      toPay: totalAPagar,
+      toReceive: receitasNaoPagas
     });
     
     // Calcular dados para o gráfico semanal
     calculateWeeklyBalances(transactionsData);
+  };
+  
+  // Função para carregar o total de investimentos pagos de todos os períodos
+  const loadTotalInvestmentsPaid = async (costCenterId: number | string | null) => {
+    try {
+      const params: any = {
+        transaction_type: 'Investimento',
+        is_paid: true // Apenas investimentos pagos
+      };
+      
+      // Adicionar filtro de centro de custo se selecionado
+      // Só adiciona o filtro se não for 'all' (que significa todos os centros de custo)
+      if (costCenterId && costCenterId !== 'all') {
+        params.cost_center_id = costCenterId;
+      }
+      
+      console.log('Carregando investimentos pagos com params:', params);
+      const response = await api.get('/transactions', { params });
+      console.log('Resposta da API para investimentos pagos:', response.data);
+      
+      const totalInvestimentosPagos = response.data
+        .reduce((sum: number, t: any) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      
+      console.log('Total investimentos pagos calculado:', totalInvestimentosPagos);
+      // Atualizar o estado com o total de investimentos pagos
+      setTotalInvestmentsPaid(totalInvestimentosPagos);
+    } catch (error) {
+      console.error('Erro ao carregar total de investimentos pagos:', error);
+    }
   };
   
   const calculateWeeklyBalances = (transactionsData: Transaction[]) => {
@@ -324,6 +393,8 @@ export default function Dashboard() {
     toPay: 0,
     toReceive: 0,
   });
+  
+  const [totalInvestmentsPaid, setTotalInvestmentsPaid] = useState(0);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -536,22 +607,23 @@ export default function Dashboard() {
 
         <Box>
           <ModernStatsCard
-            title="Saldo Atual"
-            value={formatCurrency(monthSummary.expectedBalance)}
-            subtitle="Disponível"
-            icon={<AccountBalance sx={{ fontSize: 28 }} />}
-            color="primary"
+            title="Investimentos"
+            value={formatCurrency(monthSummary.savings)}
+            subtitle="Total investido"
+            icon={<InvestmentIcon sx={{ fontSize: 28, color: colors.primary[600] }} />}
+            color="warning"
             trend={{ value: 0, isPositive: true }}
+            iconBgColor="#E6F2FC"
           />
         </Box>
 
         <Box>
           <ModernStatsCard
-            title="Economias/Investimentos"
-            value={formatCurrency(monthSummary.savings)}
-            subtitle="Total investido"
-            icon={<AttachMoney sx={{ fontSize: 28 }} />}
-            color="warning"  // Mantido como warning
+            title="Saldo Previsto"
+            value={formatCurrency(monthSummary.expectedBalance)}
+            subtitle="Disponível"
+            icon={<AccountBalance sx={{ fontSize: 28 }} />}
+            color="primary"
             trend={{ value: 0, isPositive: true }}
           />
         </Box>
@@ -700,7 +772,7 @@ export default function Dashboard() {
               <LinearProgress
                 variant="determinate"
                 value={savingsGoal && savingsGoal.target_amount > 0 ? 
-                  Math.min((monthSummary.savings / savingsGoal.target_amount) * 100, 100) : 0}
+                  Math.min((totalInvestmentsPaid / savingsGoal.target_amount) * 100, 100) : 0}
                 sx={{
                   height: 12,
                   borderRadius: 6,
@@ -716,7 +788,7 @@ export default function Dashboard() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Box>
                 <Typography variant="h5" fontWeight={700} color={colors.primary[700]}>
-                  {formatCurrency(monthSummary.savings)}
+                  {formatCurrency(totalInvestmentsPaid)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Economizado até agora
@@ -725,8 +797,8 @@ export default function Dashboard() {
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="body1" fontWeight={600}>
                   {savingsGoal ? 
-                    formatCurrency(Math.max(0, savingsGoal.target_amount - monthSummary.savings)) : 
-                    formatCurrency(Math.max(0, 8000 - monthSummary.savings))}
+                    formatCurrency(Math.max(0, savingsGoal.target_amount - totalInvestmentsPaid)) : 
+                    formatCurrency(Math.max(0, 8000 - totalInvestmentsPaid))}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Restante para meta

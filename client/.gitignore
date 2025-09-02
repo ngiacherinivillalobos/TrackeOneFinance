@@ -25,8 +25,13 @@ yarn-error.log*
 *.sqlite3
 *.db
 
+# Backup files
+*BACKUP*.tar.gz
+
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.vercel
+.env*.local
