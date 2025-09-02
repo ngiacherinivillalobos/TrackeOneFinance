@@ -67,8 +67,19 @@ const transactionController = {
 
       const dbWrapper = getDatabase();
       const transactions = await dbWrapper.all(dbWrapper.db, query, []);
+      
+      // Formatar as datas consistentemente entre ambientes
+      const formattedTransactions = transactions.map((transaction: any) => {
+        // Se transaction_date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
+        if (transaction.transaction_date instanceof Date) {
+          // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+          transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
+        }
+        // Se já estiver no formato string (SQLite), manter como está
+        return transaction;
+      });
 
-      res.json(transactions);
+      res.json(formattedTransactions);
     } catch (error) {
       console.error('Error fetching transactions:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -100,6 +111,12 @@ const transactionController = {
       if (!transaction) {
         res.status(404).json({ error: 'Transaction not found' });
         return;
+      }
+      
+      // Formatar a data consistentemente entre ambientes
+      if (transaction.transaction_date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
       }
 
       res.json(transaction);
@@ -186,6 +203,12 @@ const transactionController = {
       `;
 
       const createdTransaction = await dbWrapper.get(dbWrapper.db, selectQuery, [result.lastID]);
+      
+      // Formatar a data consistentemente entre ambientes
+      if (createdTransaction && createdTransaction.transaction_date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        createdTransaction.transaction_date = createdTransaction.transaction_date.toISOString().split('T')[0];
+      }
 
       res.status(201).json(createdTransaction);
     } catch (error) {
@@ -272,6 +295,12 @@ const transactionController = {
       if (!updatedTransaction) {
         res.status(404).json({ error: 'Transaction not found' });
         return;
+      }
+      
+      // Formatar a data consistentemente entre ambientes
+      if (updatedTransaction.transaction_date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        updatedTransaction.transaction_date = updatedTransaction.transaction_date.toISOString().split('T')[0];
       }
 
       res.json(updatedTransaction);

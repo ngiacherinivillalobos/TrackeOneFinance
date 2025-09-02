@@ -44,8 +44,19 @@ export const DashboardController = {
       `;
       
       const transactions = await dbWrapper.all(dbWrapper.db, query, [limit]);
+      
+      // Formatar as datas consistentemente entre ambientes
+      const formattedTransactions = transactions.map((transaction: any) => {
+        // Se transaction_date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
+        if (transaction.date instanceof Date) {
+          // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+          transaction.date = transaction.date.toISOString().split('T')[0];
+        }
+        // Se já estiver no formato string (SQLite), manter como está
+        return transaction;
+      });
 
-      res.json(transactions);
+      res.json(formattedTransactions);
     } catch (error) {
       console.error('Error getting recent transactions:', error);
       res.status(500).json({ error: 'Internal server error' });

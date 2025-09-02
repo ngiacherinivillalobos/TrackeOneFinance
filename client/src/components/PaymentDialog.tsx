@@ -365,7 +365,14 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                       <strong>Valor:</strong> {formatCurrency(transaction.amount)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>Data:</strong> {new Date(transaction.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      <strong>Data:</strong> {(() => {
+                        if (transaction.transaction_date.includes('T')) {
+                          return new Date(transaction.transaction_date).toLocaleDateString('pt-BR');
+                        } else {
+                          // Usar formato UTC para evitar problemas de fuso horário
+                          return new Date(transaction.transaction_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                        }
+                      })()}
                     </Typography>
                   </Box>
                 </Box>

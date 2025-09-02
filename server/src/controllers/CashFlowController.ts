@@ -135,7 +135,19 @@ export const CashFlowController = {
       console.log('SQL COMPLETA COM PARÂMETROS (CashFlow):', debugSql);
 
       const rows = await all(db, query, params);
-      res.json(rows);
+      
+      // Formatar as datas consistentemente entre ambientes
+      const formattedRows = rows.map((row: any) => {
+        // Se date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
+        if (row.date instanceof Date) {
+          // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+          row.date = row.date.toISOString().split('T')[0];
+        }
+        // Se já estiver no formato string (SQLite), manter como está
+        return row;
+      });
+      
+      res.json(formattedRows);
     } catch (error) {
       console.error('Error in getAll cash flow:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -175,6 +187,13 @@ export const CashFlowController = {
       if (!row) {
         return res.status(404).json({ error: 'Cash flow record not found' });
       }
+      
+      // Formatar a data consistentemente entre ambientes
+      if (row.date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        row.date = row.date.toISOString().split('T')[0];
+      }
+      
       res.json(row);
     } catch (error) {
       console.error('Error in getById cash flow:', error);
@@ -251,6 +270,13 @@ export const CashFlowController = {
       `;
       
       const createdRecord = await get(db, selectQuery, [result.lastID]);
+      
+      // Formatar a data consistentemente entre ambientes
+      if (createdRecord && createdRecord.date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        createdRecord.date = createdRecord.date.toISOString().split('T')[0];
+      }
+      
       res.status(201).json(createdRecord);
     } catch (error) {
       console.error('Error creating cash flow record:', error);
@@ -344,6 +370,13 @@ export const CashFlowController = {
       `;
 
       const updatedRecord = await get(db, selectQuery, [id]);
+      
+      // Formatar a data consistentemente entre ambientes
+      if (updatedRecord && updatedRecord.date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        updatedRecord.date = updatedRecord.date.toISOString().split('T')[0];
+      }
+      
       res.json(updatedRecord);
     } catch (error) {
       console.error('Error updating cash flow record:', error);

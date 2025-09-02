@@ -202,7 +202,19 @@ const list = async (req: Request, res: Response) => {
 
     const transactions = await all(db, query, queryParams);
     console.log('Found transactions:', transactions.length);
-    res.json(transactions);
+    
+    // Formatar as datas consistentemente entre ambientes
+    const formattedTransactions = transactions.map((transaction: any) => {
+      // Se transaction_date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
+      if (transaction.transaction_date instanceof Date) {
+        // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+        transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
+      }
+      // Se já estiver no formato string (SQLite), manter como está
+      return transaction;
+    });
+    
+    res.json(formattedTransactions);
   } catch (error) {
     console.error('Error fetching transactions:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -254,7 +266,13 @@ const getById = async (req: Request, res: Response) => {
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
-
+    
+    // Formatar a data consistentemente entre ambientes
+    if (transaction.transaction_date instanceof Date) {
+      // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+      transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
+    }
+    
     res.json(transaction);
   } catch (error) {
     console.error('Error fetching transaction:', error);
@@ -473,7 +491,7 @@ const create = async (req: Request, res: Response) => {
         bank_account_id,
         card_id,
         contact_id,
-        transaction_date
+        transaction_date: transaction_date instanceof Date ? transaction_date.toISOString().split('T')[0] : transaction_date
       }
     });
   } catch (error) {
@@ -586,9 +604,20 @@ const update = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
+    // Buscar a transação atualizada para retornar com data formatada corretamente
+    const { get } = getDatabase();
+    const updatedTransaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
+    
+    // Formatar a data consistentemente entre ambientes
+    if (updatedTransaction && updatedTransaction.transaction_date instanceof Date) {
+      // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
+      updatedTransaction.transaction_date = updatedTransaction.transaction_date.toISOString().split('T')[0];
+    }
+    
     res.json({ 
       message: 'Transaction updated successfully',
-      transactionId: transactionId
+      transactionId: transactionId,
+      transaction: updatedTransaction
     });
   } catch (error) {
     console.error('Error updating transaction:', error);
