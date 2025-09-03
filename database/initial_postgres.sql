@@ -170,3 +170,10 @@ INSERT INTO payment_status (id, name) VALUES
 (2, 'Pago'),
 (3, 'Vencido')
 ON CONFLICT (id) DO NOTHING;
+
+-- Também lidar com conflitos no campo name
+INSERT INTO payment_status (name) VALUES 
+('Em aberto'),
+('Pago'),
+('Vencido')
+ON CONFLICT (name) DO NOTHING;
