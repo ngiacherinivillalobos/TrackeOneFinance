@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>TrackeOne Finance</title>
+    <script type="text/javascript">
+      // Redirecionar para a página principal para que o React Router possa lidar com a rota
+      (function() {
+        var path = window.location.pathname;
+        // Se não for uma rota da API, redirecionar para a raiz
+        if (!path.startsWith('/api')) {
+          window.location.replace('/');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- Se o JavaScript estiver desativado, mostrar uma mensagem simples -->
+    <noscript>
+      <h1>TrackeOne Finance</h1>
+      <p>Ative o JavaScript para usar este aplicativo.</p>
+    </noscript>
+  </body>
+</html>

@@ -1160,7 +1160,7 @@ export default function MonthlyControl() {
       cost_center_id: (transaction as any).original_cost_center_id?.toString() || '',
       transaction_type: transaction.transaction_type,
       is_recurring: false, // Default para edição
-      recurrence_type: 'mensal',
+      recurrence_type: 'mensal' as 'unica' | 'mensal' | 'semanal' | 'diaria' | 'anual' | 'personalizada',
       recurrence_count: 1,
       recurrence_interval: 1,
       recurrence_weekday: 1,
