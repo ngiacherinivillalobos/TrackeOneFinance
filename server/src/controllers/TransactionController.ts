@@ -430,18 +430,70 @@ const create = async (req: Request, res: Response) => {
 
           // Avançar para a próxima data
           if (recurrence_type === 'mensal' || recurrence_type === 'fixo') {
-            currentDate.setMonth(currentDate.getMonth() + 1);
+            // Para recorrência mensal, usar uma abordagem mais precisa
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth();
+            const currentDay = currentDate.getDate();
+            
+            // Calcular o próximo mês
+            let nextMonth = currentMonth + 1;
+            let nextYear = currentYear;
+            
+            if (nextMonth > 11) {
+              nextMonth = 0;
+              nextYear++;
+            }
+            
+            // Verificar se o dia existe no próximo mês
+            const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+            const adjustedDay = Math.min(currentDay, daysInNextMonth);
+            
+            currentDate = new Date(nextYear, nextMonth, adjustedDay);
           } else if (recurrence_type === 'personalizado') {
             if (recurrence_weekday) {
               // Avançar uma semana
               currentDate.setDate(currentDate.getDate() + 7);
             } else {
               // Avançar um mês
-              currentDate.setMonth(currentDate.getMonth() + 1);
+              const currentYear = currentDate.getFullYear();
+              const currentMonth = currentDate.getMonth();
+              const currentDay = currentDate.getDate();
+              
+              // Calcular o próximo mês
+              let nextMonth = currentMonth + 1;
+              let nextYear = currentYear;
+              
+              if (nextMonth > 11) {
+                nextMonth = 0;
+                nextYear++;
+              }
+              
+              // Verificar se o dia existe no próximo mês
+              const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+              const adjustedDay = Math.min(currentDay, daysInNextMonth);
+              
+              currentDate = new Date(nextYear, nextMonth, adjustedDay);
             }
           } else {
             // Default: avançar um mês
-            currentDate.setMonth(currentDate.getMonth() + 1);
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth();
+            const currentDay = currentDate.getDate();
+            
+            // Calcular o próximo mês
+            let nextMonth = currentMonth + 1;
+            let nextYear = currentYear;
+            
+            if (nextMonth > 11) {
+              nextMonth = 0;
+              nextYear++;
+            }
+            
+            // Verificar se o dia existe no próximo mês
+            const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+            const adjustedDay = Math.min(currentDay, daysInNextMonth);
+            
+            currentDate = new Date(nextYear, nextMonth, adjustedDay);
           }
         } catch (err) {
           console.error('Error creating recurring transaction:', err);

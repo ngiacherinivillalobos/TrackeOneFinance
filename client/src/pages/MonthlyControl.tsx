@@ -402,14 +402,26 @@ export default function MonthlyControl() {
       let newYear = year;
       let newMonth = month + months;
       
+      // Ajustar ano e mês
       while (newMonth > 12) {
         newMonth -= 12;
         newYear += 1;
       }
+      while (newMonth < 1) {
+        newMonth += 12;
+        newYear -= 1;
+      }
       
       // Verificar se o dia existe no novo mês
       const daysInMonth = new Date(newYear, newMonth, 0).getDate();
-      const newDay = Math.min(day, daysInMonth);
+      let newDay = day;
+      
+      // Se o dia não existe no novo mês, ajustar para o último dia do mês
+      // Mas respeitando a regra: se for dia 31 e o mês não tem 31, usar o dia anterior (30)
+      // e não o próximo (01 do próximo mês)
+      if (newDay > daysInMonth) {
+        newDay = daysInMonth;
+      }
       
       return newYear + '-' + String(newMonth).padStart(2, '0') + '-' + String(newDay).padStart(2, '0');
     };
@@ -467,8 +479,14 @@ export default function MonthlyControl() {
             resultDate = addMonths(formData.transaction_date, i);
             break;
           case 'anual':
-            const [year, month, day] = formData.transaction_date.split('-');
-            resultDate = (parseInt(year) + i) + '-' + month + '-' + day;
+            const [year, month, day] = formData.transaction_date.split('-').map(Number);
+            let newYear = year + i;
+            
+            // Verificar se o dia existe no novo ano/mês (para 29 de fevereiro em anos não bissextos)
+            const daysInMonth = new Date(newYear, month, 0).getDate();
+            const newDay = Math.min(day, daysInMonth);
+            
+            resultDate = newYear + '-' + String(month).padStart(2, '0') + '-' + String(newDay).padStart(2, '0');
             break;
           case 'personalizada':
             resultDate = addDays(formData.transaction_date, i * (formData.recurrence_interval || 1));
@@ -3342,8 +3360,8 @@ export default function MonthlyControl() {
                                 if (item.creation_date.includes('T')) {
                                   return new Date(item.creation_date).toLocaleDateString('pt-BR');
                                 } else {
-                                  // Usar formato UTC para evitar problemas de fuso horário
-                                  return new Date(item.creation_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                                  // Usar formato local para evitar problemas de fuso horário
+                                  return new Date(item.creation_date + 'T12:00:00').toLocaleDateString('pt-BR');
                                 }
                               })()}
                             </TableCell>
@@ -3352,8 +3370,8 @@ export default function MonthlyControl() {
                                 if (item.due_date.includes('T')) {
                                   return new Date(item.due_date).toLocaleDateString('pt-BR');
                                 } else {
-                                  // Usar formato UTC para evitar problemas de fuso horário
-                                  return new Date(item.due_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                                  // Usar formato local para evitar problemas de fuso horário
+                                  return new Date(item.due_date + 'T12:00:00').toLocaleDateString('pt-BR');
                                 }
                               })()}
                             </TableCell>

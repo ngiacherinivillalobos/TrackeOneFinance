@@ -1194,8 +1194,8 @@ export default function Transactions() {
                               if (item.creation_date.includes('T')) {
                                 return new Date(item.creation_date).toLocaleDateString('pt-BR');
                               } else {
-                                // Usar formato UTC para evitar problemas de fuso horário
-                                return new Date(item.creation_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                                // Usar formato local para evitar problemas de fuso horário
+                                return new Date(item.creation_date + 'T12:00:00').toLocaleDateString('pt-BR');
                               }
                             })()}
                           </TableCell>
@@ -1204,8 +1204,8 @@ export default function Transactions() {
                               if (item.due_date.includes('T')) {
                                 return new Date(item.due_date).toLocaleDateString('pt-BR');
                               } else {
-                                // Usar formato UTC para evitar problemas de fuso horário
-                                return new Date(item.due_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                                // Usar formato local para evitar problemas de fuso horário
+                                return new Date(item.due_date + 'T12:00:00').toLocaleDateString('pt-BR');
                               }
                             })()}
                           </TableCell>

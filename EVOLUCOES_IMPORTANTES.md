@@ -42,6 +42,30 @@
 **SOLUÇÃO:** Mesma proteção aplicada
 **LOCAL:** TextField "A cada quantos dias"
 
+## 🔧 CORREÇÕES APLICADAS EM 03/09/2025:
+
+### PROBLEMA 4: Datas de recorrência incorretas para meses com menos dias
+**CAUSA:** Função addMonths não tratava corretamente meses com menos dias
+**SOLUÇÃO:** Implementar lógica para ajustar datas para o último dia do mês quando necessário
+**LOCAL:** Função addMonths em generateRecurrencePreview() - case 'mensal'
+
+### PROBLEMA 5: Datas anuais não tratavam anos bissextos corretamente
+**CAUSA:** Função anual não verificava se o dia existe no novo ano
+**SOLUÇÃO:** Implementar verificação de dias no mês para anos bissextos
+**LOCAL:** Case 'anual' em generateRecurrencePreview()
+
+### PROBLEMA 6: Recorrência mensal no backend não tratava meses com menos dias
+**CAUSA:** Uso direto de setMonth() que pode causar datas incorretas
+**SOLUÇÃO:** Implementar lógica personalizada para calcular o próximo mês
+**LOCAL:** TransactionController.ts - lógica de avanço de datas
+
+## 🔧 CORREÇÕES APLICADAS EM 04/09/2025:
+
+### PROBLEMA 7: Datas na tabela de recorrência prevista exibiam d-1
+**CAUSA:** Uso de formato UTC ('T00:00:00Z') causava deslocamento de um dia devido a diferença de fuso horário
+**SOLUÇÃO:** Alterar para formato local ('T12:00:00') para evitar problemas de fuso horário
+**LOCAL:** Tabelas de recorrência prevista nos arquivos MonthlyControl.tsx, Transactions_Complete.tsx e MANUAL_RECORRENCIA.md
+
 ## 📋 CHECKLIST PARA FUTURAS ALTERAÇÕES:
 
 ### ANTES DE QUALQUER MUDANÇA:

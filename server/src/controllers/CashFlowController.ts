@@ -26,6 +26,10 @@ export const CashFlowController = {
       const { db, all } = getDatabase();
       const { month, year } = req.query;
       const userCostCenterId = (req as any).user?.cost_center_id;
+      
+      console.log('Parâmetros recebidos:', { month, year, userCostCenterId, query: req.query });
+      console.log('Tipo de month:', typeof month, 'Valor:', month);
+      console.log('Tipo de year:', typeof year, 'Valor:', year);
 
       let query = `
         SELECT 
@@ -48,35 +52,69 @@ export const CashFlowController = {
         LEFT JOIN subcategories sc ON cf.subcategory_id = sc.id
         LEFT JOIN cost_centers cc ON cf.cost_center_id = cc.id
       `;
+      
+      console.log('Query base:', query);
 
       const params: any[] = [];
       const whereConditions: string[] = [];
 
       // Filtro por mês/ano se fornecido
       if (month && year) {
+        console.log('Aplicando filtro de data');
+        console.log('Valores originais - month:', month, 'year:', year);
+        
         // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
         if (process.env.NODE_ENV === 'production') {
+          console.log('Usando PostgreSQL');
           // PostgreSQL usa EXTRACT em vez de strftime
           whereConditions.push("EXTRACT(MONTH FROM cf.date) = ? AND EXTRACT(YEAR FROM cf.date) = ?");
+          
+          // Para PostgreSQL, usar valores inteiros
+          const monthInt = parseInt(month.toString(), 10);
+          const yearInt = parseInt(year.toString(), 10);
+          params.push(monthInt, yearInt);
+          console.log('Parâmetros PostgreSQL:', monthInt, yearInt);
         } else {
+          console.log('Usando SQLite');
           // SQLite usa strftime
           whereConditions.push("strftime('%m', cf.date) = ? AND strftime('%Y', cf.date) = ?");
+          
+          // Para SQLite, precisamos usar os valores como strings formatadas
+          // Padronizar month para garantir que seja no formato 'MM' (com dois dígitos)
+          const monthInt = parseInt(month.toString(), 10);
+          const monthStr = monthInt.toString().padStart(2, '0'); // Garante que mês tenha dois dígitos (ex: 09 em vez de 9)
+          const yearStr = year.toString();
+          
+          params.push(monthStr, yearStr);
+          console.log('Parâmetros SQLite:', monthStr, yearStr);
         }
-        params.push(parseInt(month.toString(), 10), parseInt(year.toString(), 10));
+        
+        console.log('Filtro aplicado:', { 
+          month, 
+          year,
+          dbType: process.env.NODE_ENV === 'production' ? 'PostgreSQL' : 'SQLite'
+        });
+      } else {
+        console.log('Nenhum filtro de data aplicado - month:', month, 'year:', year);
       }
 
       // Filtro por centro de custo do usuário
+      console.log('Filtros de centro de custo:', {
+        cost_center_id: req.query.cost_center_id,
+        userCostCenterId: userCostCenterId,
+        show_all_centers: req.query.show_all_centers
+      });
+      
       if (req.query.cost_center_id) {
-        console.log('======= FILTRO DE CENTRO DE CUSTO (CashFlow) =======');
-        console.log('Tipo do cost_center_id:', typeof req.query.cost_center_id);
-        console.log('Valor do cost_center_id:', req.query.cost_center_id);
-        
+        console.log('Filtro de cost_center_id fornecido:', req.query.cost_center_id);
         // Se o valor for 'all', não aplicar filtro de centro de custo
         if (req.query.cost_center_id === 'all') {
-          console.log('Mostrando todos os centros de custo no CashFlow');
+          // Mostrar todos os centros de custo
+          console.log('Mostrando todos os centros de custo');
         } else {
           // Verificar se tem vírgula, indicando múltiplos valores
           if (req.query.cost_center_id.toString().includes(',')) {
+            console.log('Múltiplos centros de custo detectados');
             // Múltiplos centros de custo separados por vírgula
             const costCenterIds = req.query.cost_center_id.toString().split(',').map(id => id.trim());
             
@@ -85,68 +123,68 @@ export const CashFlowController = {
               .map(id => parseInt(id, 10))
               .filter(id => !isNaN(id));
             
-            console.log('IDs originais (CashFlow):', costCenterIds);
-            console.log('IDs numéricos (CashFlow):', numericIds);
-            
             if (numericIds.length > 0) {
               // Construir cláusula IN diretamente na condição
               whereConditions.push(`cf.cost_center_id IN (${numericIds.join(',')})`);
-              
-              // Não adiciona parâmetros já que os IDs estão diretamente na cláusula SQL
-              console.log('Cláusula SQL para múltiplos centros (CashFlow):', `cf.cost_center_id IN (${numericIds.join(',')})`);
+              console.log('Filtro de múltiplos centros de custo:', numericIds);
             }
           } else {
+            console.log('Único centro de custo detectado');
             // Único centro de custo
             const costCenterId = parseInt(req.query.cost_center_id.toString(), 10);
             if (!isNaN(costCenterId)) {
               whereConditions.push("cf.cost_center_id = ?");
               params.push(costCenterId);
-              console.log('Cláusula SQL para centro único (CashFlow):', 'cf.cost_center_id = ?', costCenterId);
+              console.log('Filtro de centro de custo único:', costCenterId);
             }
           }
         }
       } else if (userCostCenterId && req.query.show_all_centers !== 'true') {
+        console.log('Aplicando filtro de centro de custo do usuário');
         whereConditions.push("cf.cost_center_id = ?");
         params.push(userCostCenterId);
+        console.log('Filtro de centro de custo do usuário:', userCostCenterId);
+      } else {
+        console.log('Nenhum filtro de centro de custo aplicado');
       }
 
       // Adicionar cláusula WHERE se houver condições
       if (whereConditions.length > 0) {
         query += ` WHERE ${whereConditions.join(' AND ')}`;
+        console.log('Condições WHERE:', whereConditions);
       }
 
       query += ` ORDER BY cf.date DESC, cf.created_at DESC`;
+      console.log('Query final:', query);
+      console.log('Parâmetros:', params);
+      console.log('Condições WHERE:', whereConditions);
 
-      console.log('SQL query antes de executar (CashFlow):', query);
-      console.log('SQL params antes de executar (CashFlow):', params);
-      
-      // Imprimir a consulta com parâmetros substituídos para depuração
-      let debugSql = query;
-      for (const param of params) {
-        if (typeof param === 'string') {
-          debugSql = debugSql.replace('?', `'${param}'`);
-        } else if (param === null) {
-          debugSql = debugSql.replace('?', 'NULL');
-        } else {
-          debugSql = debugSql.replace('?', param);
-        }
-      }
-      
-      console.log('SQL COMPLETA COM PARÂMETROS (CashFlow):', debugSql);
+      // Adicionar log para verificar a query final com parâmetros
+      let finalQuery = query;
+      params.forEach((param, index) => {
+        // Substituir o primeiro ? pela posição do parâmetro
+        finalQuery = finalQuery.replace('?', `'${param}'`);
+      });
+      console.log('Query final com parâmetros:', finalQuery);
 
       const rows = await all(db, query, params);
+      console.log('Registros encontrados no banco:', rows.length);
+      console.log('Registros retornados:', rows);
       
       // Formatar as datas consistentemente entre ambientes
       const formattedRows = rows.map((row: any) => {
         // Se date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
         if (row.date instanceof Date) {
           // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
-          row.date = row.date.toISOString().split('T')[0];
+          const formattedDate = row.date.toISOString().split('T')[0];
+          console.log('Formatando data (PostgreSQL):', { original: row.date, formatted: formattedDate });
+          row.date = formattedDate;
         }
         // Se já estiver no formato string (SQLite), manter como está
         return row;
       });
       
+      console.log('Registros formatados:', formattedRows.length);
       res.json(formattedRows);
     } catch (error) {
       console.error('Error in getAll cash flow:', error);

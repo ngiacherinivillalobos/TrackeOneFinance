@@ -33,35 +33,28 @@ class CashFlowService {
       
       if (filters?.month) {
         params.append('month', filters.month.toString());
+        console.log('Adicionando filtro de mês:', filters.month.toString());
       }
       
       if (filters?.year) {
         params.append('year', filters.year.toString());
+        console.log('Adicionando filtro de ano:', filters.year.toString());
       }
       
       // Adicionar filtro de centro de custo se especificado
       if (filters?.cost_center_id !== undefined) {
         params.append('cost_center_id', filters.cost_center_id.toString());
+        console.log('Adicionando filtro de centro de custo:', filters.cost_center_id.toString());
       }
 
-      console.log('CashFlow list - Params:', params.toString());
+      const url = `${this.baseURL}?${params.toString()}`;
+      console.log('URL da requisição:', url);
       
-      const response = await api.get(`${this.baseURL}?${params.toString()}`);
-      console.log('CashFlow list - Response data:', response.data.length, 'registros');
+      const response = await api.get(url);
+      console.log('Resposta da API:', { count: response.data.length, data: response.data.slice(0, 3) });
       return response.data;
     } catch (error) {
       console.error('Error fetching cash flow records:', error);
-      throw error;
-    }
-  }
-
-  // Obter registro por ID
-  async getById(id: number): Promise<CashFlow> {
-    try {
-      const response = await api.get(`${this.baseURL}/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching cash flow record:', error);
       throw error;
     }
   }

@@ -4,12 +4,10 @@ import axios from 'axios';
 const getBaseURL = () => {
   // Em produção, usar a URL do backend no Render
   if (import.meta.env.MODE === 'production') {
-    console.log('Usando ambiente de produção');
     // Usar a variável de ambiente VITE_API_URL se definida, senão usar padrão
     return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com';
   }
   // Em desenvolvimento, usar o proxy do Vite
-  console.log('Usando ambiente de desenvolvimento com proxy do Vite');
   return ''; // Proxy do Vite irá lidar com as requisições
 };
 
@@ -36,7 +34,6 @@ api.interceptors.request.use(
       config.url = `/api${config.url}`;
     }
     
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     return config;
   },
   error => {
@@ -48,7 +45,6 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
   response => {
-    console.log(`✅ API Response: ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   error => {

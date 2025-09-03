@@ -35,7 +35,9 @@ useEffect(() => {
 }, [formData.is_recurring, formData.recurrence_type, formData.recurrence_count, formData.recurrence_interval, formData.recurrence_weekday, formData.transaction_date, formData.amount, formData.description]);
 ```
 
-#### **3. Função generateRecurrencePreview() (linhas ~215-275):**
+#### **3. Função generateRecurrencePreview() (linhas ~215-275):
+
+**ATUALIZADO EM 03/09/2025:** Implementadas correções para tratamento de datas em meses com menos dias e anos bissextos.**
 ``typescript
 const generateRecurrencePreview = () => {
   if (!formData.transaction_date || !formData.amount || formData.recurrence_count < 1) {
@@ -205,6 +207,22 @@ const generateRecurrencePreview = () => {
 )}
 ```
 
+#### **5. Preview de Recorrências (linhas ~1285-1320):
+
+#### **6. Correções Aplicadas em 03/09/2025:**
+
+**Problema 1: Datas de recorrência incorretas para meses com menos dias**
+- **Solução:** Implementada lógica na função addMonths para ajustar datas para o último dia do mês quando necessário
+- **Exemplo:** Transação no dia 31/01 passará para 28/02 (ou 29/02 em ano bissexto) e não para 03/03
+
+**Problema 2: Datas anuais não tratavam anos bissextos corretamente**
+- **Solução:** Implementada verificação de dias no mês para anos bissextos na função anual
+- **Exemplo:** Transação no dia 29/02/2024 passará para 28/02/2025 e não para 01/03/2025
+
+**Problema 3: Recorrência mensal no backend não tratava meses com menos dias**
+- **Solução:** Implementada lógica personalizada para calcular o próximo mês no backend
+- **Exemplo:** Transações criadas no backend seguirão a mesma lógica do frontend
+
 #### **5. Preview de Recorrências (linhas ~1285-1320):**
 ``jsx
 {/* Preview de recorrências */}
@@ -231,8 +249,8 @@ const generateRecurrencePreview = () => {
                   if (item.creation_date.includes('T')) {
                     return new Date(item.creation_date).toLocaleDateString('pt-BR');
                   } else {
-                    // Usar formato UTC para evitar problemas de fuso horário
-                    return new Date(item.creation_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                    // Usar formato local para evitar problemas de fuso horário
+                    return new Date(item.creation_date + 'T12:00:00').toLocaleDateString('pt-BR');
                   }
                 })()}
               </TableCell>
@@ -241,8 +259,8 @@ const generateRecurrencePreview = () => {
                   if (item.due_date.includes('T')) {
                     return new Date(item.due_date).toLocaleDateString('pt-BR');
                   } else {
-                    // Usar formato UTC para evitar problemas de fuso horário
-                    return new Date(item.due_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                    // Usar formato local para evitar problemas de fuso horário
+                    return new Date(item.due_date + 'T12:00:00').toLocaleDateString('pt-BR');
                   }
                 })()}
               </TableCell>

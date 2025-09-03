@@ -116,12 +116,20 @@ const dbAll = (db: Database, query: string, params: any[] = []): Promise<any[]> 
       console.log(`Executando query SQLite [all]: ${query}`);
       console.log('Parâmetros:', params);
       
+      // Adicionar log para verificar a query final com parâmetros
+      let finalQuery = query;
+      params.forEach((param, index) => {
+        finalQuery = finalQuery.replace('?', `'${param}'`);
+      });
+      console.log('Query final com parâmetros:', finalQuery);
+      
       (db as sqlite3.Database).all(query, params, (err: Error | null, rows: any[]) => {
         if (err) {
           console.error('Erro ao executar query SQLite [all]:', err);
           reject(err);
         } else {
           console.log(`Query SQLite [all] bem-sucedida, retornando ${rows?.length || 0} registros`);
+          console.log('Registros retornados:', rows);
           resolve(rows || []);
         }
       });
