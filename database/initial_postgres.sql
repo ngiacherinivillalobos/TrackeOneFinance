@@ -166,8 +166,18 @@ INSERT INTO category_types (id, name) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Inserindo alguns status de pagamento básicos
-INSERT INTO payment_status (id, name) VALUES 
-(1, 'Em aberto'),
-(2, 'Pago'),
-(3, 'Vencido')
+-- Verificar se os registros já existem antes de inserir
+INSERT INTO payment_status (id, name) 
+SELECT 1, 'Em aberto'
+WHERE NOT EXISTS (SELECT 1 FROM payment_status WHERE name = 'Em aberto' OR id = 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO payment_status (id, name) 
+SELECT 2, 'Pago'
+WHERE NOT EXISTS (SELECT 1 FROM payment_status WHERE name = 'Pago' OR id = 2)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO payment_status (id, name) 
+SELECT 3, 'Vencido'
+WHERE NOT EXISTS (SELECT 1 FROM payment_status WHERE name = 'Vencido' OR id = 3)
 ON CONFLICT (id) DO NOTHING;
