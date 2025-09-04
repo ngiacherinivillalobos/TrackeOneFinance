@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS subcategories (
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 
+-- 4. Tabela de status de pagamento
 CREATE TABLE IF NOT EXISTS payment_status (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
