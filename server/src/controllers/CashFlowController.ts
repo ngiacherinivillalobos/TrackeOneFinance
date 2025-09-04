@@ -190,6 +190,11 @@ export const CashFlowController = {
           isString: typeof row.amount === 'string'
         });
         
+        // Garantir que o campo amount seja sempre um número
+        if (typeof row.amount === 'string') {
+          row.amount = parseFloat(row.amount);
+        }
+        
         // Se date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
         if (row.date instanceof Date) {
           // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
