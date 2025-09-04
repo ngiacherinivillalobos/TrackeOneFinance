@@ -104,6 +104,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     recurrence_count INTEGER DEFAULT 1, -- quantas vezes repetir
     recurrence_end_date DATE, -- data para finalizar (para fixo)
     
+    -- Campos de parcelamento
+    is_installment BOOLEAN DEFAULT false,
+    installment_number INTEGER DEFAULT NULL,
+    total_installments INTEGER DEFAULT NULL,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     

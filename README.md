@@ -182,6 +182,16 @@ The application uses SQLite for development and PostgreSQL for production.
 - `database/initial.sql` - Complete schema
 - `database/initial_clean.sql` - Clean schema without data
 
+### Database Migrations
+
+The application includes database migrations to ensure consistency between development and production environments:
+
+- **Parcelamento fields**: Added support for installment transactions
+- **Recurrence fields**: Added support for recurring transactions
+- **Boolean value normalization**: Ensures boolean values are treated as 0/1 in SQLite and true/false in PostgreSQL
+
+For details about database migrations, see [BOOLEAN_VALUES_MIGRATION.md](BOOLEAN_VALUES_MIGRATION.md)
+
 ## 📊 API Endpoints
 
 The backend provides REST API endpoints at `http://localhost:3001/api/`

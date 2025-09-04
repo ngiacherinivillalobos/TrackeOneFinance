@@ -1,5 +1,17 @@
 import api from '../services/api';
 
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  response => {
+    console.log('Subcategory API Response:', response);
+    return response;
+  },
+  error => {
+    console.error('Subcategory API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
 export interface Subcategory {
   id?: number;
   name: string;
@@ -10,8 +22,15 @@ export interface Subcategory {
 
 export const subcategoryService = {
   async list(): Promise<Subcategory[]> {
-    const response = await api.get('/subcategories');
-    return response.data;
+    console.log('Fetching subcategories...');
+    try {
+      const response = await api.get('/subcategories');
+      console.log('Subcategories response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error in subcategoryService.list:', error);
+      throw error;
+    }
   },
 
   async create(data: Omit<Subcategory, 'id'>): Promise<Subcategory> {

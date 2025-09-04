@@ -2,9 +2,12 @@ import api from '../services/api';
 
 // Add response interceptor for debugging
 api.interceptors.response.use(
-  response => response,
+  response => {
+    console.log('Category API Response:', response);
+    return response;
+  },
   error => {
-    console.error('API Error:', error.response?.data || error.message);
+    console.error('Category API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
@@ -18,8 +21,15 @@ export interface Category {
 
 export const categoryService = {
   list: async () => {
-    const response = await api.get<Category[]>('/categories');
-    return response.data;
+    console.log('Fetching categories...');
+    try {
+      const response = await api.get<Category[]>('/categories');
+      console.log('Categories response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error in categoryService.list:', error);
+      throw error;
+    }
   },
 
   create: async (category: Omit<Category, 'id'>) => {

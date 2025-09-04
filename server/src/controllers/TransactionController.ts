@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getDatabase } from '../database/connection';
+import { toDatabaseBoolean } from '../utils/booleanUtils';
 
 // Função helper para criar uma transação individual
 const createSingleTransaction = async (db: any, params: {
@@ -18,19 +19,20 @@ const createSingleTransaction = async (db: any, params: {
   installment_number?: number;
   total_installments?: number;
 }) => {
+  const isProduction = process.env.NODE_ENV === 'production';
   const query = `
     INSERT INTO transactions (
       description, amount, type, category_id, subcategory_id,
       payment_status_id, bank_account_id, card_id, contact_id, 
       transaction_date, cost_center_id, is_installment, installment_number, total_installments
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const { db: database, run } = getDatabase();
   return run(database, query, [
     params.description, params.amount, params.dbType, params.category_id, params.subcategory_id,
     params.currentPaymentStatusId, params.bank_account_id, params.card_id, params.contact_id, 
-    params.formattedDate, params.cost_center_id, params.is_installment || false, 
+    params.formattedDate, params.cost_center_id, toDatabaseBoolean(params.is_installment, isProduction), 
     params.installment_number || null, params.total_installments || null
   ]);
 };
@@ -167,6 +169,10 @@ const list = async (req: Request, res: Response) => {
           WHEN t.type = 'investment' THEN 'Investimento'
           ELSE t.type
         END as transaction_type,
+        CASE
+          WHEN t.payment_status_id = 2 THEN 1
+          ELSE 0
+        END as is_paid,
         c.name as category_name,
         s.name as subcategory_name,
         ps.name as payment_status_name,
@@ -210,6 +216,15 @@ const list = async (req: Request, res: Response) => {
         // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
         transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
       }
+      
+      // Garantir que o campo amount seja sempre um número
+      if (typeof transaction.amount === 'string') {
+        transaction.amount = parseFloat(transaction.amount);
+      }
+      
+      // Converter is_paid de inteiro para booleano
+      transaction.is_paid = transaction.is_paid === 1;
+      
       // Se já estiver no formato string (SQLite), manter como está
       return transaction;
     });
@@ -242,6 +257,10 @@ const getById = async (req: Request, res: Response) => {
           WHEN t.type = 'investment' THEN 'Investimento'
           ELSE t.type
         END as transaction_type,
+        CASE
+          WHEN t.payment_status_id = 2 THEN 1
+          ELSE 0
+        END as is_paid,
         c.name as category_name,
         s.name as subcategory_name,
         ps.name as payment_status_name,
@@ -272,6 +291,14 @@ const getById = async (req: Request, res: Response) => {
       // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
       transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
     }
+    
+    // Garantir que o campo amount seja sempre um número
+    if (typeof transaction.amount === 'string') {
+      transaction.amount = parseFloat(transaction.amount);
+    }
+    
+    // Converter is_paid de inteiro para booleano
+    transaction.is_paid = transaction.is_paid === 1;
     
     res.json(transaction);
   } catch (error) {
@@ -365,6 +392,57 @@ const create = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
+    // Lógica de transações parceladas (não recorrentes)
+    if (is_installment && total_installments && total_installments > 1) {
+      console.log('Creating installment transactions');
+      let createdTransactions: any[] = [];
+      
+      // Criar transações parceladas
+      for (let i = 1; i <= total_installments; i++) {
+        console.log(`Creating installment ${i} of ${total_installments}`);
+        
+        const formattedDate = transaction_date; // Mesma data para todas as parcelas (pode ser ajustado)
+        
+        try {
+          const isProduction = process.env.NODE_ENV === 'production';
+          const result: any = await run(db, `
+            INSERT INTO transactions (
+              description, amount, type, category_id, subcategory_id,
+              payment_status_id, bank_account_id, card_id, contact_id, 
+              transaction_date, cost_center_id, is_installment, installment_number, total_installments
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            `${description} (${i}/${total_installments})`, amount, dbType, category_id, subcategory_id,
+            finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+            formattedDate, cost_center_id, toDatabaseBoolean(true, isProduction), i, total_installments
+          ]);
+
+          createdTransactions.push({
+            id: result.lastID,
+            transaction_date: formattedDate,
+            installment_number: i,
+            total_installments: total_installments
+          });
+        } catch (err) {
+          console.error(`Error creating installment ${i}:`, err);
+          if (createdTransactions.length === 0) {
+            throw err; // Se falhar na primeira, retornar erro
+          } else {
+            // Se já criou algumas, retornar as que foram criadas
+            break;
+          }
+        }
+      }
+      
+      if (createdTransactions.length > 0) {
+        return res.status(201).json({ 
+          message: `${createdTransactions.length} installment transactions created successfully`,
+          transactions: createdTransactions,
+          count: createdTransactions.length
+        });
+      }
+    }
+
     // Lógica de recorrência
     if (is_recurring) {
       console.log('Creating recurring transactions');
@@ -405,6 +483,7 @@ const create = async (req: Request, res: Response) => {
         const formattedDate = currentDate.toISOString().split('T')[0];
         
         try {
+          const isProduction = process.env.NODE_ENV === 'production';
           const result: any = await run(db, `
             INSERT INTO transactions (
               description, amount, type, category_id, subcategory_id,
@@ -415,8 +494,8 @@ const create = async (req: Request, res: Response) => {
           `, [
             description, amount, dbType, category_id, subcategory_id,
             finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id, true, recurrence_type,
-            is_installment || false, installmentNumber, totalInstallments
+            formattedDate, cost_center_id, toDatabaseBoolean(true, isProduction), recurrence_type,
+            toDatabaseBoolean(is_installment, isProduction), installmentNumber, totalInstallments
           ]);
 
           createdTransactions.push({
@@ -516,6 +595,7 @@ const create = async (req: Request, res: Response) => {
     }
 
     // Transação única
+    const isProduction = process.env.NODE_ENV === 'production';
     const result: any = await run(db, `
       INSERT INTO transactions (
         description, amount, type, category_id, subcategory_id,
@@ -525,7 +605,7 @@ const create = async (req: Request, res: Response) => {
     `, [
       description, amount, dbType, category_id, subcategory_id,
       finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-      transaction_date, cost_center_id, is_installment || false, 
+      transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
       is_installment ? 1 : null, total_installments || null
     ]);
 
@@ -639,6 +719,7 @@ const update = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
+    const isProduction = process.env.NODE_ENV === 'production';
     const result: any = await run(db, `
       UPDATE transactions SET
         description = ?, amount = ?, type = ?, category_id = ?, subcategory_id = ?,
@@ -648,7 +729,7 @@ const update = async (req: Request, res: Response) => {
     `, [
       description, amount, dbType, category_id, subcategory_id,
       finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-      transaction_date, cost_center_id, is_installment || false, 
+      transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
       total_installments || null, transactionId
     ]);
 
@@ -903,102 +984,6 @@ const markAsPaid = async (req: Request, res: Response) => {
   }
 };
 
-const getPaymentDetails = async (req: Request, res: Response) => {
-  console.log('===== TRANSACTION CONTROLLER - GET PAYMENT DETAILS =====');
-  console.log('Transaction ID:', req.params.id);
-  
-  try {
-    const { db, all } = getDatabase();
-    const transactionId = req.params.id;
-
-    if (!transactionId) {
-      return res.status(400).json({ error: 'Transaction ID is required' });
-    }
-
-    const query = `
-      SELECT 
-        pd.*,
-        ba.name as bank_account_name,
-        c.name as card_name
-      FROM payment_details pd
-      LEFT JOIN bank_accounts ba ON pd.bank_account_id = ba.id
-      LEFT JOIN cards c ON pd.card_id = c.id
-      WHERE pd.transaction_id = ?
-      ORDER BY pd.created_at DESC
-    `;
-
-    const paymentDetails = await all(db, query, [transactionId]);
-
-    res.json(paymentDetails);
-  } catch (error) {
-    console.error('Error fetching payment details:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-const updatePaymentStatus = async (req: Request, res: Response) => {
-  console.log('===== TRANSACTION CONTROLLER - UPDATE PAYMENT STATUS =====');
-  console.log('Transaction ID:', req.params.id);
-  console.log('New status ID:', req.body.status_id);
-  
-  try {
-    const { db, get, run } = getDatabase();
-    const transactionId = req.params.id;
-    const { status_id: newStatusId } = req.body;
-
-    if (!transactionId || !newStatusId) {
-      return res.status(400).json({ error: 'Transaction ID and status ID are required' });
-    }
-
-    // Buscar a transação original
-    const transaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
-
-    if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found' });
-    }
-
-    // Iniciar transação do banco
-    await run(db, 'BEGIN TRANSACTION');
-
-    try {
-      // 1. Atualizar status da transação
-      await run(db, 'UPDATE transactions SET payment_status_id = ? WHERE id = ?', [newStatusId, transactionId]);
-
-      // 2. Se estiver marcando como "Pago", inserir detalhes do pagamento
-      if (newStatusId == 2) { // Pago
-        // Inserir registro básico de pagamento
-        await run(db, `
-          INSERT INTO payment_details (
-            transaction_id, payment_date, paid_amount, original_amount,
-            payment_type
-          ) VALUES (?, DATE('now'), ?, ?, 'manual')
-        `, [
-          transactionId,
-          transaction.amount,
-          transaction.amount
-        ]);
-      }
-
-      // Confirmar transação
-      await run(db, 'COMMIT');
-
-      console.log('Transaction status updated successfully');
-      res.json({ 
-        message: 'Transaction status updated successfully',
-        transaction_id: transactionId,
-        new_status_id: newStatusId
-      });
-    } catch (error) {
-      // Rollback em caso de erro
-      await run(db, 'ROLLBACK');
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error updating transaction status:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
 const reversePayment = async (req: Request, res: Response) => {
   console.log('===== TRANSACTION CONTROLLER - REVERSE PAYMENT =====');
   console.log('Transaction ID:', req.params.id);
@@ -1047,15 +1032,354 @@ const reversePayment = async (req: Request, res: Response) => {
   }
 };
 
+const batchEdit = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - BATCH EDIT =====');
+  console.log('Request body:', req.body);
+  
+  try {
+    const { db, run } = getDatabase();
+    const { transactions } = req.body;
+
+    if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ error: 'No transactions provided for batch edit' });
+    }
+
+    // Iniciar transação do banco
+    await run(db, 'BEGIN TRANSACTION');
+
+    try {
+      for (const transaction of transactions) {
+        const {
+          id,
+          description,
+          amount,
+          type,
+          transaction_type,
+          category_id,
+          subcategory_id,
+          payment_status_id,
+          bank_account_id,
+          card_id,
+          contact_id,
+          transaction_date,
+          cost_center_id,
+          is_recurring,
+          recurrence_type,
+          recurrence_count,
+          recurrence_end_date,
+          recurrence_weekday,
+          is_paid,
+          is_installment,
+          total_installments
+        } = transaction;
+
+        // Use transaction_type se estiver presente, senão usa type
+        const finalType = transaction_type || type;
+
+        // Convert Portuguese to English for database compatibility
+        let dbType = finalType;
+        if (finalType === 'Despesa') dbType = 'expense';
+        if (finalType === 'Receita') dbType = 'income';
+        if (finalType === 'Investimento') dbType = 'investment';
+
+        // Validate required fields
+        if (!id || !description || !amount || !finalType || !transaction_date) {
+          throw new Error(`Missing required fields for transaction ID ${id}: description, amount, type, transaction_date`);
+        }
+
+        // Validate mandatory fields: category, contact, and cost center
+        if (!category_id && category_id !== 0) {
+          throw new Error(`Categoria é obrigatória para transaction ID ${id}`);
+        }
+        if (!contact_id && contact_id !== 0) {
+          throw new Error(`Contato é obrigatório para transaction ID ${id}`);
+        }
+        if (!cost_center_id && cost_center_id !== 0) {
+          throw new Error(`Centro de Custo é obrigatório para transaction ID ${id}`);
+        }
+
+        // Lógica para determinar o payment_status_id (mesma do create)
+        let finalPaymentStatusId = payment_status_id;
+        
+        if (is_paid === true) {
+          finalPaymentStatusId = 2;
+        }
+        else if (payment_status_id === 2) {
+          finalPaymentStatusId = 2;
+        }
+        else if (!payment_status_id && !is_paid) {
+          const today = new Date().toISOString().split('T')[0];
+          
+          if (transaction_date < today) {
+            finalPaymentStatusId = 4; // Vencido
+          } else {
+            finalPaymentStatusId = 1; // Em aberto
+          }
+        }
+        else if (!payment_status_id) {
+          finalPaymentStatusId = 1;
+        }
+
+        console.log(`Updating transaction with payment status for ID ${id}:`, {
+          original_payment_status_id: payment_status_id,
+          is_paid,
+          transaction_date,
+          today: new Date().toISOString().split('T')[0],
+          final_payment_status_id: finalPaymentStatusId
+        });
+
+        const result: any = await run(db, `
+          UPDATE transactions SET
+            description = ?, amount = ?, type = ?, category_id = ?, subcategory_id = ?,
+            payment_status_id = ?, bank_account_id = ?, card_id = ?, contact_id = ?, 
+            transaction_date = ?, cost_center_id = ?, is_installment = ?, total_installments = ?
+          WHERE id = ?
+        `, [
+          description, amount, dbType, category_id, subcategory_id,
+          finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+          transaction_date, cost_center_id, is_installment || false, 
+          total_installments || null, id
+        ]);
+
+        if (result.changes === 0) {
+          throw new Error(`Transaction not found for ID ${id}`);
+        }
+      }
+
+      // Confirmar transação
+      await run(db, 'COMMIT');
+
+      res.json({ 
+        message: 'Transactions updated successfully',
+        count: transactions.length
+      });
+    } catch (error) {
+      // Rollback em caso de erro
+      await run(db, 'ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error updating transactions in batch:', error);
+    res.status(500).json({ error: 'Failed to update transactions in batch: ' + error });
+  }
+};
+
+const getTransactionStats = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - GET TRANSACTION STATS =====');
+  console.log('Query params:', req.query);
+  console.log('User info:', (req as any).user);
+  
+  try {
+    const { db, get } = getDatabase();
+    const userId = (req as any).user?.id;
+    const userCostCenterId = (req as any).user?.cost_center_id;
+    
+    console.log('User ID:', userId);
+    console.log('User Cost Center ID:', userCostCenterId);
+    
+    // Construir filtros dinamicamente
+    let whereConditions: string[] = [];
+    let queryParams: any[] = [];
+    
+    // Filtro por data - aceita tanto start_date/end_date quanto month
+    if (req.query.start_date) {
+      whereConditions.push('transaction_date >= ?');
+      queryParams.push(req.query.start_date);
+    }
+    
+    if (req.query.end_date) {
+      whereConditions.push('transaction_date <= ?');
+      queryParams.push(req.query.end_date);
+    }
+    
+    // Filtro por mês (formato YYYY-MM) - compatibilidade com página Transactions
+    if (req.query.month && !req.query.start_date && !req.query.end_date) {
+      const monthStr = req.query.month as string;
+      const [year, month] = monthStr.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = `${year}-${month.padStart(2, '0')}-${new Date(parseInt(year), parseInt(month), 0).getDate()}`;
+      whereConditions.push('transaction_date >= ? AND transaction_date <= ?');
+      queryParams.push(startDate, endDate);
+    }
+    
+    // Filtro por tipo de transação
+    if (req.query.transaction_type) {
+      const typeMap: any = {
+        'Despesa': 'expense',
+        'Receita': 'income', 
+        'Investimento': 'investment'
+      };
+      whereConditions.push('type = ?');
+      queryParams.push(typeMap[req.query.transaction_type as string] || req.query.transaction_type);
+    }
+    
+    // Filtro por categoria
+    if (req.query.category_id) {
+      whereConditions.push('category_id = ?');
+      queryParams.push(req.query.category_id);
+    }
+    
+    // Filtro por subcategoria
+    if (req.query.subcategory_id) {
+      whereConditions.push('subcategory_id = ?');
+      queryParams.push(req.query.subcategory_id);
+    }
+    
+    // Filtro por status de pagamento - suporta múltiplos valores
+    if (req.query.payment_status_id) {
+      const statusIds = Array.isArray(req.query.payment_status_id) 
+        ? req.query.payment_status_id 
+        : req.query.payment_status_id.toString().split(',');
+      
+      if (statusIds.length > 0) {
+        const placeholders = statusIds.map(() => '?').join(',');
+        whereConditions.push(`payment_status_id IN (${placeholders})`);
+        queryParams.push(...statusIds);
+      }
+    }
+    
+    // Filtro por contato
+    if (req.query.contact_id) {
+      whereConditions.push('contact_id = ?');
+      queryParams.push(req.query.contact_id);
+    }
+    
+    // Filtro por centro de custo - sempre aplicar, mesmo que seja 'all'
+    if (req.query.cost_center_id && req.query.cost_center_id !== 'all') {
+      console.log('======= PROCESSAMENTO DE FILTRO DE CENTRO DE CUSTO =======');
+      console.log('Valor original:', req.query.cost_center_id);
+      console.log('Tipo do valor:', typeof req.query.cost_center_id);
+
+      // Verificar se tem vírgula, indicando múltiplos valores
+      if (req.query.cost_center_id.toString().includes(',')) {
+        // Múltiplos centros de custo separados por vírgula
+        const costCenterIds = req.query.cost_center_id.toString().split(',').map(id => id.trim());
+        
+        // Converter IDs para números e filtrar valores inválidos
+        const numericIds = costCenterIds
+          .map(id => parseInt(id, 10))
+          .filter(id => !isNaN(id));
+        
+        console.log('IDs originais:', costCenterIds);
+        console.log('IDs numéricos:', numericIds);
+        
+        if (numericIds.length > 0) {
+          // Construir cláusula IN diretamente na condição
+          whereConditions.push(`cost_center_id IN (${numericIds.join(',')})`);
+          
+          // Não adiciona parâmetros já que os IDs estão diretamente na cláusula SQL
+          console.log('Cláusula SQL para múltiplos centros:', `cost_center_id IN (${numericIds.join(',')})`);
+        }
+      } else {
+        // Único centro de custo
+        const costCenterId = parseInt(req.query.cost_center_id.toString(), 10);
+        if (!isNaN(costCenterId)) {
+          whereConditions.push('cost_center_id = ?');
+          queryParams.push(costCenterId);
+          console.log('Cláusula SQL para centro único:', 'cost_center_id = ?', costCenterId);
+        }
+      }
+    } else if (userCostCenterId && (!req.query.cost_center_id || req.query.cost_center_id === '' || req.query.cost_center_id === 'all')) {
+      console.log('Adding cost_center_id filter from user:', userCostCenterId);
+      whereConditions.push('cost_center_id = ?');
+      queryParams.push(userCostCenterId);
+    }
+    
+    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+    
+    const query = `
+      SELECT 
+        SUM(amount) as total_amount,
+        SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expenses,
+        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_incomes,
+        SUM(CASE WHEN type = 'investment' THEN amount ELSE 0 END) as total_investments,
+        SUM(CASE WHEN payment_status_id = 2 THEN amount ELSE 0 END) as total_paid,
+        SUM(CASE WHEN payment_status_id != 2 THEN amount ELSE 0 END) as total_unpaid,
+        COUNT(*) as total_transactions,
+        COUNT(CASE WHEN type = 'expense' THEN 1 END) as total_expense_transactions,
+        COUNT(CASE WHEN type = 'income' THEN 1 END) as total_income_transactions,
+        COUNT(CASE WHEN type = 'investment' THEN 1 END) as total_investment_transactions,
+        COUNT(CASE WHEN payment_status_id = 2 THEN 1 END) as total_paid_transactions,
+        COUNT(CASE WHEN payment_status_id != 2 THEN 1 END) as total_unpaid_transactions
+      FROM transactions
+      ${whereClause}
+    `;
+
+    console.log('SQL query antes de executar:', query);
+    console.log('SQL params antes de executar:', queryParams);
+          
+    // Imprimir a consulta com parâmetros substituídos para depuração
+    let debugSql = query;
+    for (const param of queryParams) {
+      if (typeof param === 'string') {
+        debugSql = debugSql.replace('?', `'${param}'`);
+      } else if (param === null) {
+        debugSql = debugSql.replace('?', 'NULL');
+      } else {
+        debugSql = debugSql.replace('?', param);
+      }
+    }
+          
+    console.log('SQL COMPLETA COM PARÂMETROS:', debugSql);
+
+    const stats = await get(db, query, queryParams);
+    console.log('Transaction stats:', stats);
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching transaction stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const getPaymentDetails = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - GET PAYMENT DETAILS =====');
+  console.log('Transaction ID:', req.params.id);
+  
+  try {
+    const { db, get } = getDatabase();
+    const transactionId = req.params.id;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
+
+    // Buscar os detalhes do pagamento
+    const query = `
+      SELECT 
+        pd.*,
+        ba.name as bank_account_name,
+        c.name as card_name
+      FROM payment_details pd
+      LEFT JOIN bank_accounts ba ON pd.bank_account_id = ba.id
+      LEFT JOIN cards c ON pd.card_id = c.id
+      WHERE pd.transaction_id = ?
+    `;
+
+    const paymentDetails = await get(db, query, [transactionId]);
+
+    if (!paymentDetails) {
+      return res.status(404).json({ error: 'Payment details not found' });
+    }
+
+    res.json(paymentDetails);
+  } catch (error) {
+    console.error('Error fetching payment details:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export default {
   list,
   getById,
   create,
   update,
+  patchTransaction,
   delete: deleteTransaction,
   markAsPaid,
-  getPaymentDetails,
-  updatePaymentStatus,
   reversePayment,
-  patch: patchTransaction  // Nova função para edição em lote
+  batchEdit,
+  getTransactionStats,
+  patch: patchTransaction,
+  getPaymentDetails
 };

@@ -8,6 +8,7 @@ const subcategoriesController = {
     const { db, all } = getDatabase();
 
     try {
+      console.log('Fetching subcategories with categoryId:', categoryId);
       let query = 'SELECT * FROM subcategories';
       let params: any[] = [];
 
@@ -17,8 +18,10 @@ const subcategoriesController = {
       }
       
       query += ' ORDER BY name';
+      console.log('Query:', query, 'Params:', params);
 
       const subcategories = await all(db, query, params);
+      console.log('Found subcategories:', subcategories);
       res.json(subcategories);
     } catch (error) {
       console.error('Error fetching subcategories:', error);
@@ -32,7 +35,9 @@ const subcategoriesController = {
     const { db, run } = getDatabase();
 
     try {
+      console.log('Creating subcategory with:', { name, category_id });
       const result: any = await run(db, 'INSERT INTO subcategories (name, category_id) VALUES (?, ?)', [name, category_id || null]);
+      console.log('Insert result:', result);
       res.status(201).json({ id: result.lastID, name, category_id: category_id || null });
     } catch (error) {
       console.error('Error creating subcategory:', error);
@@ -47,7 +52,9 @@ const subcategoriesController = {
     const { db, run } = getDatabase();
 
     try {
+      console.log('Updating subcategory with:', { id, name, category_id });
       await run(db, 'UPDATE subcategories SET name = ?, category_id = ? WHERE id = ?', [name, category_id || null, id]);
+      console.log('Update completed');
       res.json({ id, name, category_id: category_id || null });
     } catch (error) {
       console.error('Error updating subcategory:', error);

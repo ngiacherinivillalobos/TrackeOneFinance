@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BaseCRUDPage } from '../components/shared/BaseCRUDPage';
 import { useCRUD } from '../hooks/useCRUD';
 import { subcategoryService, Subcategory } from '../services/subcategoryService';
+import { categoryService, Category } from '../services/categoryService';
 
 export default function SubcategoriesPage() {
   const {
@@ -19,8 +20,24 @@ export default function SubcategoriesPage() {
     delete: subcategoryService.delete,
   });
 
+  const [categories, setCategories] = useState<Category[]>([]);
+
   useEffect(() => {
     loadData();
+    
+    // Carregar categorias para o formulário
+    const loadCategories = async () => {
+      try {
+        console.log('Carregando categorias para o formulário de subcategorias...');
+        const categoriesData = await categoryService.list();
+        console.log('Categorias carregadas:', categoriesData);
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error('Erro ao carregar categorias:', error);
+      }
+    };
+    
+    loadCategories();
   }, []);
 
   const createItem = async (item: Omit<Subcategory, 'id'>): Promise<void> => {
@@ -43,10 +60,20 @@ export default function SubcategoriesPage() {
     }
   };
 
+  // Função para obter o nome da categoria pelo ID
+  const getCategoryName = (categoryId: number) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    return category ? category.name : 'N/A';
+  };
+
   // Definir colunas para a tabela
   const columns = [
     { key: 'name', title: 'Nome' },
-    { key: 'category_name', title: 'Categoria' },
+    { 
+      key: 'category_id', 
+      title: 'Categoria',
+      render: (item: Subcategory) => getCategoryName(item.category_id)
+    },
   ];
 
   // Definir campos para o formulário
@@ -62,7 +89,10 @@ export default function SubcategoriesPage() {
       label: 'Categoria', 
       type: 'select' as const, 
       required: true,
-      options: [] // Será preenchido dinamicamente
+      options: categories.map(category => ({
+        value: category.id,
+        label: `${category.name} (${category.source_type})`
+      }))
     }
   ];
 

@@ -36,17 +36,27 @@ export default function Subcategories() {
     name: '',
     category_id: 0
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
+    setLoading(true);
+    setError(null);
     try {
+      console.log('Loading categories and subcategories...');
       const [subcategoriesData, categoriesData] = await Promise.all([
         subcategoryService.list(),
         categoryService.list()
       ]);
+      console.log('Loaded subcategories:', subcategoriesData);
+      console.log('Loaded categories:', categoriesData);
       setSubcategories(subcategoriesData);
       setCategories(categoriesData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      setError('Erro ao carregar dados: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,8 +85,9 @@ export default function Subcategories() {
       try {
         await subcategoryService.delete(id);
         await loadData();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting subcategory:', error);
+        setError('Erro ao excluir subcategoria: ' + (error.response?.data?.error || error.message));
       }
     }
   };
@@ -91,9 +102,16 @@ export default function Subcategories() {
       }
       await loadData();
       handleClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving subcategory:', error);
+      setError('Erro ao salvar subcategoria: ' + (error.response?.data?.error || error.message));
     }
+  };
+
+  // Função para obter o nome da categoria pelo ID
+  const getCategoryName = (categoryId: number) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    return category ? category.name : 'N/A';
   };
 
   return (
@@ -104,35 +122,47 @@ export default function Subcategories() {
         </Button>
       </div>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Categoria</TableCell>
-              <TableCell align="right">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {subcategories.map((subcategory) => (
-              <TableRow key={subcategory.id}>
-                <TableCell>{subcategory.name}</TableCell>
-                <TableCell>
-                  {categories.find(cat => cat.id === subcategory.category_id)?.name || 'N/A'}
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => handleEdit(subcategory)}>
-                    <Edit />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(subcategory.id!)}>
-                    <Delete />
-                  </IconButton>
-                </TableCell>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" my={4}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome</TableCell>
+                <TableCell>Categoria</TableCell>
+                <TableCell align="right">Ações</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {subcategories.map((subcategory) => (
+                <TableRow key={subcategory.id}>
+                  <TableCell>{subcategory.name}</TableCell>
+                  <TableCell>
+                    {getCategoryName(subcategory.category_id)}
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton onClick={() => handleEdit(subcategory)}>
+                      <Edit />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(subcategory.id!)}>
+                      <Delete />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Dialog open={open} onClose={handleClose}>
         <form onSubmit={handleSubmit}>

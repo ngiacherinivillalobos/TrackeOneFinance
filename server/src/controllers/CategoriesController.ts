@@ -38,13 +38,16 @@ const categoriesController = {
     const { db, get, run } = getDatabase();
 
     try {
+      console.log('Creating category with:', { name, source_type });
       // First, get the category_type_id
       const categoryType: any = await get(db, 'SELECT id FROM category_types WHERE name = ?', [source_type]);
+      console.log('Found category type:', categoryType);
       if (!categoryType) {
         throw new Error(`Invalid category type: ${source_type}`);
       }
 
       const result: any = await run(db, 'INSERT INTO categories (name, category_type_id) VALUES (?, ?)', [name, categoryType.id]);
+      console.log('Insert result:', result);
 
       res.status(201).json({ id: result.lastID, name, source_type });
     } catch (error) {
@@ -64,13 +67,16 @@ const categoriesController = {
     const { db, get, run } = getDatabase();
 
     try {
+      console.log('Updating category with:', { id, name, source_type });
       // First, get the category_type_id
       const categoryType: any = await get(db, 'SELECT id FROM category_types WHERE name = ?', [source_type]);
+      console.log('Found category type:', categoryType);
       if (!categoryType) {
         throw new Error(`Invalid category type: ${source_type}`);
       }
 
       await run(db, 'UPDATE categories SET name = ?, category_type_id = ? WHERE id = ?', [name, categoryType.id, id]);
+      console.log('Update completed');
 
       res.json({ id, name, source_type });
     } catch (error) {

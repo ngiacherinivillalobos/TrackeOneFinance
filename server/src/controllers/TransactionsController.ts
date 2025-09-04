@@ -56,7 +56,11 @@ const transactionController = {
           c.name as category_name,
           s.name as subcategory_name,
           ps.name as payment_status_name,
-          cont.name as contact_name
+          cont.name as contact_name,
+          CASE
+            WHEN t.payment_status_id = 2 THEN 1
+            ELSE 0
+          END as is_paid
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
@@ -75,6 +79,17 @@ const transactionController = {
           // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
           transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
         }
+        
+        // Garantir que o campo amount seja sempre um número
+        if (typeof transaction.amount === 'string') {
+          transaction.amount = parseFloat(transaction.amount);
+        }
+        
+        // Converter is_paid de inteiro para booleano (se existir)
+        if (transaction.is_paid !== undefined) {
+          transaction.is_paid = transaction.is_paid === 1;
+        }
+        
         // Se já estiver no formato string (SQLite), manter como está
         return transaction;
       });
@@ -97,7 +112,11 @@ const transactionController = {
           c.name as category_name,
           s.name as subcategory_name,
           ps.name as payment_status_name,
-          cont.name as contact_name
+          cont.name as contact_name,
+          CASE
+            WHEN t.payment_status_id = 2 THEN 1
+            ELSE 0
+          END as is_paid
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
         LEFT JOIN subcategories s ON t.subcategory_id = s.id
@@ -117,6 +136,16 @@ const transactionController = {
       if (transaction.transaction_date instanceof Date) {
         // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
         transaction.transaction_date = transaction.transaction_date.toISOString().split('T')[0];
+      }
+      
+      // Garantir que o campo amount seja sempre um número
+      if (typeof transaction.amount === 'string') {
+        transaction.amount = parseFloat(transaction.amount);
+      }
+      
+      // Converter is_paid de inteiro para booleano (se existir)
+      if (transaction.is_paid !== undefined) {
+        transaction.is_paid = transaction.is_paid === 1;
       }
 
       res.json(transaction);
