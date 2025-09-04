@@ -169,10 +169,27 @@ export const CashFlowController = {
 
       const rows = await all(db, query, params);
       console.log('Registros encontrados no banco:', rows.length);
-      console.log('Registros retornados:', rows);
+      console.log('Registros retornados (detalhado):', rows.map(r => ({
+        id: r.id,
+        date: r.date,
+        description: r.description,
+        amount: r.amount,
+        record_type: r.record_type,
+        amountType: typeof r.amount,
+        amountValue: r.amount
+      })));
       
       // Formatar as datas consistentemente entre ambientes
       const formattedRows = rows.map((row: any) => {
+        // Log para verificar o tipo e valor do amount
+        console.log('Processando registro:', {
+          id: row.id,
+          amount: row.amount,
+          amountType: typeof row.amount,
+          isNumber: typeof row.amount === 'number',
+          isString: typeof row.amount === 'string'
+        });
+        
         // Se date for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
         if (row.date instanceof Date) {
           // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário

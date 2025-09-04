@@ -366,11 +366,22 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       <strong>Data:</strong> {(() => {
-                        if (transaction.transaction_date.includes('T')) {
-                          return new Date(transaction.transaction_date).toLocaleDateString('pt-BR');
-                        } else {
-                          // Usar formato UTC para evitar problemas de fuso horário
-                          return new Date(transaction.transaction_date + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                        // Tratar a data de forma consistente entre ambientes
+                        try {
+                          if (transaction.transaction_date.includes('T')) {
+                            // Formato ISO completo
+                            const date = new Date(transaction.transaction_date);
+                            return date.toLocaleDateString('pt-BR');
+                          } else {
+                            // Formato YYYY-MM-DD
+                            // Usar Date.parse para garantir consistência entre ambientes
+                            const date = new Date(transaction.transaction_date + 'T00:00:00');
+                            // Ajustar para o fuso horário local sem converter para UTC
+                            return date.toLocaleDateString('pt-BR');
+                          }
+                        } catch (error) {
+                          // Fallback para formato bruto se houver erro
+                          return transaction.transaction_date;
                         }
                       })()}
                     </Typography>

@@ -1144,10 +1144,75 @@ export default function MonthlyControl() {
   };
 
   const handleEditTransaction = (transaction: Transaction) => {
+    console.log('Editando transação:', transaction);
+    console.log('Tipo completo de transaction:', typeof transaction);
+    console.log('Chaves de transaction:', Object.keys(transaction));
     setEditingTransaction(transaction);
     
-    // Formatar o valor para o padrão brasileiro (substituir ponto por vírgula)
-    const formattedAmount = transaction.amount.toFixed(2).replace('.', ',');
+    // Verificar se o amount é um número antes de chamar toFixed
+    let formattedAmount = '';
+    console.log('Tipo de transaction.amount:', typeof transaction.amount);
+    console.log('Valor de transaction.amount:', transaction.amount);
+    console.log('Valor completo de transaction:', JSON.stringify(transaction, null, 2));
+    
+    // Função para converter formato brasileiro para número
+    const parseBrazilianNumber = (str: string): number => {
+      console.log('parseBrazilianNumber chamado com:', str, 'tipo:', typeof str);
+      if (typeof str === 'number') return str;
+      
+      str = str.toString().trim();
+      console.log('String após trim:', str);
+      
+      // Se não tem vírgula, trata como número inteiro
+      if (!str.includes(',')) {
+        // Remove pontos (milhares) e converte
+        const result = parseFloat(str.replace(/\./g, '')) || 0;
+        console.log('ParseFloat sem vírgula:', result);
+        return result;
+      }
+      
+      // Divide em parte inteira e decimal
+      const parts = str.split(',');
+      const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+      const decimalPart = parts[1] || '00'; // Parte decimal
+      
+      // Reconstrói o número no formato americano
+      const americanFormat = integerPart + '.' + decimalPart;
+      const result = parseFloat(americanFormat) || 0;
+      console.log('ParseFloat com vírgula:', result, 'formato americano:', americanFormat);
+      return result;
+    };
+    
+    // Garantir que o amount seja um número, independentemente do tipo retornado pelo backend
+    let amountAsNumber: number;
+    console.log('Verificando tipo de transaction.amount:', typeof transaction.amount);
+    if (typeof transaction.amount === 'number') {
+      console.log('transaction.amount é número:', transaction.amount);
+      amountAsNumber = transaction.amount;
+    } else if (typeof transaction.amount === 'string') {
+      console.log('transaction.amount é string:', transaction.amount);
+      // Converter string para número, tratando o formato brasileiro (vírgula como separador decimal)
+      amountAsNumber = parseBrazilianNumber(transaction.amount);
+    } else {
+      // Caso seja de outro tipo, tentar converter para número
+      console.log('transaction.amount é de outro tipo:', typeof transaction.amount, transaction.amount);
+      amountAsNumber = Number(transaction.amount) || 0;
+    }
+    
+    console.log('Convertendo para número:', amountAsNumber);
+    console.log('Tipo de amountAsNumber:', typeof amountAsNumber);
+    
+    // Verificar se amountAsNumber é realmente um número válido antes de chamar toFixed
+    if (typeof amountAsNumber === 'number' && !isNaN(amountAsNumber)) {
+      console.log('Chamando toFixed em amountAsNumber:', amountAsNumber);
+      formattedAmount = amountAsNumber.toFixed(2).replace('.', ',');
+    } else {
+      console.log('amountAsNumber não é um número válido:', amountAsNumber, 'tipo:', typeof amountAsNumber);
+      // Se não for um número válido, usar 0,00 como padrão
+      formattedAmount = '0,00';
+    }
+    
+    console.log('Valor formatado:', formattedAmount);
     
     setFormData({
       description: transaction.description,
@@ -1326,6 +1391,16 @@ export default function MonthlyControl() {
     const uniqueTransactions = Array.from(
       new Map(transactions.map(item => [item.id, item])).values()
     );
+    
+    // Adicionar logs para debug
+    console.log('Transações únicas:', uniqueTransactions);
+    uniqueTransactions.forEach((transaction, index) => {
+      console.log(`Transação ${index}:`, {
+        id: transaction.id,
+        amount: transaction.amount,
+        type: typeof transaction.amount
+      });
+    });
     
     // Depois aplicamos a ordenação
     return [...uniqueTransactions].sort(getComparator(order, orderBy));

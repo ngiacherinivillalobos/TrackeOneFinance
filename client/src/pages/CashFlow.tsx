@@ -434,14 +434,34 @@ export default function CashFlowPage() {
   }, [getFilteredRecords]);
   
   const totalReceitas = useMemo(() => {
-    const total = filteredRecords.filter(r => r.record_type === 'Receita').reduce((sum, r) => sum + r.amount, 0);
-    console.log('Total de receitas:', total);
+    const filteredReceitas = filteredRecords.filter(r => r.record_type === 'Receita');
+    console.log('Registros de receita filtrados:', filteredReceitas);
+    
+    const total = filteredReceitas.reduce((sum, r) => {
+      console.log('Processando receita:', { id: r.id, amount: r.amount, type: typeof r.amount });
+      const amount = typeof r.amount === 'string' ? parseFloat(r.amount) : r.amount;
+      const validAmount = isNaN(amount) ? 0 : amount;
+      console.log('Valor convertido:', { original: r.amount, converted: validAmount });
+      return sum + validAmount;
+    }, 0);
+    
+    console.log('Total de receitas calculado:', total);
     return total;
   }, [filteredRecords]);
   
   const totalDespesas = useMemo(() => {
-    const total = filteredRecords.filter(r => r.record_type === 'Despesa').reduce((sum, r) => sum + r.amount, 0);
-    console.log('Total de despesas:', total);
+    const filteredDespesas = filteredRecords.filter(r => r.record_type === 'Despesa');
+    console.log('Registros de despesa filtrados:', filteredDespesas);
+    
+    const total = filteredDespesas.reduce((sum, r) => {
+      console.log('Processando despesa:', { id: r.id, amount: r.amount, type: typeof r.amount });
+      const amount = typeof r.amount === 'string' ? parseFloat(r.amount) : r.amount;
+      const validAmount = isNaN(amount) ? 0 : amount;
+      console.log('Valor convertido:', { original: r.amount, converted: validAmount });
+      return sum + validAmount;
+    }, 0);
+    
+    console.log('Total de despesas calculado:', total);
     return total;
   }, [filteredRecords]);
   
