@@ -252,13 +252,26 @@ export default function Dashboard() {
     const totalPago = despesasPagas + investimentosPagos;
     const totalAPagar = despesasNaoPagas + investimentosNaoPagos;
     
+    console.log('=== Cálculo dos totalizadores ===');
+    console.log('Total de receitas:', totalReceitas);
+    console.log('Total de despesas:', totalDespesas);
+    console.log('Total de investimentos:', totalInvestimentos);
+    console.log('Receitas pagas:', receitasPagas);
+    console.log('Receitas não pagas:', receitasNaoPagas);
+    console.log('Despesas pagas:', despesasPagas);
+    console.log('Despesas não pagas:', despesasNaoPagas);
+    console.log('Investimentos pagos:', investimentosPagos);
+    console.log('Investimentos não pagos:', investimentosNaoPagos);
+    console.log('Total pago:', totalPago);
+    console.log('Total a pagar:', totalAPagar);
+    console.log('Saldo atual:', saldoAtual);
     console.log('Investimentos pagos no período filtrado:', investimentosPagos);
     
     // Calcular total de investimentos de todos os períodos (sem filtro de data) que estão pagos
     loadTotalInvestmentsPaid(currentParams.cost_center_id);
     
     // Atualizar estado com os novos valores
-    setMonthSummary({
+    const newMonthSummary = {
       income: totalReceitas,
       expenses: totalDespesas,
       savings: totalInvestimentos, // Agora mostra todos os investimentos do período, independentemente do status
@@ -267,7 +280,10 @@ export default function Dashboard() {
       paid: totalPago,
       toPay: totalAPagar,
       toReceive: receitasNaoPagas
-    });
+    };
+    
+    console.log('Novo monthSummary:', newMonthSummary);
+    setMonthSummary(newMonthSummary);
     
     // Calcular dados para o gráfico semanal
     calculateWeeklyBalances(transactionsData);
@@ -295,6 +311,7 @@ export default function Dashboard() {
         .reduce((sum: number, t: any) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
       
       console.log('Total investimentos pagos calculado:', totalInvestimentosPagos);
+      console.log('Atualizando totalInvestmentsPaid para:', totalInvestimentosPagos);
       // Atualizar o estado com o total de investimentos pagos
       setTotalInvestmentsPaid(totalInvestimentosPagos);
     } catch (error) {

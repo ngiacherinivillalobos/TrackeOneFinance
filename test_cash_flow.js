@@ -15,41 +15,6 @@ async function testCashFlow() {
     const token = loginResponse.data.token;
     console.log('✅ Login bem-sucedido\n');
     
-    // Criar alguns registros de teste
-    console.log('Criando registros de teste...');
-    const testRecords = [
-      {
-        date: '2025-09-01',
-        description: 'Teste Receita',
-        amount: 1000.50,
-        record_type: 'Receita',
-        cost_center_id: 1
-      },
-      {
-        date: '2025-09-02',
-        description: 'Teste Despesa',
-        amount: 500.25,
-        record_type: 'Despesa',
-        cost_center_id: 1
-      }
-    ];
-    
-    for (const record of testRecords) {
-      try {
-        await axios.post('https://trackeone-finance-api.onrender.com/api/cash-flow', record, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        console.log(`✅ Registro criado: ${record.description}`);
-      } catch (createError) {
-        console.log(`❌ Erro ao criar registro ${record.description}: ${createError.message}`);
-      }
-    }
-    
-    console.log('\nAguardando processamento...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
     // Testar o endpoint do fluxo de caixa
     console.log('Testando endpoint do fluxo de caixa para 9/2025...');
     const cashFlowResponse = await axios.get('https://trackeone-finance-api.onrender.com/api/cash-flow?month=9&year=2025', {
