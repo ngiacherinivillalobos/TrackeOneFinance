@@ -7,10 +7,8 @@
       // Redirecionar para a página principal para que o React Router possa lidar com a rota
       (function() {
         var path = window.location.pathname;
-        // Se não for uma rota da API, redirecionar para a raiz
-        if (!path.startsWith('/api')) {
-          window.location.replace('/');
-        }
+        // Redirecionar todas as rotas para a raiz para que o React Router possa lidar com elas
+        window.location.replace('/');
       })();
     </script>
   </head>
@@ -19,6 +17,7 @@
     <noscript>
       <h1>TrackeOne Finance</h1>
       <p>Ative o JavaScript para usar este aplicativo.</p>
+      <p><a href="/">Voltar para a página inicial</a></p>
     </noscript>
   </body>
 </html>
