@@ -41,8 +41,8 @@ const runMigrations = async (): Promise<void> => {
       for (const command of commands) {
         let cmd = command.trim();
         if (cmd !== '') {
-          // Adicionar ON CONFLICT DO NOTHING para comandos INSERT
-          if (cmd.toUpperCase().startsWith('INSERT')) {
+          // Adicionar ON CONFLICT DO NOTHING para comandos INSERT apenas se não tiver uma cláusula ON CONFLICT
+          if (cmd.toUpperCase().startsWith('INSERT') && !cmd.toUpperCase().includes('ON CONFLICT')) {
             cmd = cmd.replace(/INSERT(.+?VALUES\s*\(.+?\))/i, 'INSERT $1 ON CONFLICT DO NOTHING');
           }
           await dbWrapper.run(dbWrapper.db, cmd);
