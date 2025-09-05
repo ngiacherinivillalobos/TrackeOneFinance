@@ -210,9 +210,9 @@ export default function MonthlyControl() {
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>([]);
   
   // Estados para seleção e ações
-  const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const [actionMenuAnchorEl, setActionMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
+  const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const [newTransactionMenuAnchor, setNewTransactionMenuAnchor] = useState<HTMLElement | null>(null);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState<boolean>(false);
   const [batchActionsAnchor, setBatchActionsAnchor] = useState<HTMLElement | null>(null);
@@ -1157,6 +1157,36 @@ export default function MonthlyControl() {
     });
   };
 
+  const handleOpenNewTransactionMenu = () => {
+    resetForm();
+    setFormData({
+      description: '',
+      amount: '',
+      transaction_date: new Date().toISOString().split('T')[0],
+      category_id: '',
+      subcategory_id: '',
+      payment_status_id: '1',
+      contact_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '',
+      transaction_type: 'Despesa',
+      bank_account_id: '',
+      card_id: '',
+      is_paid: false,
+      is_recurring: false,
+      recurrence_type: 'mensal',
+      recurrence_count: 1,
+      recurrence_interval: 1,
+      recurrence_weekday: 1,
+      recurrence_end_date: '',
+      is_installment: false,
+      total_installments: 1
+    });
+    setRecurrencePreview([]);
+    setEditingTransaction(null);
+    setNewTransactionMenuAnchor(null);
+    setTransactionDialogOpen(true); // Certificar-se de que o diálogo é aberto
+  };
+
   const handleNewTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
     console.log('Criando nova transação do tipo:', type);
     setFormData({
@@ -1182,6 +1212,9 @@ export default function MonthlyControl() {
       total_installments: 1
     });
     setRecurrencePreview([]);
+    setEditingTransaction(null);
+    setNewTransactionMenuAnchor(null);
+    setTransactionDialogOpen(true); // Certificar-se de que o diálogo é aberto
   };
 
   const handleCreateTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
