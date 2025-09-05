@@ -16,6 +16,7 @@
     "deploy-check": "node scripts/deploy_check.js",
     "generate-secure-jwt": "node scripts/generate_secure_jwt.js",
     "deploy": "bash scripts/deploy_production.sh",
+    "deploy-auto": "bash scripts/deploy_auto.sh",
     "check-deploy": "node scripts/check_deploy_status.js",
     "project-report": "node scripts/generate_project_report.js"
   },
