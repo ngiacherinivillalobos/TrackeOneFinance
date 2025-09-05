@@ -68,13 +68,16 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, addMonths, subMonths } from 'date-fns';
 import api from '../services/api';
-import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
+import { transactionService, PaymentData } from '../services/transactionService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
 
+interface ServiceTransaction extends Transaction {
+  is_recurring: boolean;
+}
 
 interface Transaction {
   id: number;
@@ -87,6 +90,11 @@ interface Transaction {
   is_installment?: boolean;
   installment_number?: number;
   total_installments?: number;
+  recurrence_type?: 'unica' | 'mensal' | 'semanal' | 'personalizado' | 'fixo';
+  recurrence_count?: number;
+  recurrence_interval?: number;
+  recurrence_weekday?: number;
+  recurrence_end_date?: string;
   contact?: {
     id: number;
     name: string;
@@ -98,12 +106,14 @@ interface Transaction {
   subcategory?: {
     id: number;
     name: string;
-  }
+  };
   cost_center?: {
     id: number;
     name: string;
     number?: string;
   };
+  bank_account_id?: number | null;
+  card_id?: number | null;
   // Campos originais para edição
   original_cost_center_id?: number;
   original_contact_id?: number;
@@ -216,18 +226,21 @@ export default function MonthlyControl() {
     transaction_date: new Date().toISOString().split('T')[0],
     category_id: '',
     subcategory_id: '',
-    payment_status_id: '',
+    payment_status_id: '1',
     contact_id: '',
-    cost_center_id: '',
-    transaction_type: 'Despesa' as 'Despesa' | 'Receita' | 'Investimento',
+    cost_center_id: user?.cost_center_id?.toString() || '',
+    transaction_type: 'Despesa',
+    bank_account_id: '',
+    card_id: '',
+    is_paid: false,
     is_recurring: false,
-    recurrence_type: 'mensal' as 'unica' | 'diaria' | 'semanal' | 'mensal' | 'anual' | 'personalizada',
-    recurrence_count: 1 as number | string,
+    recurrence_type: 'mensal',
+    recurrence_count: 1,
     recurrence_interval: 1,
     recurrence_weekday: 1,
-    is_paid: false,
+    recurrence_end_date: '',
     is_installment: false,
-    total_installments: 1 as number | string
+    total_installments: 1
   });
 
   // Estado para preview de recorrências
@@ -879,7 +892,7 @@ export default function MonthlyControl() {
     setSelectedTransactionForPayment({
       ...transaction,
       is_recurring: transaction.is_recurring || false
-    });
+    } as ServiceTransaction);
     setIsBatchMode(false);
     setPaymentDialogOpen(true);
     handleActionMenuClose();
@@ -897,7 +910,8 @@ export default function MonthlyControl() {
       amount: 0, // Será calculado individualmente
       transaction_date: new Date().toISOString().split('T')[0],
       transaction_type: 'Despesa',
-      is_recurring: false
+      is_recurring: false,
+      is_paid: false
     });
     setPaymentDialogOpen(true);
     setBatchActionsAnchor(null);
@@ -1109,6 +1123,32 @@ export default function MonthlyControl() {
   };
 
   // Funções para modal de transação
+  const resetForm = () => {
+    setFormData({
+      description: '',
+      amount: '',
+      transaction_date: new Date().toISOString().split('T')[0],
+      category_id: '',
+      subcategory_id: '',
+      payment_status_id: '1',
+      contact_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '',
+      transaction_type: 'Despesa',
+      bank_account_id: '',
+      card_id: '',
+      is_paid: false,
+      is_recurring: false,
+      recurrence_type: 'mensal',
+      recurrence_count: 1,
+      recurrence_interval: 1,
+      recurrence_weekday: 1,
+      recurrence_end_date: '',
+      is_installment: false,
+      total_installments: 1
+    });
+    setRecurrencePreview([]);
+  };
+
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'success') => {
     setSnackbar({
       open: true,
@@ -1125,20 +1165,33 @@ export default function MonthlyControl() {
       transaction_date: new Date().toISOString().split('T')[0],
       category_id: '',
       subcategory_id: '',
-      payment_status_id: '',
+      payment_status_id: '1',
       contact_id: '',
       cost_center_id: user?.cost_center_id?.toString() || '',
       transaction_type: type,
+      bank_account_id: '',
+      card_id: '',
+      is_paid: false,
       is_recurring: false,
       recurrence_type: 'mensal',
       recurrence_count: 1,
       recurrence_interval: 1,
       recurrence_weekday: 1,
       recurrence_end_date: '',
-      is_paid: false,
+      is_installment: false,
+      total_installments: 1
+    });
+    setRecurrencePreview([]);
+  };
+
+  const handleCreateTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
+    resetForm();
+    setFormData(prev => ({
+      ...prev,
+      transaction_type: type,
       is_installment: false,
       total_installments: 2
-    });
+    }));
     setEditingTransaction(null);
     setRecurrencePreview([]);
     setTransactionDialogOpen(true);
@@ -1226,6 +1279,8 @@ export default function MonthlyControl() {
       contact_id: (transaction as any).original_contact_id?.toString() || transaction.contact?.id?.toString() || '',
       cost_center_id: (transaction as any).original_cost_center_id?.toString() || '',
       transaction_type: transaction.transaction_type,
+      bank_account_id: '',
+      card_id: '',
       is_recurring: transaction.is_recurring || false,
       recurrence_type: transaction.recurrence_type || 'mensal',
       recurrence_count: transaction.recurrence_count || 1,
@@ -1297,11 +1352,11 @@ export default function MonthlyControl() {
           showSnackbar('Tipo de recorrência é obrigatório', 'error');
           return;
         }
-        if (formData.recurrence_type === 'fixo' && !formData.recurrence_end_date) {
-          showSnackbar('Data final é obrigatória para recorrência fixa', 'error');
+        if (formData.recurrence_type === 'personalizada' && !formData.recurrence_end_date) {
+          showSnackbar('Data final é obrigatória para recorrência personalizada', 'error');
           return;
         }
-        if (formData.recurrence_type === 'personalizado' && (!formData.recurrence_count || formData.recurrence_count < 1)) {
+        if (formData.recurrence_type === 'personalizada' && (!formData.recurrence_count || formData.recurrence_count < 1)) {
           showSnackbar('Número de repetições é obrigatório para recorrência personalizada', 'error');
           return;
         }
@@ -1352,7 +1407,7 @@ export default function MonthlyControl() {
         transactionData.recurrence_count = formData.recurrence_count;
         transactionData.recurrence_interval = formData.recurrence_type === 'personalizada' ? formData.recurrence_interval : null;
         transactionData.recurrence_weekday = formData.recurrence_type === 'semanal' ? formData.recurrence_weekday : null;
-        transactionData.recurrence_end_date = formData.recurrence_type === 'fixo' ? formData.recurrence_end_date : null;
+        transactionData.recurrence_end_date = formData.recurrence_type === 'personalizada' ? formData.recurrence_end_date : null;
       } else {
         transactionData.is_recurring = false;
       }
@@ -3367,8 +3422,9 @@ export default function MonthlyControl() {
                         onChange={(e) => {
                           const value = e.target.value;
                           // Permitir campo vazio ou valores numéricos
-                          if (value === '' || (!isNaN(parseInt(value)) && parseInt(value) >= 0)) {
-                            setFormData(prev => ({ ...prev, total_installments: value === '' ? '' : parseInt(value) }));
+                          const numValue = value === '' ? '' : parseInt(value);
+                          if (value === '' || (!isNaN(numValue as number) && (numValue as number) >= 0)) {
+                            setFormData(prev => ({ ...prev, total_installments: numValue === '' ? 1 : Number(numValue) }));
                           }
                         }}
                         onBlur={(e) => {
@@ -3472,8 +3528,9 @@ export default function MonthlyControl() {
                             onChange={(e) => {
                               const value = e.target.value;
                               // Permitir campo vazio ou valores numéricos
-                              if (value === '' || (!isNaN(parseInt(value)) && parseInt(value) >= 0)) {
-                                setFormData(prev => ({ ...prev, recurrence_count: value === '' ? '' : parseInt(value) }));
+                              const numValue = value === '' ? '' : parseInt(value);
+                              if (value === '' || (!isNaN(numValue as number) && (numValue as number) >= 0)) {
+                                setFormData(prev => ({ ...prev, recurrence_count: numValue === '' ? 1 : Number(numValue) }));
                               }
                             }}
                             onBlur={(e) => {
