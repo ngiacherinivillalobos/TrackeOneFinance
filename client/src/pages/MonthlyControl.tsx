@@ -1118,6 +1118,7 @@ export default function MonthlyControl() {
   };
 
   const handleNewTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
+    console.log('Criando nova transação do tipo:', type);
     setFormData({
       description: '',
       amount: '',
@@ -1126,16 +1127,17 @@ export default function MonthlyControl() {
       subcategory_id: '',
       payment_status_id: '',
       contact_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '',
       transaction_type: type,
       is_recurring: false,
       recurrence_type: 'mensal',
       recurrence_count: 1,
       recurrence_interval: 1,
       recurrence_weekday: 1,
+      recurrence_end_date: '',
       is_paid: false,
       is_installment: false,
-      total_installments: 1
+      total_installments: 2
     });
     setEditingTransaction(null);
     setRecurrencePreview([]);
@@ -1224,14 +1226,22 @@ export default function MonthlyControl() {
       contact_id: (transaction as any).original_contact_id?.toString() || transaction.contact?.id?.toString() || '',
       cost_center_id: (transaction as any).original_cost_center_id?.toString() || '',
       transaction_type: transaction.transaction_type,
-      is_recurring: false, // Default para edição
-      recurrence_type: 'mensal' as 'unica' | 'mensal' | 'semanal' | 'diaria' | 'anual' | 'personalizada',
-      recurrence_count: 1,
-      recurrence_interval: 1,
-      recurrence_weekday: 1,
+      is_recurring: transaction.is_recurring || false,
+      recurrence_type: transaction.recurrence_type || 'mensal',
+      recurrence_count: transaction.recurrence_count || 1,
+      recurrence_interval: transaction.recurrence_interval || 1,
+      recurrence_weekday: transaction.recurrence_weekday || 1,
+      recurrence_end_date: transaction.recurrence_end_date || '',
       is_paid: transaction.is_paid || false,
       is_installment: transaction.is_installment || false,
-      total_installments: transaction.total_installments || 1
+      total_installments: transaction.total_installments || (transaction.is_installment ? 2 : 2)
+    });
+    
+    // Log para debug de transações parceladas
+    console.log('Dados da transação para edição:', {
+      is_installment: transaction.is_installment,
+      total_installments: transaction.total_installments,
+      installment_number: transaction.installment_number
     });
     setRecurrencePreview([]);
     setTransactionDialogOpen(true);
@@ -1245,6 +1255,7 @@ export default function MonthlyControl() {
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Iniciando submit da transação. FormData:', formData);
     try {
       setLoading(true);
       
@@ -1270,6 +1281,32 @@ export default function MonthlyControl() {
         return;
       }
       
+      // Validação adicional para transações parceladas
+      if (formData.is_installment) {
+        console.log('Validando transação parcelada. Total de parcelas:', formData.total_installments);
+        const totalInstallments = typeof formData.total_installments === 'string' ? parseInt(formData.total_installments) : formData.total_installments;
+        if (!totalInstallments || totalInstallments < 2) {
+          showSnackbar('Para transações parceladas, o número total de parcelas deve ser maior que 1', 'error');
+          return;
+        }
+      }
+      
+      // Validação adicional para transações recorrentes
+      if (formData.is_recurring) {
+        if (!formData.recurrence_type) {
+          showSnackbar('Tipo de recorrência é obrigatório', 'error');
+          return;
+        }
+        if (formData.recurrence_type === 'fixo' && !formData.recurrence_end_date) {
+          showSnackbar('Data final é obrigatória para recorrência fixa', 'error');
+          return;
+        }
+        if (formData.recurrence_type === 'personalizado' && (!formData.recurrence_count || formData.recurrence_count < 1)) {
+          showSnackbar('Número de repetições é obrigatório para recorrência personalizada', 'error');
+          return;
+        }
+      }
+      
       // Função para converter formato brasileiro para número
       const parseBrazilianNumber = (str: string): number => {
         if (typeof str === 'number') return str;
@@ -1292,7 +1329,8 @@ export default function MonthlyControl() {
         return parseFloat(americanFormat) || 0;
       };
       
-      const transactionData = {
+      // Preparar dados da transação
+      const transactionData: any = {
         description: formData.description,
         amount: parseBrazilianNumber(formData.amount),
         transaction_type: formData.transaction_type,
@@ -1302,29 +1340,74 @@ export default function MonthlyControl() {
         payment_status_id: formData.payment_status_id ? parseInt(formData.payment_status_id) : null,
         contact_id: formData.contact_id ? parseInt(formData.contact_id) : null,
         cost_center_id: formData.cost_center_id ? parseInt(formData.cost_center_id) : null,
-        is_recurring: formData.is_recurring,
-        recurrence_type: formData.is_recurring ? formData.recurrence_type : null,
-        recurrence_count: formData.is_recurring ? formData.recurrence_count : null,
-        recurrence_interval: formData.is_recurring && formData.recurrence_type === 'personalizada' ? formData.recurrence_interval : null,
-        recurrence_weekday: formData.is_recurring && formData.recurrence_type === 'semanal' ? formData.recurrence_weekday : null,
         is_paid: formData.is_paid,
-        is_installment: formData.is_installment,
-        total_installments: formData.is_installment ? (typeof formData.total_installments === 'string' ? parseInt(formData.total_installments) || 1 : formData.total_installments) : null
+        bank_account_id: null,
+        card_id: null
       };
+
+      // Adicionar campos de recorrência se necessário
+      if (formData.is_recurring) {
+        transactionData.is_recurring = true;
+        transactionData.recurrence_type = formData.recurrence_type;
+        transactionData.recurrence_count = formData.recurrence_count;
+        transactionData.recurrence_interval = formData.recurrence_type === 'personalizada' ? formData.recurrence_interval : null;
+        transactionData.recurrence_weekday = formData.recurrence_type === 'semanal' ? formData.recurrence_weekday : null;
+        transactionData.recurrence_end_date = formData.recurrence_type === 'fixo' ? formData.recurrence_end_date : null;
+      } else {
+        transactionData.is_recurring = false;
+      }
+
+      // Adicionar campos de parcelamento se necessário
+      if (formData.is_installment) {
+        transactionData.is_installment = true;
+        transactionData.total_installments = typeof formData.total_installments === 'string' ? parseInt(formData.total_installments) : formData.total_installments;
+        // Garantir que o número total de parcelas é válido
+        if (transactionData.total_installments < 2) {
+          transactionData.total_installments = 2;
+        }
+        console.log('Dados de transação parcelada:', transactionData);
+      } else {
+        transactionData.is_installment = false;
+        transactionData.total_installments = null;
+      }
+
+      // Garantir que os campos de parcelamento estão corretamente definidos
+      if (transactionData.is_installment && !transactionData.total_installments) {
+        transactionData.total_installments = 2;
+      }
+
+      console.log('Enviando dados da transação:', transactionData);
 
       if (editingTransaction) {
         await api.put(`/transactions/${editingTransaction.id}`, transactionData);
         showSnackbar('Transação atualizada com sucesso!');
       } else {
-        await api.post('/transactions', transactionData);
-        showSnackbar('Transação criada com sucesso!');
+        const response = await api.post('/transactions', transactionData);
+        console.log('Resposta da criação de transação:', response.data);
+        if (response.data && response.data.count && response.data.count > 1) {
+          showSnackbar(`${response.data.count} transações criadas com sucesso!`);
+        } else if (response.data && response.data.message) {
+          showSnackbar(response.data.message);
+        } else {
+          showSnackbar('Transação criada com sucesso!');
+        }
       }
 
       handleCloseTransactionDialog();
       loadTransactions();
     } catch (error) {
       console.error('Erro ao salvar transação:', error);
-      showSnackbar('Erro ao salvar transação', 'error');
+      if (axios.isAxiosError(error)) {
+        console.error('Detalhes do erro Axios:', {
+          message: error.message,
+          config: error.config,
+          response: error.response?.data,
+          status: error.response?.status,
+        });
+        showSnackbar(`Erro ao salvar transação: ${error.response?.data?.error || error.message}`, 'error');
+      } else {
+        showSnackbar('Erro ao salvar transação', 'error');
+      }
     } finally {
       setLoading(false);
     }

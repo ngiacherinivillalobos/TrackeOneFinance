@@ -396,93 +396,171 @@ const create = async (req: Request, res: Response) => {
     if (is_installment && total_installments && total_installments > 1) {
       console.log('Creating installment transactions');
       let createdTransactions: any[] = [];
+      let errors: any[] = [];
       
-      // Criar transações parceladas
-      for (let i = 1; i <= total_installments; i++) {
-        console.log(`Creating installment ${i} of ${total_installments}`);
+      // Garantir que total_installments é um número
+      const totalInstallmentsNum = typeof total_installments === 'string' ? parseInt(total_installments) : total_installments;
+      
+      // Criar transações parceladas com datas diferentes para cada mês
+      const baseDate = new Date(transaction_date);
+      
+      for (let i = 1; i <= totalInstallmentsNum; i++) {
+        console.log(`Creating installment ${i} of ${totalInstallmentsNum}`);
         
-        const formattedDate = transaction_date; // Mesma data para todas as parcelas (pode ser ajustado)
+        // Calcular a data para esta parcela (adicionando meses)
+        const installmentDate = new Date(baseDate);
+        installmentDate.setMonth(baseDate.getMonth() + (i - 1));
         
+        // Ajustar o dia se necessário (para meses com menos dias)
+        if (installmentDate.getDate() !== baseDate.getDate()) {
+          // Isso acontece quando o dia não existe no mês (ex: 31 de janeiro -> 31 de fevereiro)
+          installmentDate.setDate(0); // Vai para o último dia do mês anterior
+        }
+        
+        const formattedDate = installmentDate.toISOString().split('T')[0];
+        
+        // Remover qualquer número de parcela existente na descrição antes de adicionar o novo
+        let cleanDescription = description;
+        // Padrão mais abrangente para remover números de parcela
+        const parcelPattern = /\s*\(\d+(\/\d+)?\)\s*$/g;
+        cleanDescription = cleanDescription.replace(parcelPattern, '').trim();
+        // Remover também padrões no meio da descrição
+        cleanDescription = cleanDescription.replace(/\s*\(\d+\/\d+\)\s*/g, ' ').trim();
+        // Remover espaços extras
+        cleanDescription = cleanDescription.replace(/\s+/g, ' ').trim();
+        
+        // Salvar a descrição limpa no banco de dados (sem números)
+        // A formatação será feita apenas no frontend para exibição
         try {
           const isProduction = process.env.NODE_ENV === 'production';
           const result: any = await run(db, `
             INSERT INTO transactions (
               description, amount, type, category_id, subcategory_id,
               payment_status_id, bank_account_id, card_id, contact_id, 
-              transaction_date, cost_center_id, is_installment, installment_number, total_installments
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              transaction_date, cost_center_id, is_installment, installment_number, total_installments, is_recurring
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
-            `${description} (${i}/${total_installments})`, amount, dbType, category_id, subcategory_id,
+            cleanDescription, amount, dbType, category_id, subcategory_id,
             finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id, toDatabaseBoolean(true, isProduction), i, total_installments
+            formattedDate, cost_center_id, toDatabaseBoolean(is_installment, isProduction), i, totalInstallmentsNum, toDatabaseBoolean(false, isProduction)
           ]);
 
           createdTransactions.push({
             id: result.lastID,
             transaction_date: formattedDate,
             installment_number: i,
-            total_installments: total_installments
+            total_installments: totalInstallmentsNum
           });
         } catch (err) {
           console.error(`Error creating installment ${i}:`, err);
-          if (createdTransactions.length === 0) {
-            throw err; // Se falhar na primeira, retornar erro
-          } else {
-            // Se já criou algumas, retornar as que foram criadas
-            break;
-          }
+          errors.push({ installment: i, error: err });
+          // Continuar criando as outras parcelas mesmo que uma falhe
         }
       }
       
+      // Verificar se pelo menos algumas transações foram criadas
       if (createdTransactions.length > 0) {
-        return res.status(201).json({ 
-          message: `${createdTransactions.length} installment transactions created successfully`,
-          transactions: createdTransactions,
-          count: createdTransactions.length
-        });
+        if (errors.length > 0) {
+          // Se houve erros mas algumas transações foram criadas
+          return res.status(201).json({ 
+            message: `${createdTransactions.length} installment transactions created successfully, ${errors.length} failed`,
+            transactions: createdTransactions,
+            count: createdTransactions.length,
+            errors: errors
+          });
+        } else {
+          // Se todas as transações foram criadas com sucesso
+          return res.status(201).json({ 
+            message: `${createdTransactions.length} installment transactions created successfully`,
+            transactions: createdTransactions,
+            count: createdTransactions.length
+          });
+        }
+      } else {
+        // Se nenhuma transação foi criada, lançar um erro
+        return res.status(500).json({ error: 'Failed to create installment transactions', errors: errors });
       }
     }
 
-    // Lógica de recorrência
-    if (is_recurring) {
+    // Lógica de recorrência (apenas se não for parcelado)
+    if (is_recurring && !is_installment) {
       console.log('Creating recurring transactions');
       let createdTransactions: any[] = [];
       
       // Determinar a data de início e fim
       const startDate = new Date(transaction_date);
       let endDate: Date;
+      let maxRecurrences: number;
       
-      if (recurrence_type === 'fixo' && recurrence_end_date) {
-        endDate = new Date(recurrence_end_date);
-      } else if (recurrence_type === 'personalizado' && recurrence_count) {
-        endDate = new Date(startDate);
+      // Se for recorrência personalizada com quantidade definida
+      if (recurrence_type === 'personalizado' && recurrence_count) {
+        maxRecurrences = parseInt(recurrence_count);
         if (recurrence_weekday) {
           // Para recorrência semanal
-          endDate.setDate(startDate.getDate() + (recurrence_count * 7));
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + (maxRecurrences * 7));
         } else {
           // Para recorrência mensal
-          endDate.setMonth(startDate.getMonth() + recurrence_count);
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + maxRecurrences);
         }
-      } else {
-        // Default para 12 meses se não especificado
+      } 
+      // Se for recorrência fixa com data final definida
+      else if (recurrence_type === 'fixo' && recurrence_end_date) {
+        endDate = new Date(recurrence_end_date);
+        // Calcular o número de recorrências baseado na data final
+        let tempDate = new Date(startDate);
+        maxRecurrences = 0;
+        while (tempDate <= endDate) {
+          maxRecurrences++;
+          tempDate.setMonth(tempDate.getMonth() + 1);
+        }
+      } 
+      // Se for recorrência mensal com quantidade definida
+      else if (recurrence_type === 'mensal' && recurrence_count) {
+        maxRecurrences = parseInt(recurrence_count);
         endDate = new Date(startDate);
-        endDate.setMonth(startDate.getMonth() + 12);
+        endDate.setMonth(startDate.getMonth() + maxRecurrences);
+      }
+      // Default para 12 meses se não especificado
+      else {
+        maxRecurrences = 12;
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + maxRecurrences);
       }
 
-      console.log('Recurrence dates:', { startDate, endDate });
+      console.log('Recurrence parameters:', { 
+        startDate, 
+        endDate, 
+        maxRecurrences, 
+        recurrence_type, 
+        recurrence_count 
+      });
 
       // Criar transações recorrentes
       let currentDate = new Date(startDate);
       let installmentNumber = 1;
-      const totalInstallments = recurrence_type === 'personalizado' && recurrence_count ? recurrence_count : 
-                               Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)); // Aproximadamente meses
 
-      while (currentDate <= endDate) {
-        console.log('Creating transaction for date:', currentDate.toISOString().split('T')[0]);
+      // Continuar até atingir a data final ou o número máximo de recorrências
+      while (installmentNumber <= maxRecurrences) {
+        console.log(`Creating recurring transaction ${installmentNumber} of max ${maxRecurrences}`);
+        console.log('Current date:', currentDate.toISOString().split('T')[0]);
         
         const formattedDate = currentDate.toISOString().split('T')[0];
         
         try {
+          // Remover qualquer número de parcela existente na descrição antes de adicionar o novo
+          let cleanDescription = description;
+          // Padrão mais abrangente para remover números de parcela
+          const parcelPattern = /\s*\(\d+(\/\d+)?\)\s*$/g;
+          cleanDescription = cleanDescription.replace(parcelPattern, '').trim();
+          // Remover também padrões no meio da descrição
+          cleanDescription = cleanDescription.replace(/\s*\(\d+\/\d+\)\s*/g, ' ').trim();
+          // Remover espaços extras
+          cleanDescription = cleanDescription.replace(/\s+/g, ' ').trim();
+          
+          // Salvar a descrição limpa no banco de dados (sem números)
+          // A formatação será feita apenas no frontend para exibição
           const isProduction = process.env.NODE_ENV === 'production';
           const result: any = await run(db, `
             INSERT INTO transactions (
@@ -492,88 +570,64 @@ const create = async (req: Request, res: Response) => {
               is_installment, installment_number, total_installments
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
-            description, amount, dbType, category_id, subcategory_id,
+            cleanDescription, amount, dbType, category_id, subcategory_id,
             finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id, toDatabaseBoolean(true, isProduction), recurrence_type,
-            toDatabaseBoolean(is_installment, isProduction), installmentNumber, totalInstallments
+            formattedDate, cost_center_id, toDatabaseBoolean(is_recurring, isProduction), recurrence_type,
+            toDatabaseBoolean(false, isProduction), installmentNumber, maxRecurrences
           ]);
 
           createdTransactions.push({
             id: result.lastID,
             transaction_date: formattedDate,
             installment_number: installmentNumber,
-            total_installments: totalInstallments
+            total_installments: maxRecurrences
           });
-
-          installmentNumber++;
 
           // Avançar para a próxima data
           if (recurrence_type === 'mensal' || recurrence_type === 'fixo') {
-            // Para recorrência mensal, usar uma abordagem mais precisa
-            const currentYear = currentDate.getFullYear();
-            const currentMonth = currentDate.getMonth();
-            const currentDay = currentDate.getDate();
+            // Para recorrência mensal, usar a mesma lógica das transações parceladas
+            const nextDate = new Date(currentDate);
+            nextDate.setMonth(currentDate.getMonth() + 1);
             
-            // Calcular o próximo mês
-            let nextMonth = currentMonth + 1;
-            let nextYear = currentYear;
-            
-            if (nextMonth > 11) {
-              nextMonth = 0;
-              nextYear++;
+            // Ajustar o dia se necessário (para meses com menos dias)
+            if (nextDate.getDate() !== currentDate.getDate()) {
+              // Isso acontece quando o dia não existe no mês (ex: 31 de janeiro -> 31 de fevereiro)
+              nextDate.setDate(0); // Vai para o último dia do mês anterior
             }
             
-            // Verificar se o dia existe no próximo mês
-            const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-            const adjustedDay = Math.min(currentDay, daysInNextMonth);
-            
-            currentDate = new Date(nextYear, nextMonth, adjustedDay);
+            currentDate = nextDate;
           } else if (recurrence_type === 'personalizado') {
             if (recurrence_weekday) {
               // Avançar uma semana
               currentDate.setDate(currentDate.getDate() + 7);
             } else {
-              // Avançar um mês
-              const currentYear = currentDate.getFullYear();
-              const currentMonth = currentDate.getMonth();
-              const currentDay = currentDate.getDate();
+              // Avançar um mês, usando a mesma lógica das transações parceladas
+              const nextDate = new Date(currentDate);
+              nextDate.setMonth(currentDate.getMonth() + 1);
               
-              // Calcular o próximo mês
-              let nextMonth = currentMonth + 1;
-              let nextYear = currentYear;
-              
-              if (nextMonth > 11) {
-                nextMonth = 0;
-                nextYear++;
+              // Ajustar o dia se necessário (para meses com menos dias)
+              if (nextDate.getDate() !== currentDate.getDate()) {
+                // Isso acontece quando o dia não existe no mês (ex: 31 de janeiro -> 31 de fevereiro)
+                nextDate.setDate(0); // Vai para o último dia do mês anterior
               }
               
-              // Verificar se o dia existe no próximo mês
-              const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-              const adjustedDay = Math.min(currentDay, daysInNextMonth);
-              
-              currentDate = new Date(nextYear, nextMonth, adjustedDay);
+              currentDate = nextDate;
             }
           } else {
-            // Default: avançar um mês
-            const currentYear = currentDate.getFullYear();
-            const currentMonth = currentDate.getMonth();
-            const currentDay = currentDate.getDate();
+            // Default: avançar um mês, usando a mesma lógica das transações parceladas
+            const nextDate = new Date(currentDate);
+            nextDate.setMonth(currentDate.getMonth() + 1);
             
-            // Calcular o próximo mês
-            let nextMonth = currentMonth + 1;
-            let nextYear = currentYear;
-            
-            if (nextMonth > 11) {
-              nextMonth = 0;
-              nextYear++;
+            // Ajustar o dia se necessário (para meses com menos dias)
+            if (nextDate.getDate() !== currentDate.getDate()) {
+              // Isso acontece quando o dia não existe no mês (ex: 31 de janeiro -> 31 de fevereiro)
+              nextDate.setDate(0); // Vai para o último dia do mês anterior
             }
             
-            // Verificar se o dia existe no próximo mês
-            const daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-            const adjustedDay = Math.min(currentDay, daysInNextMonth);
-            
-            currentDate = new Date(nextYear, nextMonth, adjustedDay);
+            currentDate = nextDate;
           }
+
+          installmentNumber++;
         } catch (err) {
           console.error('Error creating recurring transaction:', err);
           if (createdTransactions.length === 0) {
@@ -585,50 +639,73 @@ const create = async (req: Request, res: Response) => {
         }
       }
       
+      // Garantir que o retorno aconteça mesmo quando há erro parcial
       if (createdTransactions.length > 0) {
         return res.status(201).json({ 
           message: `${createdTransactions.length} recurring transactions created successfully`,
           transactions: createdTransactions,
           count: createdTransactions.length
         });
+      } else {
+        // Se nenhuma transação foi criada, lançar um erro
+        return res.status(500).json({ error: 'Failed to create recurring transactions' });
       }
     }
 
-    // Transação única
-    const isProduction = process.env.NODE_ENV === 'production';
-    const result: any = await run(db, `
-      INSERT INTO transactions (
-        description, amount, type, category_id, subcategory_id,
-        payment_status_id, bank_account_id, card_id, contact_id, 
-        transaction_date, cost_center_id, is_installment, installment_number, total_installments
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      description, amount, dbType, category_id, subcategory_id,
-      finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-      transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
-      is_installment ? 1 : null, total_installments || null
-    ]);
+    // Transação única (apenas se não for parcelado e não for recorrente)
+    if (!is_installment && !is_recurring) {
+      // Remover qualquer número de parcela existente na descrição antes de salvar
+      let cleanDescription = description;
+      // Padrão mais abrangente para remover números de parcela
+      const parcelPattern = /\s*\(\d+(\/\d+)?\)\s*$/g;
+      cleanDescription = cleanDescription.replace(parcelPattern, '').trim();
+      // Remover também padrões no meio da descrição
+      cleanDescription = cleanDescription.replace(/\s*\(\d+\/\d+\)\s*/g, ' ').trim();
+      // Remover espaços extras
+      cleanDescription = cleanDescription.replace(/\s+/g, ' ').trim();
+      
+      const isProduction = process.env.NODE_ENV === 'production';
+      const result: any = await run(db, `
+        INSERT INTO transactions (
+          description, amount, type, category_id, subcategory_id,
+          payment_status_id, bank_account_id, card_id, contact_id, 
+          transaction_date, cost_center_id, is_installment, installment_number, total_installments,
+          is_recurring
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        cleanDescription, amount, dbType, category_id, subcategory_id,
+        finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+        transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
+        null, null,
+        toDatabaseBoolean(is_recurring, isProduction)
+      ]);
 
-    res.status(201).json({ 
-      id: result.lastID, 
-      message: 'Transaction created successfully',
-      transaction: {
-        id: result.lastID,
-        description,
-        amount,
-        type: dbType,
-        category_id,
-        subcategory_id,
-        payment_status_id: finalPaymentStatusId,
-        bank_account_id,
-        card_id,
-        contact_id,
-        transaction_date: transaction_date instanceof Date ? transaction_date.toISOString().split('T')[0] : transaction_date
-      }
-    });
+      return res.status(201).json({ 
+        id: result.lastID, 
+        message: 'Transaction created successfully',
+        transaction: {
+          id: result.lastID,
+          description: cleanDescription,
+          amount,
+          type: dbType,
+          category_id,
+          subcategory_id,
+          payment_status_id: finalPaymentStatusId,
+          bank_account_id,
+          card_id,
+          contact_id,
+          transaction_date: transaction_date instanceof Date ? transaction_date.toISOString().split('T')[0] : transaction_date,
+          is_installment: toDatabaseBoolean(is_installment, isProduction),
+          is_recurring: toDatabaseBoolean(is_recurring, isProduction)
+        }
+      });
+    } else if (is_installment || is_recurring) {
+      // Se chegou aqui e não criou transações parceladas ou recorrentes, retornar erro
+      return res.status(400).json({ error: 'Failed to create installment or recurring transactions' });
+    }
   } catch (error) {
     console.error('Error creating transaction:', error);
-    res.status(500).json({ error: 'Failed to create transaction: ' + error });
+    return res.status(500).json({ error: 'Failed to create transaction: ' + error });
   }
 };
 
@@ -689,26 +766,26 @@ const update = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
     }
 
-    // Lógica para determinar o payment_status_id (mesma do create)
+    // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
     if (is_paid === true) {
-      finalPaymentStatusId = 2;
+      finalPaymentStatusId = 2; // Pago
     }
     else if (payment_status_id === 2) {
-      finalPaymentStatusId = 2;
+      finalPaymentStatusId = 2; // Mantém como Pago
     }
     else if (!payment_status_id && !is_paid) {
       const today = new Date().toISOString().split('T')[0];
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 4; // Vencido
+        finalPaymentStatusId = 374; // Vencido
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
     else if (!payment_status_id) {
-      finalPaymentStatusId = 1;
+      finalPaymentStatusId = 1; // Em aberto
     }
 
     console.log('Updating transaction with payment status:', {
@@ -719,42 +796,103 @@ const update = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
+    // Atualizar transação única
     const isProduction = process.env.NODE_ENV === 'production';
     const result: any = await run(db, `
       UPDATE transactions SET
-        description = ?, amount = ?, type = ?, category_id = ?, subcategory_id = ?,
-        payment_status_id = ?, bank_account_id = ?, card_id = ?, contact_id = ?, 
-        transaction_date = ?, cost_center_id = ?, is_installment = ?, total_installments = ?
+        description = ?,
+        amount = ?,
+        type = ?,
+        category_id = ?,
+        subcategory_id = ?,
+        payment_status_id = ?,
+        bank_account_id = ?,
+        card_id = ?,
+        contact_id = ?,
+        transaction_date = ?,
+        cost_center_id = ?,
+        is_recurring = ?,
+        recurrence_type = ?,
+        recurrence_count = ?,
+        recurrence_end_date = ?,
+        recurrence_weekday = ?,
+        is_paid = ?,
+        is_installment = ?,
+        installment_number = ?,
+        total_installments = ?
       WHERE id = ?
     `, [
       description, amount, dbType, category_id, subcategory_id,
       finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-      transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
-      total_installments || null, transactionId
+      transaction_date, cost_center_id, toDatabaseBoolean(is_recurring, isProduction),
+      recurrence_type,
+      recurrence_count,
+      recurrence_end_date,
+      recurrence_weekday,
+      toDatabaseBoolean(is_paid, isProduction),
+      toDatabaseBoolean(is_installment, isProduction),
+      null, // installment_number
+      total_installments,
+      transactionId
     ]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Buscar a transação atualizada para retornar com data formatada corretamente
-    const { get } = getDatabase();
-    const updatedTransaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
-    
-    // Formatar a data consistentemente entre ambientes
-    if (updatedTransaction && updatedTransaction.transaction_date instanceof Date) {
-      // Usar toISOString e extrair apenas a parte da data para evitar problemas de fuso horário
-      updatedTransaction.transaction_date = updatedTransaction.transaction_date.toISOString().split('T')[0];
-    }
-    
     res.json({ 
+      id: transactionId, 
       message: 'Transaction updated successfully',
-      transactionId: transactionId,
-      transaction: updatedTransaction
+      transaction: {
+        id: transactionId,
+        description,
+        amount,
+        type: dbType,
+        category_id,
+        subcategory_id,
+        payment_status_id: finalPaymentStatusId,
+        bank_account_id,
+        card_id,
+        contact_id,
+        transaction_date: transaction_date instanceof Date ? transaction_date.toISOString().split('T')[0] : transaction_date,
+        is_recurring: toDatabaseBoolean(is_recurring, isProduction),
+        recurrence_type,
+        recurrence_count,
+        recurrence_end_date,
+        recurrence_weekday,
+        is_paid: toDatabaseBoolean(is_paid, isProduction),
+        is_installment: toDatabaseBoolean(is_installment, isProduction),
+        total_installments
+      }
     });
   } catch (error) {
     console.error('Error updating transaction:', error);
-    res.status(500).json({ error: 'Failed to update transaction: ' + error });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const remove = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - REMOVE =====');
+  console.log('Transaction ID:', req.params.id);
+  
+  try {
+    const { db, run } = getDatabase();
+    const transactionId = req.params.id;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transaction ID is required' });
+    }
+
+    const result: any = await run(db, 'DELETE FROM transactions WHERE id = ?', [transactionId]);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    res.json({ message: 'Transaction removed successfully' });
+  } catch (error) {
+    console.error('Error removing transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -1128,17 +1266,20 @@ const batchEdit = async (req: Request, res: Response) => {
           final_payment_status_id: finalPaymentStatusId
         });
 
+        const isProduction = process.env.NODE_ENV === 'production';
         const result: any = await run(db, `
           UPDATE transactions SET
             description = ?, amount = ?, type = ?, category_id = ?, subcategory_id = ?,
             payment_status_id = ?, bank_account_id = ?, card_id = ?, contact_id = ?, 
-            transaction_date = ?, cost_center_id = ?, is_installment = ?, total_installments = ?
+            transaction_date = ?, cost_center_id = ?, is_installment = ?, total_installments = ?,
+            is_recurring = ?
           WHERE id = ?
         `, [
           description, amount, dbType, category_id, subcategory_id,
           finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-          transaction_date, cost_center_id, is_installment || false, 
-          total_installments || null, id
+          transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
+          total_installments || null, toDatabaseBoolean(is_recurring, isProduction),
+          id
         ]);
 
         if (result.changes === 0) {
