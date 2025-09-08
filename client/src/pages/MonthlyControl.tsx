@@ -80,13 +80,19 @@ import { useAuth } from '../contexts/AuthContext';
 // Helper function para converter datas de forma segura
 const formatSafeDate = (dateString: string): string => {
   try {
-    // Se a data já está no formato ISO (com Z ou offset), usar diretamente
-    if (dateString.includes('T') && (dateString.includes('Z') || dateString.includes('+') || dateString.match(/.*T.*-.*$/))) {
-      return format(new Date(dateString), 'dd/MM/yyyy');
+    // Se a data já está no formato ISO (PostgreSQL: "2025-09-05T00:00:00.000Z")
+    if (dateString.includes('T')) {
+      // Extrair apenas a parte da data YYYY-MM-DD e criar data local
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day); // mês é 0-indexed
+      return format(localDate, 'dd/MM/yyyy');
     }
-    // Se é apenas YYYY-MM-DD, adicionar o horário de meio-dia para evitar problemas de timezone
+    // Se é apenas YYYY-MM-DD (SQLite), criar data local diretamente
     if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      return format(getSafeDate(dateString), 'dd/MM/yyyy');
+      const [year, month, day] = dateString.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return format(localDate, 'dd/MM/yyyy');
     }
     // Fallback: tentar converter diretamente
     return format(new Date(dateString), 'dd/MM/yyyy');
@@ -99,13 +105,17 @@ const formatSafeDate = (dateString: string): string => {
 // Helper function para converter datas para objeto Date de forma segura
 const getSafeDate = (dateString: string): Date => {
   try {
-    // Se a data já está no formato ISO (com Z ou offset), usar diretamente
-    if (dateString.includes('T') && (dateString.includes('Z') || dateString.includes('+') || dateString.match(/.*T.*-.*$/))) {
-      return new Date(dateString);
+    // Se a data já está no formato ISO (PostgreSQL: "2025-09-05T00:00:00.000Z")
+    if (dateString.includes('T')) {
+      // Extrair apenas a parte da data YYYY-MM-DD e criar data local
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      return new Date(year, month - 1, day); // mês é 0-indexed
     }
-    // Se é apenas YYYY-MM-DD, adicionar o horário de meio-dia para evitar problemas de timezone
+    // Se é apenas YYYY-MM-DD (SQLite), criar data local diretamente
     if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      return new Date(dateString + 'T12:00:00');
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day);
     }
     // Fallback: tentar converter diretamente
     return new Date(dateString);

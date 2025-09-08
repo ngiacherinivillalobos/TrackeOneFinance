@@ -1531,26 +1531,32 @@ export default function CashFlowPage() {
           </Box>
 
           {/* Counter and Batch Actions - Following MonthlyControl pattern */}
-          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body1" sx={{ color: colors.gray[600], fontWeight: 500 }}>
               {selectedRecords.length} de {filteredRecords.length} registro(s) selecionado(s)
             </Typography>
             {selectedRecords.length > 0 && (
               <Button
-                size="small"
                 variant="outlined"
+                size="small"
                 onClick={(e) => setBatchActionsAnchor(e.currentTarget)}
-                startIcon={<MoreVertIcon />}
                 sx={{
                   borderColor: colors.primary[300],
                   color: colors.primary[600],
+                  borderRadius: 1,
+                  fontSize: '0.7rem',
+                  px: 1,
+                  py: 0.25,
+                  minWidth: 'auto',
+                  height: 24,
+                  lineHeight: 1,
                   '&:hover': {
                     borderColor: colors.primary[400],
                     bgcolor: colors.primary[50]
                   }
                 }}
               >
-                Ações em lote
+                Ações em Lote
               </Button>
             )}
           </Box>
@@ -1569,9 +1575,9 @@ export default function CashFlowPage() {
                     />
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '12%' }}>Data</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '40%' }}>Descrição</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '30%' }}>Descrição</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '15%' }} align="right">Valor (R$)</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '15%' }}>Centro de Custo</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '25%' }}>Centro de Custo</TableCell>
                   <TableCell sx={{ fontWeight: 600, color: colors.gray[700], bgcolor: colors.gray[50], borderBottom: `2px solid ${colors.gray[200]}`, width: '10%' }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
