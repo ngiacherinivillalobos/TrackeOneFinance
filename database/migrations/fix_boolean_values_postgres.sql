@@ -1,32 +1,15 @@
 -- Migração simples para corrigir valores booleanos (PostgreSQL)
--- Esta versão é mais conservadora e segura
+-- Esta versão usa comandos SQL diretos sem blocos procedurais
 
--- Apenas garantir que campos booleanos existentes tenham valores corretos
--- Não tenta comparar com strings vazias
+-- Garantir que campos booleanos tenham valores corretos
+-- Usar comandos simples e diretos
 
--- Corrigir is_installment se existir
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_installment') THEN
-        UPDATE transactions SET is_installment = COALESCE(is_installment, false);
-    END IF;
-END
-$$;
+-- Primeiro, adicionar colunas se não existirem (com IF NOT EXISTS)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_installment BOOLEAN DEFAULT false;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT false;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;
 
--- Corrigir is_recurring se existir  
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_recurring') THEN
-        UPDATE transactions SET is_recurring = COALESCE(is_recurring, false);
-    END IF;
-END
-$$;
-
--- Corrigir is_paid se existir
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_paid') THEN
-        UPDATE transactions SET is_paid = COALESCE(is_paid, false);
-    END IF;
-END
-$$;
+-- Corrigir valores NULL para false em campos booleanos
+UPDATE transactions SET is_installment = false WHERE is_installment IS NULL;
+UPDATE transactions SET is_recurring = false WHERE is_recurring IS NULL;
+UPDATE transactions SET is_paid = false WHERE is_paid IS NULL;
