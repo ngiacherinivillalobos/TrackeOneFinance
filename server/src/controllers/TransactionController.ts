@@ -83,9 +83,9 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       const today = getLocalDateString();
 
       statuses.forEach(status => {
-        if (status === 'paid') statusConditions.push('t.is_paid = 1');
-        if (status === 'unpaid') statusConditions.push('(t.is_paid = 0 AND t.transaction_date >= ?)');
-        if (status === 'overdue') statusConditions.push('(t.is_paid = 0 AND t.transaction_date < ?)');
+        if (status === 'paid') statusConditions.push('t.payment_status_id = 2');
+        if (status === 'unpaid') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date >= ?)');
+        if (status === 'overdue') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date < ?)');
         if (status === 'cancelled') statusConditions.push('t.payment_status_id = 3'); // Assuming 3 is 'cancelled'
       });
       
@@ -126,10 +126,10 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     
     if (sortColumn === 'status') {
       query += ` ORDER BY CASE 
-        WHEN t.is_paid = 0 AND t.transaction_date < date('now') THEN 1 -- Vencido
-        WHEN t.is_paid = 0 AND t.transaction_date = date('now') THEN 2 -- Vence Hoje
-        WHEN t.is_paid = 0 AND t.transaction_date > date('now') THEN 3 -- Em Aberto
-        WHEN t.is_paid = 1 THEN 4 -- Pago
+        WHEN t.payment_status_id != 2 AND t.transaction_date < date('now') THEN 1 -- Vencido
+        WHEN t.payment_status_id != 2 AND t.transaction_date = date('now') THEN 2 -- Vence Hoje
+        WHEN t.payment_status_id != 2 AND t.transaction_date > date('now') THEN 3 -- Em Aberto
+        WHEN t.payment_status_id = 2 THEN 4 -- Pago
         ELSE 5
       END ${sortOrder}, t.transaction_date DESC`;
     } else {
@@ -143,7 +143,7 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       ...transaction,
       is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
       is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-      is_paid: transaction.is_paid === 1 || transaction.is_paid === true,
+      is_paid: transaction.payment_status_id === 2,
     }));
 
     res.json(convertedTransactions);
@@ -255,9 +255,9 @@ const list = async (req: Request, res: Response) => {
       values.push(req.query.cost_center_id);
     }
     
-    if (req.query.transaction_type) {
+    if (req.query.transaction_type || req.query.type) {
       conditions.push('t.type = ?');
-      values.push(req.query.transaction_type);
+      values.push(req.query.transaction_type || req.query.type);
     }
     
     if (req.query.start_date) {
@@ -276,8 +276,9 @@ const list = async (req: Request, res: Response) => {
     }
     
     if (req.query.is_paid !== undefined) {
-      conditions.push('t.is_paid = ?');
-      values.push(toDatabaseBoolean(req.query.is_paid as any, process.env.NODE_ENV === 'production'));
+      const isPaidValue = req.query.is_paid === 'true' || req.query.is_paid === '1';
+      conditions.push('t.payment_status_id = ?');
+      values.push(isPaidValue ? 2 : 1); // 2 = Pago, 1 = Em aberto
     }
     
     // Adicionar condições à query
@@ -307,7 +308,7 @@ const list = async (req: Request, res: Response) => {
         transaction_type: frontendType,
         is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
         is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-        is_paid: transaction.is_paid === 1 || transaction.is_paid === true
+        is_paid: transaction.payment_status_id === 2
       };
     });
     
@@ -386,7 +387,7 @@ const getById = async (req: Request, res: Response) => {
       transaction_type: frontendType,
       is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
       is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-      is_paid: transaction.is_paid === 1 || transaction.is_paid === true
+      is_paid: transaction.payment_status_id === 2
     };
     
     res.json(convertedTransaction);
@@ -421,7 +422,6 @@ const create = async (req: Request, res: Response) => {
       recurrence_count,
       recurrence_end_date,
       recurrence_weekday,
-      is_paid,
       is_installment,
       total_installments
     } = req.body;
@@ -462,13 +462,10 @@ const create = async (req: Request, res: Response) => {
     // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
-    if (is_paid === true) {
-      finalPaymentStatusId = 2; // Pago
-    }
-    else if (payment_status_id === 2) {
+    if (payment_status_id === 2) {
       finalPaymentStatusId = 2; // Mantém como Pago
     }
-    else if (!payment_status_id && !is_paid) {
+    else if (!payment_status_id) {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
@@ -483,7 +480,6 @@ const create = async (req: Request, res: Response) => {
 
     console.log('Creating transaction with payment status:', {
       original_payment_status_id: payment_status_id,
-      is_paid,
       transaction_date,
       today: getLocalDateString(),
       final_payment_status_id: finalPaymentStatusId
@@ -810,7 +806,6 @@ const update = async (req: Request, res: Response) => {
       recurrence_count,
       recurrence_end_date,
       recurrence_weekday,
-      is_paid,
       is_installment,
       total_installments
     } = req.body;
@@ -855,13 +850,10 @@ const update = async (req: Request, res: Response) => {
     // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
-    if (is_paid === true) {
-      finalPaymentStatusId = 2; // Pago
-    }
-    else if (payment_status_id === 2) {
+    if (payment_status_id === 2) {
       finalPaymentStatusId = 2; // Mantém como Pago
     }
-    else if (!payment_status_id && !is_paid) {
+    else if (!payment_status_id) {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
@@ -876,7 +868,6 @@ const update = async (req: Request, res: Response) => {
 
     console.log('Updating transaction with payment status:', {
       original_payment_status_id: payment_status_id,
-      is_paid,
       transaction_date,
       today: getLocalDateString(),
       final_payment_status_id: finalPaymentStatusId
@@ -941,7 +932,6 @@ const update = async (req: Request, res: Response) => {
         recurrence_type,
         recurrence_count,
         recurrence_end_date,
-        is_paid: toDatabaseBoolean(is_paid, isProduction),
         is_installment: toDatabaseBoolean(is_installment, isProduction),
         total_installments
       }
@@ -1003,10 +993,10 @@ const markAsPaid = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Atualizar o status de pagamento
+    // Atualizar o status de pagamento para "Pago" (ID = 2)
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 2, is_paid = 1
+      SET payment_status_id = 2
       WHERE id = ?
     `, [transactionId]);
 
@@ -1019,8 +1009,7 @@ const markAsPaid = async (req: Request, res: Response) => {
       message: 'Transaction marked as paid successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 2,
-        is_paid: true
+        payment_status_id: 2
       }
     });
   } catch (error) {
@@ -1051,7 +1040,7 @@ const reversePayment = async (req: Request, res: Response) => {
     // Atualizar o status de pagamento (voltar para "Em aberto")
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 1, is_paid = 0
+      SET payment_status_id = 1
       WHERE id = ?
     `, [transactionId]);
 
@@ -1064,8 +1053,7 @@ const reversePayment = async (req: Request, res: Response) => {
       message: 'Transaction payment reversed successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 1,
-        is_paid: false
+        payment_status_id: 1
       }
     });
   } catch (error) {
@@ -1187,7 +1175,6 @@ const getPaymentDetails = async (req: Request, res: Response) => {
         t.type as transaction_type,
         t.transaction_date,
         t.payment_status_id,
-        t.is_paid,
         c.name as category_name,
         co.name as contact_name,
         cc.name as cost_center_name

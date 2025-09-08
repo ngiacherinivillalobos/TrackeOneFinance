@@ -5,7 +5,7 @@ class BankAccountController {
   async index(req: Request, res: Response) {
     try {
       const { db, all } = getDatabase();
-      const bankAccounts = await all(db, 'SELECT * FROM bank_accounts ORDER BY name');
+      const bankAccounts = await all(db, 'SELECT *, initial_balance as balance FROM bank_accounts ORDER BY name');
       res.json(bankAccounts);
     } catch (error) {
       console.error('Error listing bank accounts:', error);
@@ -33,7 +33,7 @@ class BankAccountController {
   async list(req: Request, res: Response) {
     try {
       const { db, all } = getDatabase();
-      const bankAccounts = await all(db, 'SELECT * FROM bank_accounts ORDER BY name');
+      const bankAccounts = await all(db, 'SELECT *, initial_balance as balance FROM bank_accounts ORDER BY name');
       res.json(bankAccounts);
     } catch (error) {
       console.error('Error listing bank accounts:', error);
@@ -46,8 +46,8 @@ class BankAccountController {
       const { name, account_number, bank_name, agency, balance = 0 } = req.body;
       const { db, run } = getDatabase();
       
-      const result: any = await run(db, 'INSERT INTO bank_accounts (name, account_number, type, agency, balance) VALUES (?, ?, ?, ?, ?)', 
-        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance]);
+      const result: any = await run(db, 'INSERT INTO bank_accounts (name, account_number, type, agency, initial_balance, current_balance) VALUES (?, ?, ?, ?, ?, ?)', 
+        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance, balance]);
       
       res.status(201).json({ 
         id: result.lastID, 
@@ -69,8 +69,8 @@ class BankAccountController {
       const { name, account_number, bank_name, agency, balance } = req.body;
       const { db, run } = getDatabase();
       
-      await run(db, 'UPDATE bank_accounts SET name = ?, account_number = ?, type = ?, agency = ?, balance = ? WHERE id = ?', 
-        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance || 0, id]);
+      await run(db, 'UPDATE bank_accounts SET name = ?, account_number = ?, type = ?, agency = ?, initial_balance = ?, current_balance = ? WHERE id = ?', 
+        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance || 0, balance || 0, id]);
       
       res.json({ 
         id, 

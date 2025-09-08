@@ -62,8 +62,10 @@ interface Transaction {
   description: string;
   amount: number;
   transaction_date: string;
-  transaction_type: 'Despesa' | 'Receita' | 'Investimento';
+  type: 'expense' | 'income' | 'investment';
+  transaction_type?: 'Despesa' | 'Receita' | 'Investimento'; // Campo mapeado/transformado
   is_paid: boolean;
+  payment_status_id?: number;
   cost_center_id?: number;
   cost_center?: {
     id: number;
@@ -93,7 +95,10 @@ export default function Dashboard() {
   
   // Estados para dados
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [cashFlowRecords, setCashFlowRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Estados para exibição
   const [weeklyBalances, setWeeklyBalances] = useState<WeeklyBalance[]>([]);
@@ -181,15 +186,24 @@ export default function Dashboard() {
       const response = await api.get('/transactions', { params });
       console.log('Resposta da API para transações:', response.data);
       
-      // Mapear os dados para incluir informações do centro de custo
-      const mappedTransactions = response.data.map((transaction: any) => ({
-        ...transaction,
-        cost_center: transaction.cost_center_name ? {
-          id: transaction.cost_center_id,
-          name: transaction.cost_center_name,
-          number: transaction.cost_center_number
-        } : null
-      }));
+      // Mapear os dados para incluir informações do centro de custo e tipo correto
+      const mappedTransactions = response.data.map((transaction: any) => {
+        // Mapear transaction_type (português) para type (inglês)
+        let type: 'expense' | 'income' | 'investment' = 'expense';
+        if (transaction.transaction_type === 'Receita') type = 'income';
+        else if (transaction.transaction_type === 'Investimento') type = 'investment';
+        else if (transaction.transaction_type === 'Despesa') type = 'expense';
+        
+        return {
+          ...transaction,
+          type, // Adicionar o campo type correto
+          cost_center: transaction.cost_center_name ? {
+            id: transaction.cost_center_id,
+            name: transaction.cost_center_name,
+            number: transaction.cost_center_number
+          } : null
+        };
+      });
       
       console.log('Transações mapeadas:', mappedTransactions);
       setTransactions(mappedTransactions);
@@ -202,55 +216,136 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
-  
+
+  // Carregar dados das contas bancárias
+  const loadBankAccounts = async () => {
+    try {
+      const response = await api.get('/bank-accounts');
+      setBankAccounts(response.data);
+    } catch (error) {
+      console.error('Erro ao carregar contas bancárias:', error);
+    }
+  };
+
+  // Carregar dados do fluxo de caixa
+  const loadCashFlow = async () => {
+    try {
+      const response = await api.get('/cash-flow');
+      setCashFlowRecords(response.data);
+    } catch (error) {
+      console.error('Erro ao carregar fluxo de caixa:', error);
+    }
+  };
+
+  // Adicionar ao useEffect para carregar todos os dados
+  useEffect(() => {
+    loadTransactions();
+    loadBankAccounts();
+    loadCashFlow();
+  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+
+  // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Só atualiza se a página estiver visível
+      if (document.visibilityState === 'visible') {
+        loadTransactions();
+      }
+    }, 30000); // 30 segundos
+
+    return () => clearInterval(interval);
+  }, [currentDate, selectedCostCenter, dateFilterType]);
+
   const calculateDashboardData = (transactionsData: Transaction[], currentParams: any) => {
     console.log('Calculando dashboard data com transactions:', transactionsData);
     console.log('Current params:', currentParams);
     
-    // Calcular totais por tipo de transação para o período filtrado (considerando apenas a data, não o status)
+    // Função auxiliar para converter valores para número
+    const getSafeAmount = (amount: any): number => {
+      if (typeof amount === 'number') return amount;
+      if (typeof amount === 'string') {
+        const parsed = parseFloat(amount);
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    
+    // Calcular totais por tipo de transação para o período filtrado (TODAS as transações, independente do status)
     const totalReceitas = transactionsData
-      .filter(t => t.transaction_type === 'Receita')
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const totalDespesas = transactionsData
-      .filter(t => t.transaction_type === 'Despesa')
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const totalInvestimentos = transactionsData
-      .filter(t => t.transaction_type === 'Investimento')
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'investment')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    // Calcular saldo atual (Receitas - Despesas - Investimentos)
-    const saldoAtual = totalReceitas - totalDespesas - totalInvestimentos;
+    // Calcular saldo previsto (Receitas - Despesas - Investimentos do período, independente do status)
+    const saldoPrevisto = totalReceitas - totalDespesas - totalInvestimentos;
+    
+    // Calcular saldo atual real considerando:
+    // 1. Saldo Inicial das contas bancárias
+    // 2. + Receitas com status "Pago"
+    // 3. - Despesas com status "Pago"
+    // 4. - Investimentos com status "Pago"
+    // 5. +/- Transações do fluxo de caixa (TODAS)
+
+    // 1. Saldo inicial das contas bancárias
+    const saldoInicialBancos = bankAccounts.reduce((sum, account) => 
+      sum + getSafeAmount(account.initial_balance || account.balance), 0);
+
+    // 2. Receitas pagas do controle mensal
+    const receitasPagasControle = transactionsData
+      .filter(t => t.type === 'income' && t.payment_status_id === 2)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+    // 3. Despesas pagas do controle mensal
+    const despesasPagasControle = transactionsData
+      .filter(t => t.type === 'expense' && t.payment_status_id === 2)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+    // 4. Investimentos pagos do controle mensal
+    const investimentosPagosControle = transactionsData
+      .filter(t => t.type === 'investment' && t.payment_status_id === 2)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+    // 5. Total do fluxo de caixa - TODAS as transações (subtrair despesas, somar receitas)
+    const totalFluxoCaixa = cashFlowRecords.reduce((sum, record) => {
+      const amount = getSafeAmount(record.amount);
+      if (record.record_type === 'Despesa') {
+        return sum - amount;
+      } else if (record.record_type === 'Receita') {
+        return sum + amount;
+      }
+      return sum;
+    }, 0);
+
+    // Saldo atual real = Saldo Inicial + Receitas Pagas - Despesas Pagas - Investimentos Pagos + Fluxo de Caixa
+    const saldoAtualReal = saldoInicialBancos + receitasPagasControle - despesasPagasControle - investimentosPagosControle + totalFluxoCaixa;
     
     // Calcular "A Receber" e "Recebido" com base em transações de receita
     const receitasPagas = transactionsData
-      .filter(t => t.transaction_type === 'Receita' && t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'income' && t.payment_status_id === 2)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const receitasNaoPagas = transactionsData
-      .filter(t => t.transaction_type === 'Receita' && !t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'income' && t.payment_status_id === 1)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    // Calcular "A Pagar" e "Pago" com base em transações de despesa e investimento
+    // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (não incluir investimentos)
     const despesasPagas = transactionsData
-      .filter(t => t.transaction_type === 'Despesa' && t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'expense' && t.payment_status_id === 2)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const despesasNaoPagas = transactionsData
-      .filter(t => t.transaction_type === 'Despesa' && !t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
-      
-    const investimentosPagos = transactionsData
-      .filter(t => t.transaction_type === 'Investimento' && t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
-      
-    const investimentosNaoPagos = transactionsData
-      .filter(t => t.transaction_type === 'Investimento' && !t.is_paid)
-      .reduce((sum, t) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+      .filter(t => t.type === 'expense' && t.payment_status_id === 1)
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    const totalPago = despesasPagas + investimentosPagos;
-    const totalAPagar = despesasNaoPagas + investimentosNaoPagos;
+    const totalPago = despesasPagas; // Apenas despesas pagas
+    const totalAPagar = despesasNaoPagas; // Apenas despesas não pagas
     
     console.log('=== Cálculo dos totalizadores ===');
     console.log('Total de receitas:', totalReceitas);
@@ -260,12 +355,21 @@ export default function Dashboard() {
     console.log('Receitas não pagas:', receitasNaoPagas);
     console.log('Despesas pagas:', despesasPagas);
     console.log('Despesas não pagas:', despesasNaoPagas);
-    console.log('Investimentos pagos:', investimentosPagos);
-    console.log('Investimentos não pagos:', investimentosNaoPagos);
     console.log('Total pago:', totalPago);
-    console.log('Total a pagar:', totalAPagar);
-    console.log('Saldo atual:', saldoAtual);
-    console.log('Investimentos pagos no período filtrado:', investimentosPagos);
+    console.log('=== DEBUG SALDO ATUAL ===');
+    console.log('Todas as transações:', transactionsData.length);
+    console.log('Total receitas (TODAS):', totalReceitas);
+    console.log('Total despesas (TODAS):', totalDespesas);
+    console.log('Total investimentos (TODAS):', totalInvestimentos);
+    console.log('Saldo previsto (todas as transações):', saldoPrevisto);
+    console.log('=== Cálculo Saldo Atual Real ===');
+    console.log('Saldo inicial bancos:', saldoInicialBancos);
+    console.log('Receitas pagas (controle):', receitasPagasControle);
+    console.log('Despesas pagas (controle):', despesasPagasControle);
+    console.log('Investimentos pagos (controle):', investimentosPagosControle);
+    console.log('Total fluxo de caixa:', totalFluxoCaixa);
+    console.log('Saldo atual real (final):', saldoAtualReal);
+    console.log('==============================');
     
     // Calcular total de investimentos de todos os períodos (sem filtro de data) que estão pagos
     loadTotalInvestmentsPaid(currentParams.cost_center_id);
@@ -275,7 +379,8 @@ export default function Dashboard() {
       income: totalReceitas,
       expenses: totalDespesas,
       savings: totalInvestimentos, // Agora mostra todos os investimentos do período, independentemente do status
-      expectedBalance: saldoAtual,
+      expectedBalance: saldoPrevisto,
+      currentBalance: saldoAtualReal, // Novo campo para saldo atual real
       received: receitasPagas,
       paid: totalPago,
       toPay: totalAPagar,
@@ -289,12 +394,12 @@ export default function Dashboard() {
     calculateWeeklyBalances(transactionsData);
   };
   
-  // Função para carregar o total de investimentos pagos de todos os períodos
+  // Função para carregar o total de investimentos pagos de todos os períodos (Meta de Economia)
   const loadTotalInvestmentsPaid = async (costCenterId: number | string | null) => {
     try {
       const params: any = {
-        transaction_type: 'Investimento',
-        is_paid: true // Apenas investimentos pagos
+        type: 'investment',
+        payment_status_id: 2 // Apenas investimentos com status "Pago"
       };
       
       // Adicionar filtro de centro de custo se selecionado
@@ -303,19 +408,21 @@ export default function Dashboard() {
         params.cost_center_id = costCenterId;
       }
       
-      console.log('Carregando investimentos pagos com params:', params);
+      console.log('Carregando total de investimentos pagos com params:', params);
       const response = await api.get('/transactions', { params });
-      console.log('Resposta da API para investimentos pagos:', response.data);
+      console.log('Response investimentos pagos:', response.data);
       
       const totalInvestimentosPagos = response.data
-        .reduce((sum: number, t: any) => sum + (typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount), 0);
+        .reduce((sum: number, t: any) => {
+          const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0);
+          return sum + amount;
+        }, 0);
       
       console.log('Total investimentos pagos calculado:', totalInvestimentosPagos);
-      console.log('Atualizando totalInvestmentsPaid para:', totalInvestimentosPagos);
-      // Atualizar o estado com o total de investimentos pagos
       setTotalInvestmentsPaid(totalInvestimentosPagos);
     } catch (error) {
       console.error('Erro ao carregar total de investimentos pagos:', error);
+      setTotalInvestmentsPaid(0);
     }
   };
   
@@ -360,15 +467,15 @@ export default function Dashboard() {
         });
         
         const previousIncome = previousWeekTransactions
-          .filter(t => t.transaction_type === 'Receita')
+          .filter(t => t.type === 'income')
           .reduce((sum, t) => sum + t.amount, 0);
           
         const previousExpenses = previousWeekTransactions
-          .filter(t => t.transaction_type === 'Despesa')
+          .filter(t => t.type === 'expense')
           .reduce((sum, t) => sum + t.amount, 0);
           
         const previousInvestments = previousWeekTransactions
-          .filter(t => t.transaction_type === 'Investimento')
+          .filter(t => t.type === 'investment')
           .reduce((sum, t) => sum + t.amount, 0);
           
         balance = previousIncome - previousExpenses - previousInvestments;
@@ -382,7 +489,7 @@ export default function Dashboard() {
       
       // Calcular gastos da semana (despesas + investimentos)
       const spent = weekTransactions
-        .filter(t => t.transaction_type === 'Despesa' || t.transaction_type === 'Investimento')
+        .filter(t => t.type === 'expense' || t.type === 'investment')
         .reduce((sum, t) => sum + t.amount, 0);
       
       // Calcular saldo restante
@@ -405,6 +512,7 @@ export default function Dashboard() {
     expenses: 0,
     savings: 0,
     expectedBalance: 0,
+    currentBalance: 0, // Novo campo
     received: 0,
     paid: 0,
     toPay: 0,
@@ -419,6 +527,14 @@ export default function Dashboard() {
       currency: 'BRL'
     }).format(value);
   };
+
+  // Função para forçar refresh dos dados (útil após estornos)
+  const refreshDashboard = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Expor a função globalmente para uso em outros componentes
+  (window as any).refreshDashboard = refreshDashboard;
 
   const getProgressColor = (current: number, total: number) => {
     const percentage = (current / total) * 100;
@@ -594,7 +710,8 @@ export default function Dashboard() {
         gridTemplateColumns: {
           xs: '1fr',
           sm: 'repeat(2, 1fr)',
-          lg: 'repeat(4, 1fr)'
+          md: 'repeat(3, 1fr)',
+          lg: 'repeat(5, 1fr)'
         },
         gap: 3,
         mb: 3
@@ -638,10 +755,21 @@ export default function Dashboard() {
           <ModernStatsCard
             title="Saldo Previsto"
             value={formatCurrency(monthSummary.expectedBalance)}
-            subtitle="Disponível"
+            subtitle="Baseado no período"
+            icon={<Timeline sx={{ fontSize: 28 }} />}
+            color="secondary"
+            trend={{ value: 0, isPositive: true }}
+          />
+        </Box>
+
+        <Box>
+          <ModernStatsCard
+            title="Saldo Atual"
+            value={formatCurrency(monthSummary.currentBalance)}
+            subtitle="Contas + Fluxo + Transações"
             icon={<AccountBalance sx={{ fontSize: 28 }} />}
             color="primary"
-            trend={{ value: 0, isPositive: true }}
+            trend={{ value: 0, isPositive: monthSummary.currentBalance >= 0 }}
           />
         </Box>
       </Box>
@@ -713,7 +841,7 @@ export default function Dashboard() {
                       borderRadius: 4,
                       backgroundColor: colors.error[100],
                       '& .MuiLinearProgress-bar': {
-                        backgroundColor: getProgressColor(monthSummary.paid, monthSummary.expenses),
+                        backgroundColor: '#BD362E', // Vermelho fixo para "Pago"
                         borderRadius: 4,
                       },
                     }}

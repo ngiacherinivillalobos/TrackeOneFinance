@@ -1588,11 +1588,10 @@ export default function CashFlowPage() {
                   </TableRow>
                 ) : filteredRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      <Box sx={{ py: 4 }}>
-                        <ReceiptIcon sx={{ fontSize: 48, color: colors.gray[400], mb: 2 }} />
-                        <Typography variant="h6" color="textSecondary">Nenhum registro encontrado</Typography>
-                      </Box>
+                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhuma transação encontrada para este período
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
