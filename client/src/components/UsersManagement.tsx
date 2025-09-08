@@ -26,7 +26,7 @@ import {
   Delete as DeleteIcon,
   LockReset as LockResetIcon,
 } from '@mui/icons-material';
-import api from '../services/api';
+import api from '../lib/axios';
 
 interface CostCenter {
   id: number;

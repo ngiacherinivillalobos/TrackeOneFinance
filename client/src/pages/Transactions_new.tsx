@@ -55,7 +55,7 @@ import { PaymentStatus, paymentStatusService } from '../services/paymentStatusSe
 import { Contact, contactService } from '../services/contactService';
 import { CostCenter, costCenterService } from '../services/costCenterService';
 import { Subcategory, subcategoryService } from '../services/subcategoryService';
-import api from '../services/api';
+import api from '../lib/axios';
 
 export default function Transactions() {
   // Estados principais

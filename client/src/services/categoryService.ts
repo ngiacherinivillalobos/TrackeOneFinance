@@ -1,4 +1,4 @@
-import api from '../services/api';
+import api from '../lib/axios';
 
 // Add response interceptor for debugging
 api.interceptors.response.use(

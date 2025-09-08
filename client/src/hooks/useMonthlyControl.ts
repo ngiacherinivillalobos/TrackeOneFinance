@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import api from '../services/api';
+import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';

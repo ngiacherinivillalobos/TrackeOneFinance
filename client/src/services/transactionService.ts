@@ -1,4 +1,4 @@
-import api from '../services/api';
+import api from '../lib/axios';
 
 export interface Transaction {
   id?: number;

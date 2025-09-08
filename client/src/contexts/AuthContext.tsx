@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-import api from '../services/api';
+import api from '../lib/axios';
 
 // Definir o tipo para o timeout do Node.js
 type Timeout = ReturnType<typeof setTimeout>;

@@ -31,7 +31,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PeopleIcon from '@mui/icons-material/People';
 import { CostCenter, costCenterService } from '../services/costCenterService';
-import api from '../services/api';
+import api from '../lib/axios';
 
 interface User {
   id: number;

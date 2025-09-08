@@ -43,7 +43,7 @@ import {
 } from '@mui/icons-material';
 import { ModernHeader, ModernStatsCard, ModernSection, ModernCard } from '../components/modern/ModernComponents';
 import { colors, gradients } from '../theme/modernTheme';
-import api from '../services/api';
+import api from '../lib/axios';
 import { format, addMonths, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';

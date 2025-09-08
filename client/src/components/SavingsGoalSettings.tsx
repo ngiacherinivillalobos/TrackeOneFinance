@@ -19,7 +19,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, parseISO } from 'date-fns';
-import api from '../services/api';
+import api from '../lib/axios';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { colors } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';

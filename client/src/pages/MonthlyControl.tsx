@@ -69,7 +69,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, addMonths, subMonths } from 'date-fns';
-import api from '../services/api';
+import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
