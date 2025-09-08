@@ -43,18 +43,19 @@ class BankAccountController {
 
   async create(req: Request, res: Response) {
     try {
-      const { name, account_number, bank_name, agency } = req.body;
+      const { name, account_number, bank_name, agency, balance = 0 } = req.body;
       const { db, run } = getDatabase();
       
-      const result: any = await run(db, 'INSERT INTO bank_accounts (name, account_number, type, agency) VALUES (?, ?, ?, ?)', 
-        [name, account_number || null, bank_name || 'Conta Corrente', agency || null]);
+      const result: any = await run(db, 'INSERT INTO bank_accounts (name, account_number, type, agency, balance) VALUES (?, ?, ?, ?, ?)', 
+        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance]);
       
       res.status(201).json({ 
         id: result.lastID, 
         name, 
         account_number: account_number || null,
         bank_name: bank_name || 'Conta Corrente',
-        agency: agency || null
+        agency: agency || null,
+        balance: balance
       });
     } catch (error) {
       console.error('Error creating bank account:', error);
@@ -65,18 +66,19 @@ class BankAccountController {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { name, account_number, bank_name, agency } = req.body;
+      const { name, account_number, bank_name, agency, balance } = req.body;
       const { db, run } = getDatabase();
       
-      await run(db, 'UPDATE bank_accounts SET name = ?, account_number = ?, type = ?, agency = ? WHERE id = ?', 
-        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, id]);
+      await run(db, 'UPDATE bank_accounts SET name = ?, account_number = ?, type = ?, agency = ?, balance = ? WHERE id = ?', 
+        [name, account_number || null, bank_name || 'Conta Corrente', agency || null, balance || 0, id]);
       
       res.json({ 
         id, 
         name, 
         account_number: account_number || null,
         bank_name: bank_name || 'Conta Corrente',
-        agency: agency || null
+        agency: agency || null,
+        balance: balance || 0
       });
     } catch (error) {
       console.error('Error updating bank account:', error);
@@ -93,6 +95,84 @@ class BankAccountController {
       res.json({ message: 'Bank account deleted successfully' });
     } catch (error) {
       console.error('Error deleting bank account:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getBankAccountBalance(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { db, get, all } = getDatabase();
+      
+      // Buscar conta bancária
+      const bankAccount = await get(db, 'SELECT * FROM bank_accounts WHERE id = ?', [id]);
+      if (!bankAccount) {
+        return res.status(404).json({ error: 'Bank account not found' });
+      }
+
+      // Calcular movimentações (receitas - despesas) para esta conta
+      const movements = await all(db, `
+        SELECT 
+          SUM(CASE WHEN transaction_type = 'Receita' THEN amount ELSE 0 END) as total_income,
+          SUM(CASE WHEN transaction_type = 'Despesa' THEN amount ELSE 0 END) as total_expense
+        FROM transactions 
+        WHERE bank_account_id = ?
+      `, [id]);
+
+      const totalIncome = parseFloat(movements[0]?.total_income || '0');
+      const totalExpense = parseFloat(movements[0]?.total_expense || '0');
+      const totalMovements = totalIncome - totalExpense;
+      const currentBalance = parseFloat(bankAccount.balance || '0') + totalMovements;
+
+      res.json({
+        ...bankAccount,
+        bank_name: bankAccount.type || bankAccount.bank_name,
+        initial_balance: parseFloat(bankAccount.balance || '0'),
+        current_balance: currentBalance,
+        total_movements: totalMovements
+      });
+    } catch (error) {
+      console.error('Error getting bank account balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getBankAccountsWithBalances(req: Request, res: Response) {
+    try {
+      const { db, all } = getDatabase();
+      
+      // Buscar todas as contas bancárias
+      const bankAccounts = await all(db, 'SELECT * FROM bank_accounts ORDER BY name');
+      
+      // Calcular saldo atual para cada conta
+      const accountsWithBalances = await Promise.all(
+        bankAccounts.map(async (account: any) => {
+          const movements = await all(db, `
+            SELECT 
+              SUM(CASE WHEN transaction_type = 'Receita' THEN amount ELSE 0 END) as total_income,
+              SUM(CASE WHEN transaction_type = 'Despesa' THEN amount ELSE 0 END) as total_expense
+            FROM transactions 
+            WHERE bank_account_id = ?
+          `, [account.id]);
+
+          const totalIncome = parseFloat(movements[0]?.total_income || '0');
+          const totalExpense = parseFloat(movements[0]?.total_expense || '0');
+          const totalMovements = totalIncome - totalExpense;
+          const currentBalance = parseFloat(account.balance || '0') + totalMovements;
+
+          return {
+            ...account,
+            bank_name: account.type || account.bank_name,
+            initial_balance: parseFloat(account.balance || '0'),
+            current_balance: currentBalance,
+            total_movements: totalMovements
+          };
+        })
+      );
+
+      res.json(accountsWithBalances);
+    } catch (error) {
+      console.error('Error getting bank accounts with balances:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

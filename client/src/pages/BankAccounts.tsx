@@ -27,7 +27,8 @@ export default function BankAccounts() {
     name: '',
     agency: '',
     account_number: '',
-    bank_name: ''
+    bank_name: '',
+    balance: 0
   });
 
   const loadData = async () => {
@@ -50,7 +51,7 @@ export default function BankAccounts() {
   const handleClose = () => {
     setOpen(false);
     setEditingBankAccount(null);
-    setFormData({ name: '', agency: '', account_number: '', bank_name: '' });
+    setFormData({ name: '', agency: '', account_number: '', bank_name: '', balance: 0 });
   };
 
   const handleEdit = (bankAccount: BankAccount) => {
@@ -59,7 +60,8 @@ export default function BankAccounts() {
       name: bankAccount.name,
       agency: bankAccount.agency || '',
       account_number: bankAccount.account_number || '',
-      bank_name: bankAccount.bank_name || ''
+      bank_name: bankAccount.bank_name || '',
+      balance: bankAccount.balance || 0
     });
     setOpen(true);
   };
@@ -106,6 +108,7 @@ export default function BankAccounts() {
               <TableCell>Banco</TableCell>
               <TableCell>Agência</TableCell>
               <TableCell>Conta</TableCell>
+              <TableCell align="right">Saldo Inicial (R$)</TableCell>
               <TableCell align="right">Ações</TableCell>
             </TableRow>
           </TableHead>
@@ -116,6 +119,12 @@ export default function BankAccounts() {
                 <TableCell>{bankAccount.bank_name || '-'}</TableCell>
                 <TableCell>{bankAccount.agency || '-'}</TableCell>
                 <TableCell>{bankAccount.account_number || '-'}</TableCell>
+                <TableCell align="right">
+                  {bankAccount.balance !== undefined ? 
+                    `R$ ${parseFloat(bankAccount.balance.toString()).toFixed(2).replace('.', ',')}` : 
+                    'R$ 0,00'
+                  }
+                </TableCell>
                 <TableCell align="right">
                   <IconButton onClick={() => handleEdit(bankAccount)}>
                     <EditIcon />
@@ -167,6 +176,18 @@ export default function BankAccounts() {
               fullWidth
               value={formData.account_number}
               onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+            />
+            <TextField
+              margin="dense"
+              label="Saldo Inicial (R$)"
+              type="number"
+              fullWidth
+              value={formData.balance || 0}
+              onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) || 0 })}
+              inputProps={{ 
+                step: "0.01",
+                min: "0"
+              }}
             />
           </DialogContent>
           <DialogActions>

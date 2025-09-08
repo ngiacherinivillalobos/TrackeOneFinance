@@ -6,6 +6,7 @@ export interface BankAccount {
   agency?: string;
   account_number?: string;
   bank_name?: string;
+  balance?: number;
   created_at?: string;
 }
 
