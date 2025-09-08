@@ -154,10 +154,10 @@ export const ModernSection: React.FC<ModernSectionProps> = ({
 
 interface ModernStatsCardProps {
   title: string;
-  value: string | number;
+  value: string | number | React.ReactNode;
   subtitle?: string;
   icon: React.ReactNode;
-  color?: 'primary' | 'success' | 'warning' | 'error';
+  color?: 'primary' | 'success' | 'warning' | 'error' | 'secondary';
   trend?: {
     value: number;
     isPositive: boolean;
@@ -174,7 +174,8 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
   trend,
   iconBgColor,
 }) => {
-  const colorScheme = colors[color];
+  // Garantir que sempre temos um colorScheme válido
+  const colorScheme = colors[color] || colors.primary;
   
   return (
     <Paper

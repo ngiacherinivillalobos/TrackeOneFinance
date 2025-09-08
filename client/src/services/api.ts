@@ -5,10 +5,10 @@ const getBaseURL = () => {
   // Em produção, usar a URL do backend no Render
   if (import.meta.env.MODE === 'production') {
     // Usar a variável de ambiente VITE_API_URL se definida, senão usar padrão
-    return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com';
+    return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com/api';
   }
-  // Em desenvolvimento, usar o proxy do Vite
-  return ''; // Proxy do Vite irá lidar com as requisições
+  // Em desenvolvimento, usar URL absoluta para o backend
+  return 'http://localhost:3001/api';
 };
 
 export const api = axios.create({

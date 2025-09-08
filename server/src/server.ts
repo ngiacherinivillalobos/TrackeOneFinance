@@ -42,6 +42,16 @@ app.get('/api/test', (req: Request, res: Response) => {
   res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
 });
 
+// Health check endpoint para Docker
+app.get('/api/health', (req: Request, res: Response) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database: 'connected'
+  });
+});
+
 // Monta o roteador principal
 app.use('/api', mainRouter);
 

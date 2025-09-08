@@ -4,7 +4,8 @@ import { getDatabase } from '../database/connection';
 const categoriesController = {
   // Listar todas as categorias
   async list(req: Request, res: Response) {
-    console.log('List categories route hit');
+    console.log('===== CATEGORIES CONTROLLER - LIST =====');
+    console.log('User from auth:', (req as any).user);
     const { db, all } = getDatabase();
     
     try {

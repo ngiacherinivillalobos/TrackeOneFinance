@@ -4,6 +4,7 @@ import { authMiddleware } from '../controllers/authMiddleware';
 
 const router = Router();
 
+router.get('/filtered', authMiddleware, transactionController.getFilteredTransactions);
 router.get('/', authMiddleware, transactionController.list);
 router.get('/:id', authMiddleware, transactionController.getById);
 router.post('/', authMiddleware, transactionController.create);

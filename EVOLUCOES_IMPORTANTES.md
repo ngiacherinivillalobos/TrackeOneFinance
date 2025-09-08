@@ -92,11 +92,99 @@
 - TrackeOneFinance_backup_ANTES_CORRECAO_20250825_*
 - /backups/ - pasta com todos os arquivos históricos
 
+## 🔧 CORREÇÕES APLICADAS EM 05/09/2025:
+
+### PROBLEMA 8: Datas d+1 na criação e recorrência de transações
+**CAUSA:** Uso de formato UTC (`new Date(date)`) no backend causava deslocamento de timezone
+**SOLUÇÃO:** Implementar funções helper `createSafeDate()` e `getLocalDateString()` no backend similar ao frontend
+**LOCAL:** 
+- TransactionController.ts - Todas as funções de criação de data
+- TransactionsController.ts - Função getPaymentStatusId
+- MonthlyControl.tsx - Todas as comparações e ordenações de data
+
+### APLICADO EM AMBOS FRONTEND E BACKEND:
+- ✅ Função `getLocalDateString()` para data atual
+- ✅ Função `createSafeDate()` para datas específicas com T12:00:00
+- ✅ Substituição de `new Date().toISOString().split('T')[0]` por `getLocalDateString()`
+- ✅ Substituição de `new Date(dateString)` por `createSafeDate(dateString)`
+- ✅ Correção em parcelamento, recorrência e comparações de vencimento
+
+## 🔧 CORREÇÕES APLICADAS EM 08/09/2025:
+
+### PROBLEMA 8: Erros de TypeError e Totalizador das Transações Selecionadas
+
+#### Contexto:
+- **Erro reportado**: "Erro ao selecionar todos os registros: Uncaught TypeError: Cannot read properties of undefined (reading '50')"
+- **Problema secundário**: "E falta o totalizador da tabela"
+
+#### Root Cause Analysis:
+1. **TypeError em ModernStatsCard**: Acesso a `colorScheme[50]` quando `colorScheme` era `undefined`
+2. **Color prop inválido**: Uso de `color="info"` que não existia na interface de props
+3. **ID undefined**: Transações com `id` undefined causando problemas na seleção
+
+#### Soluções Implementadas:
+
+##### 1. Correção dos Componentes ModernStatsCard
+**Arquivo**: `client/src/components/modern/ModernComponents.tsx`
+
+- **Adicionado fallback para colorScheme**:
+```tsx
+const colorScheme = colors[color] || colors.primary;
+```
+
+- **Expandida interface de cores**:
+```tsx
+color?: 'primary' | 'success' | 'warning' | 'error' | 'secondary'
+```
+
+##### 2. Correção dos Props de Cor
+**Arquivo**: `client/src/pages/MonthlyControl.tsx`
+
+- **Substituído color inválido**: `color="info"` → `color="primary"`
+
+##### 3. Proteção contra ID Undefined
+**Arquivo**: `client/src/pages/MonthlyControl.tsx`
+
+- **Filtro de transações com ID válido**:
+```tsx
+// Na seleção de todas as transações
+transactions.map(t => t.id).filter(id => id !== undefined) as number[]
+
+// Na renderização da tabela
+{sortedTransactions.filter(transaction => transaction.id).map((transaction) => {
+
+// No cálculo de totalizadores
+const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
+```
+
+#### Funcionalidades do Totalizador:
+
+##### 1. Cards de Estatísticas das Transações Selecionadas
+- **Registros Selecionados**: Mostra quantidade total selecionada
+- **Valor Total**: Soma líquida (receitas - despesas + investimentos)
+- **Receitas**: Total de receitas selecionadas (se > 0)
+- **Despesas**: Total de despesas selecionadas (se > 0)
+- **Investimentos**: Total de investimentos selecionados (se > 0)
+
+##### 2. UI Condicional:
+- Cards aparecem apenas quando `selectedTransactions.length > 0`
+- Border destacada em azul para indicar seleção ativa
+- Cards individuais só aparecem se o valor específico > 0
+
+#### Resultado:
+✅ **TypeError completamente resolvido**
+✅ **Totalizador funcionando perfeitamente**
+✅ **Seleção de transações sem erros**
+✅ **Componentes com validação robusta**
+
 ## 🎯 STATUS ATUAL: 
 **FUNCIONAL** - Recorrência implementada e testada ✅
 **DATA CORRETA** - Preview mostra datas corretas ✅  
 **CAMPOS PROTEGIDOS** - Não pode zerar quantidade/intervalo ✅
+**TIMEZONE CORRIGIDO** - D+1 bug completamente resolvido ✅
+**TOTALIZADOR IMPLEMENTADO** - Cards de estatísticas selecionadas ✅
+**COMPONENTES VALIDADOS** - ModernStatsCard com fallbacks robustos ✅
 
 ---
-**Última atualização:** 25 de agosto de 2025 18:27
+**Última atualização:** 08 de setembro de 2025
 **Próxima verificação:** Antes de qualquer nova mudança

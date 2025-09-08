@@ -1,6 +1,25 @@
 import { Request, Response } from 'express';
 import { getDatabase } from '../database/connection';
 
+// Função helper para obter data local no formato YYYY-MM-DD
+const getLocalDateString = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Função helper para criar Date segura para timezone
+const createSafeDate = (dateString: string): Date => {
+  // Se a string já tem T12:00:00, usar diretamente
+  if (dateString.includes('T12:00:00')) {
+    return new Date(dateString);
+  }
+  // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
+  return new Date(dateString + 'T12:00:00');
+};
+
 export interface Transaction {
   id?: number;
   description: string;
@@ -29,8 +48,8 @@ export interface Transaction {
 const transactionController = {
   // Função auxiliar para determinar o status de pagamento baseado na regra de negócio
   getPaymentStatusId(transaction_date: string, requested_payment_status_id?: number): number {
-    const today = new Date().toISOString().split('T')[0];
-    const transactionDate = new Date(transaction_date).toISOString().split('T')[0];
+    const today = getLocalDateString();
+    const transactionDate = createSafeDate(transaction_date).toISOString().split('T')[0];
     
     // Se a transação é de hoje ou futuro, sempre usar "Em aberto" (id 1)
     if (transactionDate >= today) {
