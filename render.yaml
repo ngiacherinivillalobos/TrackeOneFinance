@@ -19,7 +19,7 @@ services:
       - key: PORT
         value: 3001
       - key: FRONTEND_URL
-        value: https://trackone-finance.vercel.app
+        value: https://client-l7sgs3kth-natali-giacherini-villalobos-projects.vercel.app
 
 # PostgreSQL Database
 databases:
