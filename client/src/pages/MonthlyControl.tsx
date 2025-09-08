@@ -115,6 +115,16 @@ const getSafeDate = (dateString: string): Date => {
   }
 };
 
+// Função helper para converter valores monetários de forma segura
+const getSafeAmount = (amount: any): number => {
+  if (typeof amount === 'number') return amount;
+  if (typeof amount === 'string') {
+    const parsed = parseFloat(amount);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
+
 interface Transaction {
   id: number;
   description: string;
@@ -305,11 +315,11 @@ export default function MonthlyControl() {
   
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
   const totalDespesas = transactions
     .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
@@ -330,21 +340,21 @@ export default function MonthlyControl() {
     return !t.is_paid && transactionDate > today;
   });
 
-  const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
-  const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -t.amount : t.amount), 0);
+  const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
+  const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
+  const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
   const saldoPeriodo = totalReceitas - totalDespesas;
 
   // Calcular totais dos registros selecionados
   const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
   const totalSelectedCount = selectedTransactionsData.length;
   const totalSelectedValue = selectedTransactionsData.reduce((sum, t) => {
-    if (t.transaction_type === 'Despesa') return sum - t.amount;
-    return sum + t.amount;
+    if (t.transaction_type === 'Despesa') return sum - getSafeAmount(t.amount);
+    return sum + getSafeAmount(t.amount);
   }, 0);
-  const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + t.amount, 0);
-  const totalSelectedDespesas = selectedTransactionsData.filter(t => t.transaction_type === 'Despesa').reduce((sum, t) => sum + t.amount, 0);
-  const totalSelectedInvestimentos = selectedTransactionsData.filter(t => t.transaction_type === 'Investimento').reduce((sum, t) => sum + t.amount, 0);
+  const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  const totalSelectedDespesas = selectedTransactionsData.filter(t => t.transaction_type === 'Despesa').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  const totalSelectedInvestimentos = selectedTransactionsData.filter(t => t.transaction_type === 'Investimento').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
   // Configurar centro de custo padrão quando usuário for carregado
   useEffect(() => {
@@ -985,8 +995,9 @@ export default function MonthlyControl() {
   const handleEditTransaction = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     
-    // Formatar o valor para o padrão brasileiro (substituir ponto por vírgula)
-    const formattedAmount = transaction.amount.toFixed(2).replace('.', ',');
+    // Converter amount para número e formatar para o padrão brasileiro
+    const numericAmount = parseFloat(transaction.amount.toString()) || 0;
+    const formattedAmount = numericAmount.toFixed(2).replace('.', ',');
     
     setFormData({
       description: transaction.description,
