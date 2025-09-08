@@ -1,17 +1,55 @@
 -- Migração para ajustar valores booleanos na tabela transactions (PostgreSQL)
--- Esta migração garante que os valores booleanos sejam tratados como 0 ou 1
+-- Esta migração garante que os valores booleanos sejam tratados corretamente
 
--- Verificar se a tabela transactions existe e tem os campos necessários
--- Esta migração assume que os campos já existem e apenas ajusta os valores
+-- Primeiro, vamos verificar se as colunas existem antes de atualizá-las
+DO $$
+BEGIN
+    -- Verificar e atualizar is_installment se a coluna existir
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_installment') THEN
+        -- Atualizar valores NULL para false
+        UPDATE transactions SET is_installment = false WHERE is_installment IS NULL;
+        
+        -- Se a coluna for text/varchar, converter para boolean
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_installment' AND data_type != 'boolean') THEN
+            -- Alterar tipo da coluna para boolean
+            ALTER TABLE transactions ALTER COLUMN is_installment TYPE BOOLEAN USING 
+                CASE 
+                    WHEN is_installment::TEXT IN ('true', '1', 't', 'yes', 'y') THEN true
+                    ELSE false
+                END;
+        END IF;
+    END IF;
 
--- Atualizar valores existentes nos campos booleanos para garantir consistência
-UPDATE transactions SET is_installment = false WHERE is_installment IS NULL OR is_installment = '';
-UPDATE transactions SET is_installment = true WHERE is_installment = 'true' OR is_installment = '1' OR is_installment = 1;
+    -- Verificar e atualizar is_recurring se a coluna existir
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_recurring') THEN
+        -- Atualizar valores NULL para false
+        UPDATE transactions SET is_recurring = false WHERE is_recurring IS NULL;
+        
+        -- Se a coluna for text/varchar, converter para boolean
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_recurring' AND data_type != 'boolean') THEN
+            -- Alterar tipo da coluna para boolean
+            ALTER TABLE transactions ALTER COLUMN is_recurring TYPE BOOLEAN USING 
+                CASE 
+                    WHEN is_recurring::TEXT IN ('true', '1', 't', 'yes', 'y') THEN true
+                    ELSE false
+                END;
+        END IF;
+    END IF;
 
--- Para campos de recorrência (se existirem)
-UPDATE transactions SET is_recurring = false WHERE is_recurring IS NULL OR is_recurring = '';
-UPDATE transactions SET is_recurring = true WHERE is_recurring = 'true' OR is_recurring = '1' OR is_recurring = 1;
-
--- Se necessário, alterar o tipo das colunas para garantir consistência
--- ALTER TABLE transactions ALTER COLUMN is_installment TYPE BOOLEAN USING is_installment::BOOLEAN;
--- ALTER TABLE transactions ALTER COLUMN is_recurring TYPE BOOLEAN USING is_recurring::BOOLEAN;
+    -- Verificar e atualizar is_paid se a coluna existir
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_paid') THEN
+        -- Atualizar valores NULL para false
+        UPDATE transactions SET is_paid = false WHERE is_paid IS NULL;
+        
+        -- Se a coluna for text/varchar, converter para boolean
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_paid' AND data_type != 'boolean') THEN
+            -- Alterar tipo da coluna para boolean
+            ALTER TABLE transactions ALTER COLUMN is_paid TYPE BOOLEAN USING 
+                CASE 
+                    WHEN is_paid::TEXT IN ('true', '1', 't', 'yes', 'y') THEN true
+                    ELSE false
+                END;
+        END IF;
+    END IF;
+END
+$$;
