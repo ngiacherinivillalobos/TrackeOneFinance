@@ -4,6 +4,7 @@ import { Pool, QueryResult } from 'pg';
 declare module 'pg';
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 
 // Carregar variáveis de ambiente do arquivo .env
@@ -209,32 +210,116 @@ const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
     const tableExists = result.rows[0].exists;
     console.log('Tabela payment_details existe:', tableExists);
     
+    // Se a tabela não existe, executar o script completo de inicialização
     if (!tableExists) {
-      console.log('Criando tabela payment_details...');
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS payment_details (
-          id SERIAL PRIMARY KEY,
-          transaction_id INTEGER NOT NULL,
-          payment_date DATE NOT NULL,
-          paid_amount DECIMAL(10,2) NOT NULL,
-          original_amount DECIMAL(10,2) NOT NULL,
-          payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('bank_account', 'credit_card')),
-          bank_account_id INTEGER,
-          card_id INTEGER,
-          discount_amount DECIMAL(10,2) DEFAULT 0,
-          interest_amount DECIMAL(10,2) DEFAULT 0,
-          observations TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          
-          FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-          FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id),
-          FOREIGN KEY (card_id) REFERENCES cards(id)
-        )
-      `);
-      console.log('Tabela payment_details criada com sucesso');
+      console.log('Executando script completo de inicialização do PostgreSQL...');
+      
+      // Caminho para o arquivo de inicialização
+      const initScriptPath = path.resolve(__dirname, '..', '..', '..', 'database', 'init_postgresql.sql');
+      
+      // Verificar se o arquivo existe
+      if (fs.existsSync(initScriptPath)) {
+        const initScript = fs.readFileSync(initScriptPath, 'utf8');
+        
+        // Dividir o script em comandos separados por ponto-e-vírgula
+        const commands = initScript.split(';').filter(cmd => cmd.trim() !== '');
+        
+        for (const command of commands) {
+          const cmd = command.trim();
+          if (cmd !== '') {
+            try {
+              await pool.query(cmd);
+            } catch (error) {
+              // Ignorar erros de "já existe" mas logar outros erros
+              if (!error.message.includes('already exists') && !error.message.includes('duplicate key')) {
+                console.error(`Erro ao executar comando SQL: ${cmd.substring(0, 100)}...`, error);
+              }
+            }
+          }
+        }
+        
+        console.log('Script de inicialização PostgreSQL executado com sucesso');
+      } else {
+        console.log('Arquivo de inicialização não encontrado, criando apenas tabela payment_details...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS payment_details (
+            id SERIAL PRIMARY KEY,
+            transaction_id INTEGER NOT NULL,
+            payment_date DATE NOT NULL,
+            paid_amount DECIMAL(10,2) NOT NULL,
+            original_amount DECIMAL(10,2) NOT NULL,
+            payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('bank_account', 'credit_card')),
+            bank_account_id INTEGER,
+            card_id INTEGER,
+            discount_amount DECIMAL(10,2) DEFAULT 0,
+            interest_amount DECIMAL(10,2) DEFAULT 0,
+            observations TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+            FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id),
+            FOREIGN KEY (card_id) REFERENCES cards(id)
+          )
+        `);
+      }
+    } else {
+      console.log('Database já inicializado, verificando dados iniciais...');
+      
+      // Verificar se existem centros de custo
+      const costCentersResult = await pool.query('SELECT COUNT(*) as count FROM cost_centers');
+      const costCentersCount = parseInt(costCentersResult.rows[0].count);
+      
+      if (costCentersCount === 0) {
+        console.log('Inserindo dados iniciais de centros de custo...');
+        await pool.query(`
+          INSERT INTO cost_centers (name, number, description) VALUES 
+          ('Administrativo', '001', 'Centro de custo administrativo'),
+          ('Operacional', '002', 'Centro de custo operacional'),
+          ('Vendas', '003', 'Centro de custo de vendas'),
+          ('Marketing', '004', 'Centro de custo de marketing')
+        `);
+      }
+      
+      // Verificar se existem categorias
+      const categoriesResult = await pool.query('SELECT COUNT(*) as count FROM categories');
+      const categoriesCount = parseInt(categoriesResult.rows[0].count);
+      
+      if (categoriesCount === 0) {
+        console.log('Inserindo dados iniciais de categorias...');
+        await pool.query(`
+          INSERT INTO categories (name, description) VALUES 
+          ('Alimentação', 'Gastos com alimentação e refeições'),
+          ('Transporte', 'Gastos com transporte público, combustível, etc.'),
+          ('Moradia', 'Aluguel, financiamento, condomínio'),
+          ('Saúde', 'Plano de saúde, medicamentos, consultas'),
+          ('Educação', 'Cursos, livros, material escolar'),
+          ('Lazer', 'Cinema, restaurantes, viagens'),
+          ('Receitas', 'Salário, freelances, investimentos'),
+          ('Investimentos', 'Aplicações financeiras')
+        `);
+      }
+      
+      // Verificar se existem métodos de pagamento
+      const paymentMethodsResult = await pool.query('SELECT COUNT(*) as count FROM payment_methods');
+      const paymentMethodsCount = parseInt(paymentMethodsResult.rows[0].count);
+      
+      if (paymentMethodsCount === 0) {
+        console.log('Inserindo dados iniciais de métodos de pagamento...');
+        await pool.query(`
+          INSERT INTO payment_methods (name, description) VALUES 
+          ('Dinheiro', 'Pagamento em espécie'),
+          ('Cartão de Crédito', 'Pagamento via cartão de crédito'),
+          ('Cartão de Débito', 'Pagamento via cartão de débito'),
+          ('PIX', 'Transferência instantânea PIX'),
+          ('Transferência Bancária', 'TED/DOC entre contas'),
+          ('Boleto', 'Pagamento via boleto bancário')
+        `);
+      }
     }
+    
+    console.log('Database initialized successfully');
   } catch (error) {
-    console.error('Erro ao verificar/criar tabela payment_details:', error);
+    console.error('Erro ao verificar/criar tabelas PostgreSQL:', error);
     throw error;
   }
 };
