@@ -19,7 +19,7 @@ services:
       - key: PORT
         value: 3001
       - key: FRONTEND_URL
-        value: https://client-l7sgs3kth-natali-giacherini-villalobos-projects.vercel.app
+        value: https://ngvtech.com.br
 
 # PostgreSQL Database
 databases:
