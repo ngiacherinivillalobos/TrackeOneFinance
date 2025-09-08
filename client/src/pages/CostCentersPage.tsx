@@ -47,6 +47,11 @@ export default function CostCentersPage() {
   const columns = [
     { key: 'name', title: 'Nome' },
     { key: 'number', title: 'Número' },
+    { 
+      key: 'payment_days', 
+      title: 'Dias de Recebimento',
+      render: (value: string) => value ? `Dias: ${value}` : '-'
+    },
   ];
 
   // Definir campos para o formulário
@@ -61,6 +66,13 @@ export default function CostCentersPage() {
       name: 'number', 
       label: 'Número', 
       type: 'text' as const 
+    },
+    { 
+      name: 'payment_days', 
+      label: 'Dias de Recebimento', 
+      type: 'text' as const,
+      placeholder: 'Ex: 5,15,20 (separados por vírgula)',
+      helperText: 'Informe os dias do mês de recebimento separados por vírgula'
     }
   ];
 

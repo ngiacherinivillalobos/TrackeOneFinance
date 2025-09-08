@@ -4,6 +4,7 @@ export interface CostCenter {
   id?: number;
   name: string;
   number?: string;
+  payment_days?: string; // Dias de recebimento separados por vírgula (ex: "5,15,20")
   created_at?: string;
 }
 

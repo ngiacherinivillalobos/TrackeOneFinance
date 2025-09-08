@@ -32,14 +32,15 @@ class CostCenterController {
 
   async create(req: Request, res: Response) {
     try {
-      const { name, number } = req.body;
+      const { name, number, payment_days } = req.body;
       const { db, run } = getDatabase();
       
-      const result: any = await run(db, 'INSERT INTO cost_centers (name, number) VALUES (?, ?)', [name, number || null]);
+      const result: any = await run(db, 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)', [name, number || null, payment_days || null]);
       res.status(201).json({ 
         id: result.lastID, 
         name, 
-        number: number || null
+        number: number || null,
+        payment_days: payment_days || null
       });
     } catch (error) {
       console.error('Error creating cost center:', error);
@@ -50,14 +51,15 @@ class CostCenterController {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { name, number } = req.body;
+      const { name, number, payment_days } = req.body;
       const { db, run } = getDatabase();
       
-      await run(db, 'UPDATE cost_centers SET name = ?, number = ? WHERE id = ?', [name, number || null, id]);
+      await run(db, 'UPDATE cost_centers SET name = ?, number = ?, payment_days = ? WHERE id = ?', [name, number || null, payment_days || null, id]);
       res.json({ 
         id, 
         name, 
-        number: number || null
+        number: number || null,
+        payment_days: payment_days || null
       });
     } catch (error) {
       console.error('Error updating cost center:', error);

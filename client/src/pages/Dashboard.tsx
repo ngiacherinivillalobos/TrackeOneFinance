@@ -49,6 +49,13 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 
+// Função helper para criar data segura (evita problema de timezone d-1)
+const createSafeDate = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  // Adiciona horário local para evitar problemas de timezone
+  return new Date(dateString + 'T12:00:00');
+};
+
 interface WeeklyBalance {
   startDate: string;
   endDate: string;
@@ -900,7 +907,7 @@ export default function Dashboard() {
         <Box>
           <ModernSection
             title="Meta de Economia"
-            subtitle={savingsGoal ? `Prazo: ${format(parseISO(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
+            subtitle={savingsGoal ? `Prazo: ${format(createSafeDate(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
             icon={<ShowChart sx={{ fontSize: 24 }} />}
             headerGradient
           >

@@ -23,6 +23,8 @@ interface FieldConfig {
   required?: boolean;
   options?: { value: string; label: string }[];
   defaultValue?: any;
+  placeholder?: string;
+  helperText?: string;
 }
 
 interface BaseFormProps {
@@ -100,6 +102,8 @@ export function BaseForm({
                     value={values[field.name] || field.defaultValue || ''}
                     onChange={(e) => onChange(field.name, e.target.value)}
                     required={field.required}
+                    placeholder={field.placeholder}
+                    helperText={field.helperText}
                   />
                 )}
               </Box>
