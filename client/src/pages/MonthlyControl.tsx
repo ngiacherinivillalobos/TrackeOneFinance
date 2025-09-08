@@ -77,6 +77,44 @@ import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../com
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
 
+// Helper function para converter datas de forma segura
+const formatSafeDate = (dateString: string): string => {
+  try {
+    // Se a data já está no formato ISO (com Z ou offset), usar diretamente
+    if (dateString.includes('T') && (dateString.includes('Z') || dateString.includes('+') || dateString.match(/.*T.*-.*$/))) {
+      return format(new Date(dateString), 'dd/MM/yyyy');
+    }
+    // Se é apenas YYYY-MM-DD, adicionar o horário de meio-dia para evitar problemas de timezone
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return format(getSafeDate(dateString), 'dd/MM/yyyy');
+    }
+    // Fallback: tentar converter diretamente
+    return format(new Date(dateString), 'dd/MM/yyyy');
+  } catch (error) {
+    console.warn('Erro ao converter data:', dateString, error);
+    return 'Data inválida';
+  }
+};
+
+// Helper function para converter datas para objeto Date de forma segura
+const getSafeDate = (dateString: string): Date => {
+  try {
+    // Se a data já está no formato ISO (com Z ou offset), usar diretamente
+    if (dateString.includes('T') && (dateString.includes('Z') || dateString.includes('+') || dateString.match(/.*T.*-.*$/))) {
+      return new Date(dateString);
+    }
+    // Se é apenas YYYY-MM-DD, adicionar o horário de meio-dia para evitar problemas de timezone
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return new Date(dateString + 'T12:00:00');
+    }
+    // Fallback: tentar converter diretamente
+    return new Date(dateString);
+  } catch (error) {
+    console.warn('Erro ao converter data para Date:', dateString, error);
+    return new Date(); // Retorna data atual como fallback
+  }
+};
+
 interface Transaction {
   id: number;
   description: string;
@@ -275,19 +313,19 @@ export default function MonthlyControl() {
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T12:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
     return !t.is_paid && transactionDate < today;
   });
 
   const vencemHoje = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T12:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
     return !t.is_paid && transactionDate.getTime() === today.getTime();
   });
 
   const aVencer = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T12:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
     return !t.is_paid && transactionDate > today;
   });
@@ -507,7 +545,7 @@ export default function MonthlyControl() {
         filteredTransactions = filteredTransactions.filter((t: any) => {
           if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
           if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && new Date(t.transaction_date + 'T12:00:00') < new Date()) return true;
+          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
           if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
           return false;
         });
@@ -1082,8 +1120,8 @@ export default function MonthlyControl() {
 
     switch (orderBy) {
       case 'transaction_date':
-        aValue = new Date(a.transaction_date + 'T12:00:00');
-        bValue = new Date(b.transaction_date + 'T12:00:00');
+        aValue = getSafeDate(a.transaction_date);
+        bValue = getSafeDate(b.transaction_date);
         break;
       case 'description':
         aValue = a.description.toLowerCase();
@@ -1211,7 +1249,7 @@ export default function MonthlyControl() {
     if (transaction.is_paid) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T12:00:00');
+    const transactionDate = getSafeDate(transaction.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
     return transactionDate < today;
   };
@@ -1221,7 +1259,7 @@ export default function MonthlyControl() {
     if (transaction.is_paid) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const transactionDate = new Date(transaction.transaction_date + 'T12:00:00');
+    const transactionDate = getSafeDate(transaction.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
     return transactionDate.getTime() === today.getTime();
   };
@@ -2309,7 +2347,7 @@ export default function MonthlyControl() {
                     
                     <TableCell sx={{ minWidth: 90 }}>
                       <Typography variant="body2">
-                        {format(new Date(transaction.transaction_date + 'T12:00:00'), 'dd/MM/yyyy')}
+                        {formatSafeDate(transaction.transaction_date)}
                       </Typography>
                     </TableCell>
                     
@@ -3133,8 +3171,8 @@ export default function MonthlyControl() {
                       <TableBody>
                         {recurrencePreview.map((item, index) => (
                           <TableRow key={index}>
-                            <TableCell>{new Date(item.creation_date + 'T12:00:00').toLocaleDateString('pt-BR')}</TableCell>
-                            <TableCell>{new Date(item.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</TableCell>
+                            <TableCell>{getSafeDate(item.creation_date).toLocaleDateString('pt-BR')}</TableCell>
+                            <TableCell>{getSafeDate(item.due_date).toLocaleDateString('pt-BR')}</TableCell>
                             <TableCell>{item.description}</TableCell>
                             <TableCell align="right">
                               {item.amount.toLocaleString('pt-BR', { 
