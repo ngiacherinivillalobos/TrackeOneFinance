@@ -265,55 +265,100 @@ const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
     } else {
       console.log('Database já inicializado, verificando dados iniciais...');
       
-      // Verificar se existem centros de custo
-      const costCentersResult = await pool.query('SELECT COUNT(*) as count FROM cost_centers');
-      const costCentersCount = parseInt(costCentersResult.rows[0].count);
-      
-      if (costCentersCount === 0) {
-        console.log('Inserindo dados iniciais de centros de custo...');
-        await pool.query(`
-          INSERT INTO cost_centers (name, number, description) VALUES 
-          ('Administrativo', '001', 'Centro de custo administrativo'),
-          ('Operacional', '002', 'Centro de custo operacional'),
-          ('Vendas', '003', 'Centro de custo de vendas'),
-          ('Marketing', '004', 'Centro de custo de marketing')
+      // Verificar se a tabela cost_centers existe antes de tentar acessá-la
+      try {
+        const costCentersTableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'cost_centers'
+          )
         `);
+        
+        if (costCentersTableCheck.rows[0].exists) {
+          const costCentersResult = await pool.query('SELECT COUNT(*) as count FROM cost_centers');
+          const costCentersCount = parseInt(costCentersResult.rows[0].count);
+          
+          if (costCentersCount === 0) {
+            console.log('Inserindo dados iniciais de centros de custo...');
+            await pool.query(`
+              INSERT INTO cost_centers (name, number, description) VALUES 
+              ('Administrativo', '001', 'Centro de custo administrativo'),
+              ('Operacional', '002', 'Centro de custo operacional'),
+              ('Vendas', '003', 'Centro de custo de vendas'),
+              ('Marketing', '004', 'Centro de custo de marketing')
+            `);
+          }
+        } else {
+          console.log('Tabela cost_centers não existe, pulando verificação...');
+        }
+      } catch (error) {
+        console.log('Erro ao verificar cost_centers, pulando...', error.message);
       }
       
-      // Verificar se existem categorias
-      const categoriesResult = await pool.query('SELECT COUNT(*) as count FROM categories');
-      const categoriesCount = parseInt(categoriesResult.rows[0].count);
-      
-      if (categoriesCount === 0) {
-        console.log('Inserindo dados iniciais de categorias...');
-        await pool.query(`
-          INSERT INTO categories (name, description) VALUES 
-          ('Alimentação', 'Gastos com alimentação e refeições'),
-          ('Transporte', 'Gastos com transporte público, combustível, etc.'),
-          ('Moradia', 'Aluguel, financiamento, condomínio'),
-          ('Saúde', 'Plano de saúde, medicamentos, consultas'),
-          ('Educação', 'Cursos, livros, material escolar'),
-          ('Lazer', 'Cinema, restaurantes, viagens'),
-          ('Receitas', 'Salário, freelances, investimentos'),
-          ('Investimentos', 'Aplicações financeiras')
+      // Verificar se a tabela categories existe antes de tentar acessá-la
+      try {
+        const categoriesTableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'categories'
+          )
         `);
+        
+        if (categoriesTableCheck.rows[0].exists) {
+          const categoriesResult = await pool.query('SELECT COUNT(*) as count FROM categories');
+          const categoriesCount = parseInt(categoriesResult.rows[0].count);
+          
+          if (categoriesCount === 0) {
+            console.log('Inserindo dados iniciais de categorias...');
+            await pool.query(`
+              INSERT INTO categories (name, description) VALUES 
+              ('Alimentação', 'Gastos com alimentação e refeições'),
+              ('Transporte', 'Gastos com transporte público, combustível, etc.'),
+              ('Moradia', 'Aluguel, financiamento, condomínio'),
+              ('Saúde', 'Plano de saúde, medicamentos, consultas'),
+              ('Educação', 'Cursos, livros, material escolar'),
+              ('Lazer', 'Cinema, restaurantes, viagens'),
+              ('Receitas', 'Salário, freelances, investimentos'),
+              ('Investimentos', 'Aplicações financeiras')
+            `);
+          }
+        } else {
+          console.log('Tabela categories não existe, pulando verificação...');
+        }
+      } catch (error) {
+        console.log('Erro ao verificar categories, pulando...', error.message);
       }
       
-      // Verificar se existem métodos de pagamento
-      const paymentMethodsResult = await pool.query('SELECT COUNT(*) as count FROM payment_methods');
-      const paymentMethodsCount = parseInt(paymentMethodsResult.rows[0].count);
-      
-      if (paymentMethodsCount === 0) {
-        console.log('Inserindo dados iniciais de métodos de pagamento...');
-        await pool.query(`
-          INSERT INTO payment_methods (name, description) VALUES 
-          ('Dinheiro', 'Pagamento em espécie'),
-          ('Cartão de Crédito', 'Pagamento via cartão de crédito'),
-          ('Cartão de Débito', 'Pagamento via cartão de débito'),
-          ('PIX', 'Transferência instantânea PIX'),
-          ('Transferência Bancária', 'TED/DOC entre contas'),
-          ('Boleto', 'Pagamento via boleto bancário')
+      // Verificar se a tabela payment_methods existe antes de tentar acessá-la
+      try {
+        const paymentMethodsTableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'payment_methods'
+          )
         `);
+        
+        if (paymentMethodsTableCheck.rows[0].exists) {
+          const paymentMethodsResult = await pool.query('SELECT COUNT(*) as count FROM payment_methods');
+          const paymentMethodsCount = parseInt(paymentMethodsResult.rows[0].count);
+          
+          if (paymentMethodsCount === 0) {
+            console.log('Inserindo dados iniciais de métodos de pagamento...');
+            await pool.query(`
+              INSERT INTO payment_methods (name, description) VALUES 
+              ('Dinheiro', 'Pagamento em espécie'),
+              ('Cartão de Crédito', 'Pagamento via cartão de crédito'),
+              ('Cartão de Débito', 'Pagamento via cartão de débito'),
+              ('PIX', 'Transferência instantânea PIX'),
+              ('Transferência Bancária', 'TED/DOC entre contas'),
+              ('Boleto', 'Pagamento via boleto bancário')
+            `);
+          }
+        } else {
+          console.log('Tabela payment_methods não existe, pulando verificação...');
+        }
+      } catch (error) {
+        console.log('Erro ao verificar payment_methods, pulando...', error.message);
       }
     }
     
