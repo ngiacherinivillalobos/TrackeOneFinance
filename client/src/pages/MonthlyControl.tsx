@@ -512,6 +512,7 @@ export default function MonthlyControl() {
       
       // Preparar parâmetros de filtro
       const baseParams: any = {
+        dateFilterType,
         ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
           // Tratar filtros de array e payment_status_id separadamente
           if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
@@ -520,6 +521,17 @@ export default function MonthlyControl() {
           return value !== '';
         }))
       };
+      
+      // Adicionar parâmetros específicos de acordo com o tipo de filtro de data
+      if (dateFilterType === 'month') {
+        baseParams.month = currentDate.getMonth();
+        baseParams.year = currentDate.getFullYear();
+      } else if (dateFilterType === 'year') {
+        baseParams.year = selectedYear;
+      } else if (dateFilterType === 'custom' && customStartDate && customEndDate) {
+        baseParams.customStartDate = format(customStartDate, 'yyyy-MM-dd');
+        baseParams.customEndDate = format(customEndDate, 'yyyy-MM-dd');
+      }
       
       // Adicionar parâmetros de data apenas se não for "Todo o período"
       if (dateFilterType !== 'all' && startDate && endDate) {
@@ -533,6 +545,7 @@ export default function MonthlyControl() {
       
       const response = await api.get(`/transactions/filtered?${params}`);
       console.log("Resposta da API recebida:", response.data);
+      console.log("Primeiras 3 transações - tipos:", response.data.slice(0, 3).map((t: any) => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
       
       // Aplicar filtros no frontend
       let filteredTransactions = response.data;
@@ -590,6 +603,11 @@ export default function MonthlyControl() {
         // Remover filtros de data para buscar todos os vencidos
         delete overdueParams.start_date;
         delete overdueParams.end_date;
+        delete overdueParams.month;
+        delete overdueParams.year;
+        delete overdueParams.customStartDate;
+        delete overdueParams.customEndDate;
+        overdueParams.dateFilterType = 'all'; // Buscar todas as datas para encontrar vencidos
         
         try {
           const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);

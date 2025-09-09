@@ -73,8 +73,18 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
 
     // Date filters
     if (dateFilterType === 'month' && month && year) {
-      const startDate = `${year}-${String(parseInt(month as string) + 1).padStart(2, '0')}-01`;
-      const endDate = new Date(parseInt(year as string), parseInt(month as string) + 1, 0).toISOString().split('T')[0];
+      // month já vem como índice correto (0-11), então usar diretamente
+      const monthIndex = parseInt(month as string);
+      const yearNum = parseInt(year as string);
+      
+      // Construir primeiro dia do mês
+      const startDate = `${yearNum}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+      
+      // Construir último dia do mês
+      const lastDay = new Date(yearNum, monthIndex + 1, 0).getDate();
+      const endDate = `${yearNum}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      
+      console.log('Month filter applied:', { month, year, monthIndex, startDate, endDate });
       conditions.push('t.transaction_date BETWEEN ? AND ?');
       values.push(startDate, endDate);
     } else if (dateFilterType === 'year' && year) {
@@ -162,6 +172,8 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       if (transaction.type === 'income') frontendType = 'Receita';
       if (transaction.type === 'investment') frontendType = 'Investimento';
       
+      console.log(`[getFilteredTransactions] Converting type: ${transaction.type} -> ${frontendType} for transaction ${transaction.id}`);
+      
       return {
         ...transaction,
         transaction_type: frontendType,
@@ -170,6 +182,9 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
         is_paid: transaction.payment_status_id === 2,
       };
     });
+
+    console.log(`[getFilteredTransactions] Final converted transactions count: ${convertedTransactions.length}`);
+    console.log(`[getFilteredTransactions] Sample transaction types:`, convertedTransactions.slice(0, 3).map(t => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
 
     res.json(convertedTransactions);
   } catch (error) {
@@ -328,6 +343,8 @@ const list = async (req: Request, res: Response) => {
       if (transaction.transaction_type === 'income') frontendType = 'Receita';
       if (transaction.transaction_type === 'investment') frontendType = 'Investimento';
       
+      console.log(`[list] Converting type: ${transaction.transaction_type} -> ${frontendType} for transaction ${transaction.id}`);
+      
       return {
         ...transaction,
         transaction_type: frontendType,
@@ -337,6 +354,9 @@ const list = async (req: Request, res: Response) => {
       };
     });
     
+    console.log(`[list] Final converted transactions count: ${convertedTransactions.length}`);
+    console.log(`[list] Sample transaction types:`, convertedTransactions.slice(0, 3).map(t => ({ id: t.id, transaction_type: t.transaction_type })));
+
     res.json(convertedTransactions);
   } catch (error) {
     console.error('Error listing transactions:', error);
