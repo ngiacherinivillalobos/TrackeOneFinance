@@ -36,23 +36,35 @@ class CostCenterController {
       console.log('Creating cost center with data:', { name, number, payment_days });
       const { db, run } = getDatabase();
       
-      // Para PostgreSQL, usar RETURNING id para obter o ID inserido
+      // Verificar se estamos em produção para decidir quais campos usar
       const isProduction = process.env.NODE_ENV === 'production';
-      const query = isProduction 
-        ? 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?) RETURNING id'
-        : 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)';
       
-      const result: any = await run(db, query, [name, number || null, payment_days || null]);
-      console.log('Database result:', result);
-      
-      const insertedId = isProduction ? result.lastID : result.lastID;
-      
-      res.status(201).json({ 
-        id: insertedId, 
-        name, 
-        number: number || null,
-        payment_days: payment_days || null
-      });
+      if (isProduction) {
+        // Em produção (PostgreSQL), tentar primeiro sem payment_days para ver se resolve
+        console.log('Tentando criar cost_center sem payment_days em produção...');
+        const query = 'INSERT INTO cost_centers (name, number) VALUES (?, ?) RETURNING id';
+        const result: any = await run(db, query, [name, number || null]);
+        console.log('Database result:', result);
+        
+        res.status(201).json({ 
+          id: result.lastID, 
+          name, 
+          number: number || null,
+          // Não retornar payment_days se não foi salvo
+        });
+      } else {
+        // Em desenvolvimento (SQLite), usar todos os campos
+        const query = 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)';
+        const result: any = await run(db, query, [name, number || null, payment_days || null]);
+        console.log('Database result:', result);
+        
+        res.status(201).json({ 
+          id: result.lastID, 
+          name, 
+          number: number || null,
+          payment_days: payment_days || null
+        });
+      }
     } catch (error) {
       console.error('Error creating cost center:', error);
       res.status(500).json({ error: 'Internal server error' });
