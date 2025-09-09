@@ -529,9 +529,9 @@ export default function MonthlyControl() {
       
       const params = new URLSearchParams(baseParams);
       
-      console.log('Enviando requisição para /api/transactions com os parâmetros:', params.toString());
+      console.log('Enviando requisição para /api/transactions/filtered com os parâmetros:', params.toString());
       
-      const response = await api.get(`/transactions?${params}`);
+      const response = await api.get(`/transactions/filtered?${params}`);
       console.log("Resposta da API recebida:", response.data);
       
       // Aplicar filtros no frontend
@@ -592,7 +592,7 @@ export default function MonthlyControl() {
         delete overdueParams.end_date;
         
         try {
-          const overdueResponse = await api.get(`/transactions?${new URLSearchParams(overdueParams)}`);
+          const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);
           // Converter o campo is_paid baseado no payment_status_id
           const overdueData = overdueResponse.data.map((t: any) => ({
             ...t,
