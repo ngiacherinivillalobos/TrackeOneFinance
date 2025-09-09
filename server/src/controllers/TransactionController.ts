@@ -400,8 +400,8 @@ const getById = async (req: Request, res: Response) => {
 };
 
 const create = async (req: Request, res: Response) => {
-  console.log('===== TRANSACTION CONTROLLER - CREATE =====');
-  console.log('Request body:', req.body);
+  console.log('🔥🔥🔥 TRANSACTION CREATE CALLED 🔥🔥🔥');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
   
   try {
     const { db, run } = getDatabase();

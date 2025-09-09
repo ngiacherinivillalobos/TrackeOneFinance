@@ -190,7 +190,8 @@ const transactionController = {
         is_recurring,
         recurrence_type,
         recurrence_count,
-        recurrence_end_date
+        recurrence_end_date,
+        is_paid
       } = req.body;
 
       // Validate required fields
@@ -206,7 +207,30 @@ const transactionController = {
       }
 
       // Aplicar regra de negócio para determinar o status de pagamento correto
-      const finalPaymentStatusId = this.getPaymentStatusId(transaction_date, payment_status_id);
+      let finalPaymentStatusId = payment_status_id;
+      
+      // Se is_paid é true, sempre definir como Pago (status 2)
+      if (is_paid === true) {
+        finalPaymentStatusId = 2; // Pago
+      }
+      // Se payment_status_id é 2, mantém como Pago
+      else if (payment_status_id === 2) {
+        finalPaymentStatusId = 2; // Mantém como Pago
+      }
+      // Se payment_status_id não está definido (vazio ou null/undefined)
+      else if (!payment_status_id || payment_status_id === '') {
+        const today = getLocalDateString();
+        
+        if (transaction_date < today) {
+          finalPaymentStatusId = 3; // Vencida
+        } else {
+          finalPaymentStatusId = 1; // Em aberto
+        }
+      }
+      // Caso contrário, usar o status fornecido
+      else {
+        finalPaymentStatusId = payment_status_id;
+      }
 
       const query = `
         INSERT INTO transactions (
