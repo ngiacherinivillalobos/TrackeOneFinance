@@ -41,9 +41,11 @@ export const formatToISODate = (date: Date): string => {
  */
 export const getLocalDateString = (): string => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  // Forçar horário meio-dia para evitar problemas de timezone
+  const safeDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  const year = safeDate.getFullYear();
+  const month = String(safeDate.getMonth() + 1).padStart(2, '0');
+  const day = String(safeDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -56,12 +58,17 @@ export const getLocalDateString = (): string => {
 export const formatDateToLocal = (date: Date): string => {
   if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
     console.warn('Data inválida recebida em formatDateToLocal:', date);
-    return formatDateToLocal(new Date()); // fallback para data atual
+    // Criar uma nova data com horário meio-dia para evitar problemas de timezone
+    const now = new Date();
+    const safeDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+    return formatDateToLocal(safeDate);
   }
   
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  // Forçar horário meio-dia para evitar problemas de timezone em UTC
+  const safeDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
+  const year = safeDate.getFullYear();
+  const month = String(safeDate.getMonth() + 1).padStart(2, '0');
+  const day = String(safeDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -98,4 +105,16 @@ export const createSafeDate = (dateStr: string): Date => {
     console.warn('Erro ao criar data:', error, 'dateStr:', dateStr);
     return new Date();
   }
+};
+
+/**
+ * Get current date string in YYYY-MM-DD format for form initialization
+ * This function is safe for timezone issues and UTC environments
+ * @returns Current date in YYYY-MM-DD format
+ */
+export const getTodayString = (): string => {
+  const now = new Date();
+  // Forçar horário meio-dia para evitar problemas de timezone
+  const safeDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  return formatDateToLocal(safeDate);
 };

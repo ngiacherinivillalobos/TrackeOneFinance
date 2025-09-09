@@ -84,7 +84,13 @@ export const SavingsGoalSettings: React.FC = () => {
         setTargetAmount(formattedAmount);
         
         // Converter a data usando createSafeDate para evitar problemas de timezone
-        setTargetDate(goal.target_date ? createSafeDate(goal.target_date) : null);
+        // Se houver data, criar objeto Date com hora meio-dia para evitar timezone issues
+        if (goal.target_date) {
+          const safeDate = createSafeDate(goal.target_date);
+          setTargetDate(safeDate);
+        } else {
+          setTargetDate(null);
+        }
         
         // Definir o centro de custo selecionado
         if (goal.cost_center_id) {
@@ -163,7 +169,13 @@ export const SavingsGoalSettings: React.FC = () => {
       }
       
       // Usar formatDateToLocal para evitar problema d-1 de timezone
-      const formattedDate = formatDateToLocal(targetDate);
+      // Garantir que a data seja formatada corretamente mesmo em UTC
+      const formattedDate = targetDate ? formatDateToLocal(targetDate) : null;
+      
+      if (!formattedDate) {
+        showSnackbar('Por favor, selecione uma data alvo.', 'error');
+        return;
+      }
       
       // Sempre usar o centro de custo do usuário logado
       const goalData = {
