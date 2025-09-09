@@ -20,19 +20,19 @@ router.get('/debug/migration', async (req: any, res: any) => {
   try {
     const { db, all } = require('../database/connection').getDatabase();
     
-    // Verificar se a coluna is_paid existe
+    // Verificar se a coluna is_paid existe (PostgreSQL)
     const result = await all(db, `
-      SELECT sql FROM sqlite_master 
-      WHERE type='table' AND name='transactions'
-      UNION ALL
-      SELECT column_name as sql FROM information_schema.columns 
-      WHERE table_name = 'transactions' AND column_name = 'is_paid'
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'transactions' 
+      ORDER BY ordinal_position
     `);
     
     res.json({
       environment: process.env.NODE_ENV,
-      database_type: process.env.NODE_ENV === 'production' ? 'PostgreSQL' : 'SQLite',
-      migration_check: result,
+      database_type: 'PostgreSQL',
+      table_columns: result,
+      is_paid_exists: result.some(col => col.column_name === 'is_paid'),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
