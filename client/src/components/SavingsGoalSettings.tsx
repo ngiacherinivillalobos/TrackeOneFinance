@@ -18,7 +18,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import api from '../lib/axios';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { colors } from '../theme/modernTheme';
