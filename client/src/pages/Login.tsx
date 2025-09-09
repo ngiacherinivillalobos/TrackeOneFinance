@@ -17,7 +17,7 @@ const Login: React.FC = () => {
   const checkServer = async () => {
     try {
       setServerStatus('checking');
-      await api.get('/api/test');
+      await api.get('/health');
       setServerStatus('online');
     } catch (error) {
       console.error('Erro ao verificar status do servidor:', error);
