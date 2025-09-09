@@ -76,7 +76,7 @@ import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
-import { getLocalDateString, createSafeDate } from '../utils/dateUtils';
+import { createSafeDate, formatDateToLocal } from '../utils/dateUtils';
 
 // Helper function para converter datas de forma segura
 const formatSafeDate = (dateString: string): string => {
@@ -243,7 +243,7 @@ export default function MonthlyControl() {
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    transaction_date: getLocalDateString(),
+    transaction_date: formatDateToLocal(new Date()),
     category_id: '',
     subcategory_id: '',
     payment_status_id: '',
@@ -478,7 +478,7 @@ export default function MonthlyControl() {
       // Garantir valor padrão
       if (!resultDate) resultDate = formData.transaction_date;
       previews.push({
-        creation_date: getLocalDateString(),
+        creation_date: formatDateToLocal(new Date()),
         due_date: resultDate,
         description: formData.description || 'Nova transação',
         amount: amount
@@ -769,7 +769,7 @@ export default function MonthlyControl() {
       const duplicated = {
         ...original,
         id: undefined,
-        transaction_date: getLocalDateString(), // data local corrigida
+        transaction_date: formatDateToLocal(new Date()), // data local corrigida
         description: original.description + ' (cópia)'
       };
       await api.post('/transactions', duplicated);
@@ -819,7 +819,7 @@ export default function MonthlyControl() {
       id: 0, // Indica modo lote
       description: `Pagamento em lote (${selectedTransactions.length} transações)`,
       amount: 0, // Será calculado individualmente
-      transaction_date: getLocalDateString(),
+      transaction_date: formatDateToLocal(new Date()),
       transaction_type: 'Despesa',
       is_recurring: false
     });
@@ -1044,7 +1044,7 @@ export default function MonthlyControl() {
     setFormData({
       description: '',
       amount: '',
-      transaction_date: getLocalDateString(),
+      transaction_date: formatDateToLocal(new Date()),
       category_id: '',
       subcategory_id: '',
       payment_status_id: '',

@@ -155,12 +155,21 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
 
     const transactions = await all(db, query, values);
     
-    const convertedTransactions = transactions.map((transaction: any) => ({
-      ...transaction,
-      is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
-      is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-      is_paid: transaction.payment_status_id === 2,
-    }));
+    const convertedTransactions = transactions.map((transaction: any) => {
+      // Converter tipo do banco para o formato do frontend
+      let frontendType = transaction.type; // fallback
+      if (transaction.type === 'expense') frontendType = 'Despesa';
+      if (transaction.type === 'income') frontendType = 'Receita';
+      if (transaction.type === 'investment') frontendType = 'Investimento';
+      
+      return {
+        ...transaction,
+        transaction_type: frontendType,
+        is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
+        is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
+        is_paid: transaction.payment_status_id === 2,
+      };
+    });
 
     res.json(convertedTransactions);
   } catch (error) {

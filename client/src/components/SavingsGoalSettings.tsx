@@ -23,7 +23,7 @@ import api from '../lib/axios';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { colors } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
-import { getLocalDateString, formatDateToLocal, createSafeDate } from '../utils/dateUtils';
+import { formatDateToLocal, createSafeDate } from '../utils/dateUtils';
 
 interface CostCenter {
   id: number;

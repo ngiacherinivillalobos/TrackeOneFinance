@@ -56,7 +56,7 @@ export const getLocalDateString = (): string => {
 export const formatDateToLocal = (date: Date): string => {
   if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
     console.warn('Data inválida recebida em formatDateToLocal:', date);
-    return getLocalDateString(); // fallback para data atual
+    return formatDateToLocal(new Date()); // fallback para data atual
   }
   
   const year = date.getFullYear();

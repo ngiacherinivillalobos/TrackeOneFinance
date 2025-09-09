@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { bankAccountService, BankAccount } from '../services/bankAccountService';
 import { cardService, Card } from '../services/cardService';
-import { getLocalDateString, formatDateToLocal } from '../utils/dateUtils';
+import { formatDateToLocal } from '../utils/dateUtils';
 
 export interface Transaction {
   id?: number;
