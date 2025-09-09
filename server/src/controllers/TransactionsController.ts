@@ -3,11 +3,25 @@ import { getDatabase } from '../database/connection';
 
 // Função helper para obter data local no formato YYYY-MM-DD
 const getLocalDateString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // Em produção, usar UTC para ser consistente com PostgreSQL CURRENT_DATE
+  // Em desenvolvimento, usar hora local para ser consistente com SQLite date('now')
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    // UTC para produção (PostgreSQL)
+    const now = new Date();
+    const utcYear = now.getUTCFullYear();
+    const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const utcDay = String(now.getUTCDate()).padStart(2, '0');
+    return `${utcYear}-${utcMonth}-${utcDay}`;
+  } else {
+    // Hora local para desenvolvimento (SQLite)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 };
 
 // Função helper para criar Date segura para timezone

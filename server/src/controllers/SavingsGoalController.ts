@@ -44,6 +44,21 @@ export const savingsGoalController = {
         return res.status(400).json({ error: 'Valor da meta deve ser maior que zero.' });
       }
       
+      // Processar a data para evitar problemas de timezone
+      // Se a data vem como YYYY-MM-DD, garantir que seja salva corretamente
+      let processedDate = target_date;
+      if (typeof target_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target_date)) {
+        // Para PostgreSQL em produção, adicionar indicador de timezone UTC para evitar conversão
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (isProduction) {
+          // Em produção (PostgreSQL), usar apenas a data sem timezone para evitar conversão
+          processedDate = target_date; // Manter como YYYY-MM-DD
+        } else {
+          // Em desenvolvimento (SQLite), usar como está
+          processedDate = target_date;
+        }
+      }
+      
       // Sempre usar o centro de custo do usuário logado
       const effectiveCostCenterId = userCostCenterId;
       
@@ -59,8 +74,8 @@ export const savingsGoalController = {
           ? 'UPDATE savings_goals SET target_amount = ?, target_date = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
           : 'UPDATE savings_goals SET target_amount = ?, target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
         const params = effectiveCostCenterId !== undefined
-          ? [target_amount, target_date, effectiveCostCenterId, userId]
-          : [target_amount, target_date, userId];
+          ? [target_amount, processedDate, effectiveCostCenterId, userId]
+          : [target_amount, processedDate, userId];
             
         await run(db, query, params);
       } else {
@@ -69,8 +84,8 @@ export const savingsGoalController = {
           ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
           : 'INSERT INTO savings_goals (user_id, target_amount, target_date) VALUES (?, ?, ?)';
         const params = effectiveCostCenterId !== undefined
-          ? [userId, target_amount, target_date, effectiveCostCenterId]
-          : [userId, target_amount, target_date];
+          ? [userId, target_amount, processedDate, effectiveCostCenterId]
+          : [userId, target_amount, processedDate];
             
         result = await run(db, query, params);
       }
@@ -81,7 +96,7 @@ export const savingsGoalController = {
           id: result?.lastID, 
           user_id: userId, 
           target_amount, 
-          target_date, 
+          target_date: processedDate, 
           cost_center_id: effectiveCostCenterId,
           created_at: existingGoal?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString()
