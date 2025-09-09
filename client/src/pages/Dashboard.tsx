@@ -48,7 +48,7 @@ import { format, addMonths, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
-import { createSafeDate } from '../utils/dateUtils';
+import { createSafeDate, formatToBrazilianDate } from '../utils/dateUtils';
 
 interface WeeklyBalance {
   startDate: string;
@@ -939,7 +939,7 @@ export default function Dashboard() {
         <Box>
           <ModernSection
             title="Meta de Economia"
-            subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${format(createSafeDate(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
+            subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${formatToBrazilianDate(savingsGoal.target_date)}` : "Progresso até o final do mês"}
             icon={<ShowChart sx={{ fontSize: 24 }} />}
             headerGradient
           >
