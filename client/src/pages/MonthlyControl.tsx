@@ -542,7 +542,8 @@ export default function MonthlyControl() {
         filteredTransactions = filteredTransactions.filter((t: any) => {
           if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
           if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
+          // REMOVIDO: Não filtrar vencidas aqui, será feito separadamente
+          // if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
           if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
           return false;
         });
@@ -580,11 +581,10 @@ export default function MonthlyControl() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      // Buscar registros vencidos separadamente apenas se o filtro de situação incluir 'overdue' ou 'unpaid'
+      // Buscar registros vencidos separadamente apenas se o filtro incluir 'overdue'
       let overdueTransactions: any[] = [];
-      if (filters.payment_status_id.length === 0 || 
-          filters.payment_status_id.includes('overdue') || 
-          filters.payment_status_id.includes('unpaid')) {
+      
+      if (filters.payment_status_id.length === 0 || filters.payment_status_id.includes('overdue')) {
         
         const overdueParams = { ...baseParams };
         // Remover filtros de data para buscar todos os vencidos
@@ -592,7 +592,6 @@ export default function MonthlyControl() {
         delete overdueParams.end_date;
         
         try {
-          // Garantir que estamos buscando apenas registros não pagos
           const overdueResponse = await api.get(`/transactions?${new URLSearchParams(overdueParams)}`);
           // Converter o campo is_paid baseado no payment_status_id
           const overdueData = overdueResponse.data.map((t: any) => ({
@@ -600,10 +599,10 @@ export default function MonthlyControl() {
             is_paid: t.payment_status_id === 2
           }));
           
+          // Filtrar apenas transações vencidas (data < hoje) e não pagas
           overdueTransactions = overdueData.filter((t: any) => {
             const transactionDate = new Date(t.transaction_date + 'T00:00:00');
             transactionDate.setHours(0, 0, 0, 0);
-            // Verificar se a transação está vencida (data < hoje) e não paga
             return !t.is_paid && transactionDate < today;
           });
           
