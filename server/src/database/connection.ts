@@ -71,19 +71,35 @@ const dbRun = (db: Database, query: string, params: any[] = []): Promise<{ lastI
         return `$${questionMarkCount + 1}`;
       });
       
+      console.log(`Executando query PostgreSQL [run]: ${pgQuery}`);
+      console.log('Parâmetros:', params);
+      
       (db as Pool).query(pgQuery, params)
         .then((result: QueryResult) => {
+          console.log(`Query PostgreSQL [run] bem-sucedida, affectedRows: ${result.rowCount}`);
+          // Se a query tem RETURNING, o ID estará em result.rows[0].id
+          const lastID = result.rows.length > 0 && result.rows[0].id ? result.rows[0].id : undefined;
           resolve({ 
-            lastID: result.rows.length > 0 ? result.rows[0].id : undefined,
+            lastID: lastID,
             changes: result.rowCount !== null ? result.rowCount : undefined
           });
         })
-        .catch((error: Error) => reject(error));
+        .catch((error: Error) => {
+          console.error('Erro ao executar query PostgreSQL [run]:', error);
+          reject(error);
+        });
     } else {
       // SQLite
+      console.log(`Executando query SQLite [run]: ${query}`);
+      console.log('Parâmetros:', params);
       (db as sqlite3.Database).run(query, params, function(this: any, err: Error | null) {
-        if (err) reject(err);
-        else resolve({ lastID: this.lastID, changes: this.changes });
+        if (err) {
+          console.error('Erro ao executar query SQLite [run]:', err);
+          reject(err);
+        } else {
+          console.log(`Query SQLite [run] bem-sucedida, lastID: ${this.lastID}, changes: ${this.changes}`);
+          resolve({ lastID: this.lastID, changes: this.changes });
+        }
       });
     }
   });

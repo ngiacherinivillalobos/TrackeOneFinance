@@ -36,10 +36,19 @@ class CostCenterController {
       console.log('Creating cost center with data:', { name, number, payment_days });
       const { db, run } = getDatabase();
       
-      const result: any = await run(db, 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)', [name, number || null, payment_days || null]);
+      // Para PostgreSQL, usar RETURNING id para obter o ID inserido
+      const isProduction = process.env.NODE_ENV === 'production';
+      const query = isProduction 
+        ? 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?) RETURNING id'
+        : 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)';
+      
+      const result: any = await run(db, query, [name, number || null, payment_days || null]);
       console.log('Database result:', result);
+      
+      const insertedId = isProduction ? result.lastID : result.lastID;
+      
       res.status(201).json({ 
-        id: result.lastID, 
+        id: insertedId, 
         name, 
         number: number || null,
         payment_days: payment_days || null
