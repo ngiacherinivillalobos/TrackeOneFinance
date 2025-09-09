@@ -2,31 +2,22 @@
 -- Esta versão é mais conservadora e segura
 
 -- Apenas garantir que campos booleanos existentes tenham valores corretos
--- Não tenta comparar com strings vazias
+-- Usar UPDATE direto com COALESCE para garantir valores não-nulos
 
--- Corrigir is_installment se existir
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_installment') THEN
-        UPDATE transactions SET is_installment = COALESCE(is_installment, false);
-    END IF;
-END
-$$;
+-- Corrigir is_installment (usar valores padrão para campos nulos)
+UPDATE transactions 
+SET is_installment = COALESCE(is_installment, false) 
+WHERE is_installment IS NULL;
 
--- Corrigir is_recurring se existir  
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_recurring') THEN
-        UPDATE transactions SET is_recurring = COALESCE(is_recurring, false);
-    END IF;
-END
-$$;
+-- Corrigir is_recurring (usar valores padrão para campos nulos)
+UPDATE transactions 
+SET is_recurring = COALESCE(is_recurring, false) 
+WHERE is_recurring IS NULL;
 
--- Corrigir is_paid se existir
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'transactions' AND column_name = 'is_paid') THEN
-        UPDATE transactions SET is_paid = COALESCE(is_paid, false);
-    END IF;
+-- Corrigir is_paid baseado no payment_status_id
+UPDATE transactions 
+SET is_paid = CASE 
+    WHEN payment_status_id = 2 THEN true 
+    ELSE false 
 END
-$$;
+WHERE is_paid IS NULL OR payment_status_id IS NOT NULL;
