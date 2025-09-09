@@ -423,7 +423,8 @@ const create = async (req: Request, res: Response) => {
       recurrence_end_date,
       recurrence_weekday,
       is_installment,
-      total_installments
+      total_installments,
+      is_paid
     } = req.body;
 
     // Use transaction_type se estiver presente, senão usa type
@@ -462,10 +463,16 @@ const create = async (req: Request, res: Response) => {
     // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
-    if (payment_status_id === 2) {
+    // Se is_paid é true, sempre definir como Pago (status 2)
+    if (is_paid === true) {
+      finalPaymentStatusId = 2; // Pago
+    }
+    // Se payment_status_id é 2, mantém como Pago
+    else if (payment_status_id === 2) {
       finalPaymentStatusId = 2; // Mantém como Pago
     }
-    else if (!payment_status_id) {
+    // Se payment_status_id não está definido (vazio ou null/undefined)
+    else if (!payment_status_id || payment_status_id === '') {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
@@ -474,12 +481,14 @@ const create = async (req: Request, res: Response) => {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
-    else if (!payment_status_id) {
-      finalPaymentStatusId = 1; // Em aberto
+    // Caso contrário, usar o payment_status_id fornecido
+    else {
+      finalPaymentStatusId = payment_status_id;
     }
 
     console.log('Creating transaction with payment status:', {
       original_payment_status_id: payment_status_id,
+      is_paid,
       transaction_date,
       today: getLocalDateString(),
       final_payment_status_id: finalPaymentStatusId
@@ -807,7 +816,8 @@ const update = async (req: Request, res: Response) => {
       recurrence_end_date,
       recurrence_weekday,
       is_installment,
-      total_installments
+      total_installments,
+      is_paid
     } = req.body;
 
     // Use transaction_type se estiver presente, senão usa type
@@ -850,10 +860,16 @@ const update = async (req: Request, res: Response) => {
     // Lógica para determinar o payment_status_id
     let finalPaymentStatusId = payment_status_id;
     
-    if (payment_status_id === 2) {
+    // Se is_paid é true, sempre definir como Pago (status 2)
+    if (is_paid === true) {
+      finalPaymentStatusId = 2; // Pago
+    }
+    // Se payment_status_id é 2, mantém como Pago
+    else if (payment_status_id === 2) {
       finalPaymentStatusId = 2; // Mantém como Pago
     }
-    else if (!payment_status_id) {
+    // Se payment_status_id não está definido (vazio ou null/undefined)
+    else if (!payment_status_id || payment_status_id === '') {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
@@ -862,12 +878,14 @@ const update = async (req: Request, res: Response) => {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
-    else if (!payment_status_id) {
-      finalPaymentStatusId = 1; // Em aberto
+    // Caso contrário, usar o payment_status_id fornecido
+    else {
+      finalPaymentStatusId = payment_status_id;
     }
 
     console.log('Updating transaction with payment status:', {
       original_payment_status_id: payment_status_id,
+      is_paid,
       transaction_date,
       today: getLocalDateString(),
       final_payment_status_id: finalPaymentStatusId
