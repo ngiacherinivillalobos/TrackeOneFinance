@@ -23,6 +23,7 @@ import api from '../lib/axios';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { colors } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
+import { getLocalDateString, formatDateToLocal } from '../utils/dateUtils';
 
 interface CostCenter {
   id: number;
@@ -161,7 +162,8 @@ export const SavingsGoalSettings: React.FC = () => {
         return;
       }
       
-      const formattedDate = format(targetDate, 'yyyy-MM-dd');
+      // Usar formatDateToLocal para evitar problema d-1 de timezone
+      const formattedDate = formatDateToLocal(targetDate);
       
       // Sempre usar o centro de custo do usuário logado
       const goalData = {

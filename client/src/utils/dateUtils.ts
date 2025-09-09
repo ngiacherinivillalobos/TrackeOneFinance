@@ -48,6 +48,24 @@ export const getLocalDateString = (): string => {
 };
 
 /**
+ * Format a Date object to local YYYY-MM-DD string without timezone issues
+ * This function prevents the d-1 bug in production environments
+ * @param date Date object to format
+ * @returns Date in YYYY-MM-DD format
+ */
+export const formatDateToLocal = (date: Date): string => {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+    console.warn('Data inválida recebida em formatDateToLocal:', date);
+    return getLocalDateString(); // fallback para data atual
+  }
+  
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Create a safe date object from a date string to prevent timezone issues
  * @param dateStr Date string in YYYY-MM-DD format
  * @returns Date object
