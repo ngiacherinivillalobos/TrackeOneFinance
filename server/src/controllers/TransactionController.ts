@@ -124,11 +124,14 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     const sortColumn = validOrderBy.includes(orderBy as string) ? orderBy : 'transaction_date';
     const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
     
+    const isProduction = process.env.NODE_ENV === 'production';
+    const currentDateFunction = isProduction ? 'CURRENT_DATE' : "date('now')";
+    
     if (sortColumn === 'status') {
       query += ` ORDER BY CASE 
-        WHEN t.payment_status_id != 2 AND t.transaction_date < date('now') THEN 1 -- Vencido
-        WHEN t.payment_status_id != 2 AND t.transaction_date = date('now') THEN 2 -- Vence Hoje
-        WHEN t.payment_status_id != 2 AND t.transaction_date > date('now') THEN 3 -- Em Aberto
+        WHEN t.payment_status_id != 2 AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
+        WHEN t.payment_status_id != 2 AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
+        WHEN t.payment_status_id != 2 AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
         WHEN t.payment_status_id = 2 THEN 4 -- Pago
         ELSE 5
       END ${sortOrder}, t.transaction_date DESC`;
@@ -138,7 +141,6 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
 
     const transactions = await all(db, query, values);
     
-    const isProduction = process.env.NODE_ENV === 'production';
     const convertedTransactions = transactions.map((transaction: any) => ({
       ...transaction,
       is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,

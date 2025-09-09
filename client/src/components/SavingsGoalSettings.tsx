@@ -23,7 +23,7 @@ import api from '../lib/axios';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { colors } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
-import { getLocalDateString, formatDateToLocal } from '../utils/dateUtils';
+import { getLocalDateString, formatDateToLocal, createSafeDate } from '../utils/dateUtils';
 
 interface CostCenter {
   id: number;
@@ -83,8 +83,8 @@ export const SavingsGoalSettings: React.FC = () => {
         });
         setTargetAmount(formattedAmount);
         
-        // Converter a data
-        setTargetDate(goal.target_date ? parseISO(goal.target_date) : null);
+        // Converter a data usando createSafeDate para evitar problemas de timezone
+        setTargetDate(goal.target_date ? createSafeDate(goal.target_date) : null);
         
         // Definir o centro de custo selecionado
         if (goal.cost_center_id) {

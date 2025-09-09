@@ -111,7 +111,7 @@ const runDeployCheck = () => {
   const packageChecks = [
     {
       file: 'server/package.json',
-      pattern: '"start": "node start.js"',
+      pattern: '"start": "node dist/server.js"',
       description: 'Script de start no servidor'
     },
     {
