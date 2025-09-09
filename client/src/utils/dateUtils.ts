@@ -33,3 +33,51 @@ export const formatToBrazilianDate = (date: Date | string): string => {
 export const formatToISODate = (date: Date): string => {
   return date.toISOString().split('T')[0];
 };
+
+/**
+ * Get current local date as YYYY-MM-DD string without timezone issues
+ * This function prevents the d-1 bug in production environments
+ * @returns Current local date in YYYY-MM-DD format
+ */
+export const getLocalDateString = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Create a safe date object from a date string to prevent timezone issues
+ * @param dateStr Date string in YYYY-MM-DD format
+ * @returns Date object
+ */
+export const createSafeDate = (dateStr: string): Date => {
+  if (!dateStr || typeof dateStr !== 'string') return new Date();
+  
+  try {
+    if (dateStr.includes('T')) {
+      const date = new Date(dateStr);
+      // Verifica se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida recebida:', dateStr);
+        return new Date();
+      }
+      return date;
+    }
+    
+    // For YYYY-MM-DD format, append time to avoid timezone issues
+    const date = new Date(dateStr + 'T12:00:00');
+    
+    // Verifica se a data é válida
+    if (isNaN(date.getTime())) {
+      console.warn('Data inválida recebida:', dateStr);
+      return new Date();
+    }
+    
+    return date;
+  } catch (error) {
+    console.warn('Erro ao criar data:', error, 'dateStr:', dateStr);
+    return new Date();
+  }
+};

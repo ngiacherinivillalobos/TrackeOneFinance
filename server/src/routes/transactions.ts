@@ -12,6 +12,9 @@ router.put('/:id', authMiddleware, transactionController.update);
 router.patch('/:id', authMiddleware, transactionController.patch); // Nova rota para edição em lote
 router.delete('/:id', authMiddleware, transactionController.delete);
 
+// Rota para edição em lote
+router.post('/batch-edit', authMiddleware, transactionController.batchEdit);
+
 // Rotas para pagamento
 router.post('/:id/mark-as-paid', authMiddleware, transactionController.markAsPaid);
 router.post('/:id/reverse-payment', authMiddleware, transactionController.reversePayment);

@@ -1080,13 +1080,18 @@ const batchEdit = async (req: Request, res: Response) => {
 
     // Construir query de atualização
     const setClause = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), transactionIds];
+    const updateValues = Object.values(updates);
+    const placeholders = transactionIds.map(() => '?').join(', ');
+    const values = [...updateValues, ...transactionIds];
 
     const query = `
       UPDATE transactions 
       SET ${setClause}
-      WHERE id IN (${transactionIds.map(() => '?').join(', ')})
+      WHERE id IN (${placeholders})
     `;
+
+    console.log('Batch edit query:', query);
+    console.log('Batch edit values:', values);
 
     const result: any = await run(db, query, values);
 

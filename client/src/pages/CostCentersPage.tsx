@@ -50,7 +50,7 @@ export default function CostCentersPage() {
     { 
       key: 'payment_days', 
       title: 'Dias de Recebimento',
-      render: (value: string) => value ? `Dias: ${value}` : '-'
+      render: (item: CostCenter) => item.payment_days ? `Dias: ${item.payment_days}` : '-'
     },
   ];
 

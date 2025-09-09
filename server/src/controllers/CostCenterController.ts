@@ -33,9 +33,11 @@ class CostCenterController {
   async create(req: Request, res: Response) {
     try {
       const { name, number, payment_days } = req.body;
+      console.log('Creating cost center with data:', { name, number, payment_days });
       const { db, run } = getDatabase();
       
       const result: any = await run(db, 'INSERT INTO cost_centers (name, number, payment_days) VALUES (?, ?, ?)', [name, number || null, payment_days || null]);
+      console.log('Database result:', result);
       res.status(201).json({ 
         id: result.lastID, 
         name, 

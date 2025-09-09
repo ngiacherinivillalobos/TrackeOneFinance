@@ -48,13 +48,7 @@ import { format, addMonths, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
-
-// Função helper para criar data segura (evita problema de timezone d-1)
-const createSafeDate = (dateString: string): Date => {
-  if (!dateString) return new Date();
-  // Adiciona horário local para evitar problemas de timezone
-  return new Date(dateString + 'T12:00:00');
-};
+import { createSafeDate } from '../utils/dateUtils';
 
 interface WeeklyBalance {
   startDate: string;
@@ -193,8 +187,46 @@ export default function Dashboard() {
       const response = await api.get('/transactions', { params });
       console.log('Resposta da API para transações:', response.data);
       
+      let filteredTransactions = response.data;
+      let overdueTransactions: any[] = [];
+      
+      // Se estivermos filtrando por período específico, buscar também transações vencidas de todo o período
+      if (startDate && endDate) {
+        try {
+          console.log('Buscando transações vencidas...');
+          const overdueParams = {
+            payment_status_id: 374, // Status "Vencido"
+            cost_center_id: params.cost_center_id
+          };
+          
+          const overdueResponse = await api.get('/transactions', { params: overdueParams });
+          console.log('Transações vencidas encontradas:', overdueResponse.data);
+          
+          if (overdueResponse.data && Array.isArray(overdueResponse.data)) {
+            overdueTransactions = overdueResponse.data.filter((t: any) => 
+              t.payment_status_id === 374 && // Apenas transações vencidas
+              t.transaction_date < startDate // Garantir que são de períodos anteriores
+            );
+            console.log('Transações vencidas filtradas:', overdueTransactions);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar transações vencidas:', error);
+        }
+      }
+      
+      // Combinar transações filtradas com transações vencidas
+      const combinedTransactions = [...filteredTransactions, ...overdueTransactions];
+      
+      // Garantir que não há transações duplicadas baseado no ID
+      const uniqueTransactions = combinedTransactions.reduce((acc: any[], transaction: any) => {
+        if (!acc.some((t: any) => t.id === transaction.id)) {
+          acc.push(transaction);
+        }
+        return acc;
+      }, []);
+      
       // Mapear os dados para incluir informações do centro de custo e tipo correto
-      const mappedTransactions = response.data.map((transaction: any) => {
+      const mappedTransactions = uniqueTransactions.map((transaction: any) => {
         // Mapear transaction_type (português) para type (inglês)
         let type: 'expense' | 'income' | 'investment' = 'expense';
         if (transaction.transaction_type === 'Receita') type = 'income';
@@ -348,11 +380,11 @@ export default function Dashboard() {
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const despesasNaoPagas = transactionsData
-      .filter(t => t.type === 'expense' && t.payment_status_id === 1)
+      .filter(t => t.type === 'expense' && (t.payment_status_id === 1 || t.payment_status_id === 374))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
     const totalPago = despesasPagas; // Apenas despesas pagas
-    const totalAPagar = despesasNaoPagas; // Apenas despesas não pagas
+    const totalAPagar = despesasNaoPagas; // Despesas não pagas (em aberto + vencidas)
     
     console.log('=== Cálculo dos totalizadores ===');
     console.log('Total de receitas:', totalReceitas);
@@ -907,7 +939,7 @@ export default function Dashboard() {
         <Box>
           <ModernSection
             title="Meta de Economia"
-            subtitle={savingsGoal ? `Prazo: ${format(createSafeDate(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
+            subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${format(createSafeDate(savingsGoal.target_date), 'dd/MM/yyyy', { locale: ptBR })}` : "Progresso até o final do mês"}
             icon={<ShowChart sx={{ fontSize: 24 }} />}
             headerGradient
           >

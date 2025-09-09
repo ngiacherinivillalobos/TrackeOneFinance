@@ -76,6 +76,7 @@ import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
+import { getLocalDateString, createSafeDate } from '../utils/dateUtils';
 
 // Helper function para converter datas de forma segura
 const formatSafeDate = (dateString: string): string => {
@@ -103,27 +104,8 @@ const formatSafeDate = (dateString: string): string => {
 };
 
 // Helper function para converter datas para objeto Date de forma segura
-const getSafeDate = (dateString: string): Date => {
-  try {
-    // Se a data já está no formato ISO (PostgreSQL: "2025-09-05T00:00:00.000Z")
-    if (dateString.includes('T')) {
-      // Extrair apenas a parte da data YYYY-MM-DD e criar data local
-      const datePart = dateString.split('T')[0];
-      const [year, month, day] = datePart.split('-').map(Number);
-      return new Date(year, month - 1, day); // mês é 0-indexed
-    }
-    // Se é apenas YYYY-MM-DD (SQLite), criar data local diretamente
-    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [year, month, day] = dateString.split('-').map(Number);
-      return new Date(year, month - 1, day);
-    }
-    // Fallback: tentar converter diretamente
-    return new Date(dateString);
-  } catch (error) {
-    console.warn('Erro ao converter data para Date:', dateString, error);
-    return new Date(); // Retorna data atual como fallback
-  }
-};
+// Usar createSafeDate do utilitário de datas
+const getSafeDate = createSafeDate;
 
 // Função helper para converter valores monetários de forma segura
 const getSafeAmount = (amount: any): number => {
@@ -208,15 +190,6 @@ interface Filters {
 export default function MonthlyControl() {
   // Hook de autenticação para obter dados do usuário
   const { user } = useAuth();
-  
-  // Função helper para obter data local (evita problema de timezone d+1)
-  const getLocalDateString = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
   
   // Responsividade
   const theme = useTheme();
@@ -353,6 +326,10 @@ export default function MonthlyControl() {
   const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
   const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
   const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
+  
+  // Total "A Pagar" = Vencidos + Vencem Hoje + A Vencer (todas as transações não pagas)
+  const totalAPagar = totalVencidos + totalVencemHoje + totalAVencer;
+  
   const saldoPeriodo = totalReceitas - totalDespesas;
 
   // Calcular totais dos registros selecionados
@@ -599,7 +576,96 @@ export default function MonthlyControl() {
         );
       }
       
-      setTransactions(filteredTransactions.map((transaction: any) => ({
+      // Sempre incluir registros vencidos (data < hoje e em aberto), independentemente dos filtros de data
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Buscar registros vencidos separadamente apenas se o filtro de situação incluir 'overdue' ou 'unpaid'
+      let overdueTransactions: any[] = [];
+      if (filters.payment_status_id.length === 0 || 
+          filters.payment_status_id.includes('overdue') || 
+          filters.payment_status_id.includes('unpaid')) {
+        
+        const overdueParams = { ...baseParams };
+        // Remover filtros de data para buscar todos os vencidos
+        delete overdueParams.start_date;
+        delete overdueParams.end_date;
+        
+        try {
+          // Garantir que estamos buscando apenas registros não pagos
+          const overdueResponse = await api.get(`/transactions?${new URLSearchParams(overdueParams)}`);
+          // Converter o campo is_paid baseado no payment_status_id
+          const overdueData = overdueResponse.data.map((t: any) => ({
+            ...t,
+            is_paid: t.payment_status_id === 2
+          }));
+          
+          overdueTransactions = overdueData.filter((t: any) => {
+            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+            transactionDate.setHours(0, 0, 0, 0);
+            // Verificar se a transação está vencida (data < hoje) e não paga
+            return !t.is_paid && transactionDate < today;
+          });
+          
+          // Aplicar os mesmos filtros aos registros vencidos (exceto data)
+          // Filtro de tipo de transação
+          if (filters.transaction_type.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.transaction_type.includes(t.transaction_type)
+            );
+          }
+          
+          // Filtro de contato
+          if (filters.contact_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.contact_id.includes(t.contact_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de categoria
+          if (filters.category_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.category_id.includes(t.category_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de centro de custo
+          if (filters.cost_center_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => 
+              filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
+            );
+          }
+          
+          // Filtro de status de pagamento - aplicar também aos vencidos
+          if (filters.payment_status_id.length > 0) {
+            overdueTransactions = overdueTransactions.filter((t: any) => {
+              // Para registros vencidos, verificar se 'overdue' ou 'unpaid' estão nos filtros
+              return (filters.payment_status_id.includes('overdue') || filters.payment_status_id.includes('unpaid')) && 
+                     !t.is_paid; // Garantir que registros vencidos não estão pagos
+            });
+          } else {
+            // Se não houver filtro de status, mostrar apenas vencidos não pagos
+            overdueTransactions = overdueTransactions.filter((t: any) => !t.is_paid);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar transações vencidas:', error);
+          // Se houver erro ao carregar transações vencidas, continuar com a lista filtrada normalmente
+          overdueTransactions = [];
+        }
+      }
+      
+      // Combinar transações filtradas com transações vencidas
+      const combinedTransactions = [...filteredTransactions, ...overdueTransactions];
+      
+      // Garantir que não há transações duplicadas baseado no ID
+      const uniqueTransactions = combinedTransactions.reduce((acc: any[], transaction: any) => {
+        if (!acc.some((t: any) => t.id === transaction.id)) {
+          acc.push(transaction);
+        }
+        return acc;
+      }, []);
+      
+      setTransactions(uniqueTransactions.map((transaction: any) => ({
         ...transaction,
         // Mapear os dados relacionados para o formato esperado pelo frontend
         contact: transaction.contact_name ? { 
@@ -861,14 +927,13 @@ export default function MonthlyControl() {
         showSnackbar('Nenhum campo foi preenchido para edição', 'warning');
         return;
       }
-      
-      // Atualizar todas as transações selecionadas usando PATCH
-      await Promise.all(
-        selectedTransactions.map(id => 
-          api.patch(`/transactions/${id}`, updateData)
-        )
-      );
-      
+
+      // Usar o endpoint de batch edit ao invés de múltiplas requisições PATCH
+      await api.post('/transactions/batch-edit', {
+        transactionIds: selectedTransactions,
+        updates: updateData
+      });
+
       setSelectedTransactions([]);
       setBatchEditDialogOpen(false);
       loadTransactions();
@@ -2130,9 +2195,9 @@ export default function MonthlyControl() {
             />
             
             <ModernStatsCard
-              title="A Vencer"
-              value={formatCurrency(Math.abs(totalAVencer))}
-              subtitle="Próximos vencimentos"
+              title="A Pagar"
+              value={formatCurrency(Math.abs(totalAPagar))}
+              subtitle="Total pendente (inclui vencidos)"
               icon={<ReceiptIcon sx={{ fontSize: 16 }} />}
               color="primary"
             />

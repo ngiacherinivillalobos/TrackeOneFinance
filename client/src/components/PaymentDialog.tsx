@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { bankAccountService, BankAccount } from '../services/bankAccountService';
 import { cardService, Card } from '../services/cardService';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export interface Transaction {
   id?: number;
@@ -77,7 +78,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
 
   // Estados do formulário
   const [formData, setFormData] = useState<PaymentFormData>({
-    payment_date: new Date().toISOString().split('T')[0],
+    payment_date: getLocalDateString(),
     paid_amount: 0,
     paid_amount_display: '',
     payment_type: 'bank_account',
@@ -162,7 +163,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                          (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0);
       const displayValue = isBatchMode ? '' : amountValue.toFixed(2).replace('.', ',');
       setFormData({
-        payment_date: new Date().toISOString().split('T')[0],
+        payment_date: getLocalDateString(),
         paid_amount: isBatchMode ? 0 : amountValue,
         paid_amount_display: displayValue,
         payment_type: 'bank_account',
