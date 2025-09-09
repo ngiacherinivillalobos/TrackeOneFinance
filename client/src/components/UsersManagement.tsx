@@ -27,6 +27,7 @@ import {
   LockReset as LockResetIcon,
 } from '@mui/icons-material';
 import api from '../lib/axios';
+import { createSafeDate } from '../utils/dateUtils';
 
 interface CostCenter {
   id: number;
@@ -38,7 +39,7 @@ interface User {
   id: number;
   email: string;
   cost_center_id?: number;
-  created_at: string;
+  created_at: string | null;
 }
 
 interface NewUser {
@@ -251,11 +252,14 @@ export const UsersManagement: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     {(() => {
-                      if (user.created_at.includes('T')) {
-                        return new Date(user.created_at).toLocaleDateString('pt-BR');
-                      } else {
-                        // Usar formato UTC para evitar problemas de fuso horário
-                        return new Date(user.created_at + 'T00:00:00Z').toLocaleDateString('pt-BR');
+                      if (!user.created_at) {
+                        return 'Data não disponível';
+                      }
+                      try {
+                        return createSafeDate(user.created_at).toLocaleDateString('pt-BR');
+                      } catch (error) {
+                        console.warn('Erro ao formatar data:', error, 'created_at:', user.created_at);
+                        return 'Data inválida';
                       }
                     })()}
                   </TableCell>
