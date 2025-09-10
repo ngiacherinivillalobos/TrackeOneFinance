@@ -231,7 +231,7 @@ const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
       console.log('Executando script completo de inicialização do PostgreSQL...');
       
       // Caminho para o arquivo de inicialização
-      const initScriptPath = path.resolve(__dirname, '..', '..', '..', 'database', 'init_postgresql.sql');
+      const initScriptPath = path.resolve(__dirname, '..', '..', '..', 'database', 'init_render_postgresql.sql');
       
       // Verificar se o arquivo existe
       if (fs.existsSync(initScriptPath)) {
