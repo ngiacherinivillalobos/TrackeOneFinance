@@ -939,7 +939,7 @@ export default function Dashboard() {
         <Box>
           <ModernSection
             title="Meta de Economia"
-            subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${formatToBrazilianDate(savingsGoal.target_date)}` : "Progresso até o final do mês"}
+            subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${formatToBrazilianDate(createSafeDate(savingsGoal.target_date))}` : "Progresso até o final do mês"}
             icon={<ShowChart sx={{ fontSize: 24 }} />}
             headerGradient
           >

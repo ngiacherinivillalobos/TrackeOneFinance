@@ -48,15 +48,8 @@ export const savingsGoalController = {
       // Se a data vem como YYYY-MM-DD, garantir que seja salva corretamente
       let processedDate = target_date;
       if (typeof target_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target_date)) {
-        // Para PostgreSQL em produção, adicionar indicador de timezone UTC para evitar conversão
-        const isProduction = process.env.NODE_ENV === 'production';
-        if (isProduction) {
-          // Em produção (PostgreSQL), usar apenas a data sem timezone para evitar conversão
-          processedDate = target_date; // Manter como YYYY-MM-DD
-        } else {
-          // Em desenvolvimento (SQLite), usar como está
-          processedDate = target_date;
-        }
+        // Para ambos os ambientes, usar a data como está para evitar conversão de timezone
+        processedDate = target_date; // Manter como YYYY-MM-DD
       }
       
       // Sempre usar o centro de custo do usuário logado
@@ -78,7 +71,7 @@ export const savingsGoalController = {
           : [target_amount, processedDate, userId];
             
         await run(db, query, params);
-      } else {
+      //
         // Criar nova meta
         const query = effectiveCostCenterId !== undefined
           ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
