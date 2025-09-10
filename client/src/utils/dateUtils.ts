@@ -81,8 +81,14 @@ export const createSafeDate = (dateStr: string): Date => {
   if (!dateStr || typeof dateStr !== 'string') return new Date();
   
   try {
+    // Se é uma data ISO, extrair apenas a parte da data e criar com horário fixo
     if (dateStr.includes('T')) {
-      const date = new Date(dateStr);
+      // Extrair YYYY-MM-DD da data ISO
+      const datePart = dateStr.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      // Criar data com horário fixo para evitar problemas de timezone
+      const date = new Date(year, month - 1, day, 12, 0, 0);
+      
       // Verifica se a data é válida
       if (isNaN(date.getTime())) {
         console.warn('Data inválida recebida:', dateStr);
