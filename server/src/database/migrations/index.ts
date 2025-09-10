@@ -98,9 +98,45 @@ const applyPostgreSQLMigrations = async (dbWrapper: any) => {
     const migrationPath = path.join(migrationsDir, file);
     const migrationSql = fs.readFileSync(migrationPath, 'utf8');
     
-    // Dividir o SQL em comandos individuais
-    const commands = migrationSql.split(';').filter(cmd => cmd.trim() !== '');
+    // Tratar blocos DO $$ ... $$ como comandos únicos
+    // Isso preserva a lógica condicional dentro dos blocos
+    const commands: string[] = [];
+    let currentIndex = 0;
     
+    while (currentIndex < migrationSql.length) {
+      // Procurar por blocos DO $$
+      const doBlockStart = migrationSql.indexOf('DO $$', currentIndex);
+      
+      if (doBlockStart !== -1) {
+        // Adicionar qualquer conteúdo antes do bloco DO $$
+        const beforeBlock = migrationSql.substring(currentIndex, doBlockStart).trim();
+        if (beforeBlock) {
+          commands.push(...beforeBlock.split(';').filter(cmd => cmd.trim() !== ''));
+        }
+        
+        // Encontrar o fim do bloco DO $$
+        const doBlockEnd = migrationSql.indexOf('$$;', doBlockStart);
+        if (doBlockEnd !== -1) {
+          const doBlock = migrationSql.substring(doBlockStart, doBlockEnd + 3); // Incluir $$;
+          commands.push(doBlock);
+          currentIndex = doBlockEnd + 3;
+        } else {
+          // Se não encontrar $$;, tratar o resto como um bloco
+          const doBlock = migrationSql.substring(doBlockStart);
+          commands.push(doBlock);
+          break;
+        }
+      } else {
+        // Adicionar o restante do conteúdo
+        const remaining = migrationSql.substring(currentIndex).trim();
+        if (remaining) {
+          commands.push(...remaining.split(';').filter(cmd => cmd.trim() !== ''));
+        }
+        break;
+      }
+    }
+    
+    // Executar cada comando
     for (const command of commands) {
       const cmd = command.trim();
       if (cmd !== '') {
