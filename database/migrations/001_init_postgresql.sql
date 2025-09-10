@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     is_installment BOOLEAN DEFAULT FALSE,
     installment_number INTEGER,
     total_installments INTEGER,
+    payment_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (contact_id) REFERENCES contacts(id),
