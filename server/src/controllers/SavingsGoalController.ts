@@ -63,24 +63,24 @@ export const savingsGoalController = {
       let result;
       if (existingGoal) {
         // Atualizar meta existente
-        const query = effectiveCostCenterId !== undefined
+        const updateQuery = effectiveCostCenterId !== undefined
           ? 'UPDATE savings_goals SET target_amount = ?, target_date = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
           : 'UPDATE savings_goals SET target_amount = ?, target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
-        const params = effectiveCostCenterId !== undefined
+        const updateParams = effectiveCostCenterId !== undefined
           ? [target_amount, processedDate, effectiveCostCenterId, userId]
           : [target_amount, processedDate, userId];
             
-        await run(db, query, params);
-      //
+        await run(db, updateQuery, updateParams);
+      } else {
         // Criar nova meta
-        const query = effectiveCostCenterId !== undefined
+        const insertQuery = effectiveCostCenterId !== undefined
           ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
           : 'INSERT INTO savings_goals (user_id, target_amount, target_date) VALUES (?, ?, ?)';
-        const params = effectiveCostCenterId !== undefined
+        const insertParams = effectiveCostCenterId !== undefined
           ? [userId, target_amount, processedDate, effectiveCostCenterId]
           : [userId, target_amount, processedDate];
             
-        result = await run(db, query, params);
+        result = await run(db, insertQuery, insertParams);
       }
       
       res.json({ 
