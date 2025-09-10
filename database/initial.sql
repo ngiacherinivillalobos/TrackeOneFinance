@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     contact_id INTEGER,
     cost_center_id INTEGER,
     transaction_date DATE NOT NULL,
+    payment_date DATE,
     
     -- Campos de recorrência
     is_recurring BOOLEAN DEFAULT 0,
