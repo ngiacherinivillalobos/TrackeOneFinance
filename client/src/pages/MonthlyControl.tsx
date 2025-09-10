@@ -211,7 +211,7 @@ export default function MonthlyControl() {
   // Estados para filtros
   const [filters, setFilters] = useState<Filters>({
     transaction_type: [],
-    payment_status_id: ['unpaid', 'overdue'], // Filtro padrão: Em aberto e Vencido
+    payment_status_id: ['overdue'], // Alterado para mostrar apenas vencidos por padrão
     category_id: [],
     subcategory_id: '',
     contact_id: [],
@@ -295,6 +295,7 @@ export default function MonthlyControl() {
   // Cálculo dos totais e status de vencimento
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  console.log("Data de hoje para cálculos:", today);
   
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
@@ -308,19 +309,25 @@ export default function MonthlyControl() {
   const vencidos = transactions.filter(t => {
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate < today;
+    const isOverdue = !t.is_paid && transactionDate < today;
+    console.log(`Verificando vencidos - Transação ${t.id}: data=${t.transaction_date}, is_paid=${t.is_paid}, vencido=${isOverdue}`);
+    return isOverdue;
   });
 
   const vencemHoje = transactions.filter(t => {
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate.getTime() === today.getTime();
+    const isDueToday = !t.is_paid && transactionDate.getTime() === today.getTime();
+    console.log(`Verificando vencem hoje - Transação ${t.id}: data=${t.transaction_date}, is_paid=${t.is_paid}, vence_hoje=${isDueToday}`);
+    return isDueToday;
   });
 
   const aVencer = transactions.filter(t => {
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate > today;
+    const isFuture = !t.is_paid && transactionDate > today;
+    console.log(`Verificando a vencer - Transação ${t.id}: data=${t.transaction_date}, is_paid=${t.is_paid}, a_vencer=${isFuture}`);
+    return isFuture;
   });
 
   const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
@@ -331,6 +338,7 @@ export default function MonthlyControl() {
   const totalAPagar = totalVencidos + totalVencemHoje + totalAVencer;
   
   const saldoPeriodo = totalReceitas - totalDespesas;
+  console.log("Cálculos dos totais:", { totalVencidos, totalVencemHoje, totalAVencer, totalAPagar, saldoPeriodo });
 
   // Calcular totais dos registros selecionados
   const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
@@ -342,6 +350,14 @@ export default function MonthlyControl() {
   const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
   const totalSelectedDespesas = selectedTransactionsData.filter(t => t.transaction_type === 'Despesa').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
   const totalSelectedInvestimentos = selectedTransactionsData.filter(t => t.transaction_type === 'Investimento').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  
+  console.log("Totais calculados:", {
+    totalSelectedCount,
+    totalSelectedValue,
+    totalSelectedReceitas,
+    totalSelectedDespesas,
+    totalSelectedInvestimentos
+  });
 
   // Configurar centro de custo padrão quando usuário for carregado
   useEffect(() => {
@@ -490,29 +506,25 @@ export default function MonthlyControl() {
 
   const loadTransactions = async () => {
     console.log("Iniciando loadTransactions...");
+    console.log("Filtros atuais:", filters);
+    console.log("Tipo de filtro de data:", dateFilterType);
+    
     try {
       setLoading(true);
       
-      let startDate: string | undefined;
-      let endDate: string | undefined;
+      // Sempre buscar todas as transações vencidas, independentemente da data
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      // Apenas aplicar filtros de data se não for "Todo o período"
-      if (dateFilterType !== 'all') {
-        if (dateFilterType === 'month') {
-          startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
-          endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
-        } else if (dateFilterType === 'year') {
-          startDate = `${selectedYear}-01-01`;
-          endDate = `${selectedYear}-12-31`;
-        } else if (dateFilterType === 'custom' && customStartDate && customEndDate) {
-          startDate = format(customStartDate, 'yyyy-MM-dd');
-          endDate = format(customEndDate, 'yyyy-MM-dd');
-        }
-      }
+      console.log("Data de hoje para comparação:", today);
       
-      // Preparar parâmetros de filtro
+      // Buscar registros vencidos (data < hoje e em aberto)
+      let overdueTransactions: any[] = [];
+      
+      // Sempre buscar registros vencidos, independentemente dos filtros
       const baseParams: any = {
-        dateFilterType,
+        dateFilterType: 'all', // Sempre buscar todas as datas
+        payment_status_id: 'overdue', // Sempre buscar apenas vencidos
         ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
           // Tratar filtros de array e payment_status_id separadamente
           if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
@@ -522,167 +534,163 @@ export default function MonthlyControl() {
         }))
       };
       
-      // Adicionar parâmetros específicos de acordo com o tipo de filtro de data
-      if (dateFilterType === 'month') {
-        baseParams.month = currentDate.getMonth();
-        baseParams.year = currentDate.getFullYear();
-      } else if (dateFilterType === 'year') {
-        baseParams.year = selectedYear;
-      } else if (dateFilterType === 'custom' && customStartDate && customEndDate) {
-        baseParams.customStartDate = format(customStartDate, 'yyyy-MM-dd');
-        baseParams.customEndDate = format(customEndDate, 'yyyy-MM-dd');
-      }
-      
-      // Adicionar parâmetros de data apenas se não for "Todo o período"
-      if (dateFilterType !== 'all' && startDate && endDate) {
-        baseParams.start_date = startDate;
-        baseParams.end_date = endDate;
-      }
-      
-      const params = new URLSearchParams(baseParams);
-      
-      console.log('Enviando requisição para /api/transactions/filtered com os parâmetros:', params.toString());
-      
-      const response = await api.get(`/transactions/filtered?${params}`);
-      console.log("Resposta da API recebida:", response.data);
-      console.log("Primeiras 3 transações - tipos:", response.data.slice(0, 3).map((t: any) => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
-      
-      // Aplicar filtros no frontend
-      let filteredTransactions = response.data;
-      
-      // Filtro de status de pagamento
-      if (filters.payment_status_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => {
-          if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
-          if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          // REMOVIDO: Não filtrar vencidas aqui, será feito separadamente
-          // if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
-          if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
-          return false;
-        });
-      }
-      
-      // Filtro de tipo de transação
-      if (filters.transaction_type.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.transaction_type.includes(t.transaction_type)
-        );
-      }
-      
-      // Filtro de contato
-      if (filters.contact_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.contact_id.includes(t.contact_id?.toString() || '')
-        );
-      }
-      
-      // Filtro de centro de custo
+      // Adicionar parâmetros específicos
       if (filters.cost_center_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
-        );
+        baseParams.cost_center_id = filters.cost_center_id.join(',');
       }
       
-      // Filtro de categoria
-      if (filters.category_id.length > 0) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          filters.category_id.includes(t.category_id?.toString() || '')
-        );
+      console.log("Parâmetros da requisição:", baseParams);
+      
+      try {
+        const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(baseParams)}`);
+        console.log("Resposta da API para transações vencidas:", overdueResponse.data);
+        console.log("Quantidade de transações vencidas recebidas:", overdueResponse.data.length);
+        
+        // Converter o campo is_paid baseado no payment_status_id
+        const overdueData = overdueResponse.data.map((t: any) => ({
+          ...t,
+          is_paid: t.payment_status_id === 2
+        }));
+        
+        console.log("Dados convertidos:", overdueData);
+        
+        // Como já filtramos no backend por 'overdue', não precisamos filtrar novamente no frontend
+        // Apenas garantir que as transações não estão marcadas como pagas
+        overdueTransactions = overdueData.filter((t: any) => {
+          console.log(`Verificando transação ${t.id}: payment_status_id=${t.payment_status_id}, is_paid=${t.is_paid}`);
+          return !t.is_paid;
+        });
+        
+        console.log("Transações vencidas filtradas (não pagas):", overdueTransactions.length);
+        console.log("Transações vencidas filtradas (não pagas):", overdueTransactions);
+        
+        // Aplicar os mesmos filtros aos registros vencidos
+        // Filtro de tipo de transação
+        if (filters.transaction_type.length > 0) {
+          console.log("Aplicando filtro de tipo de transação:", filters.transaction_type);
+          overdueTransactions = overdueTransactions.filter((t: any) => 
+            filters.transaction_type.includes(t.transaction_type)
+          );
+          console.log("Após filtro de tipo de transação:", overdueTransactions.length);
+        }
+        
+        // Filtro de contato
+        if (filters.contact_id.length > 0) {
+          console.log("Aplicando filtro de contato:", filters.contact_id);
+          overdueTransactions = overdueTransactions.filter((t: any) => 
+            filters.contact_id.includes(t.contact_id?.toString() || '')
+          );
+          console.log("Após filtro de contato:", overdueTransactions.length);
+        }
+        
+        // Filtro de categoria
+        if (filters.category_id.length > 0) {
+          console.log("Aplicando filtro de categoria:", filters.category_id);
+          overdueTransactions = overdueTransactions.filter((t: any) => 
+            filters.category_id.includes(t.category_id?.toString() || '')
+          );
+          console.log("Após filtro de categoria:", overdueTransactions.length);
+        }
+        
+        // Filtro de centro de custo
+        if (filters.cost_center_id.length > 0) {
+          console.log("Aplicando filtro de centro de custo:", filters.cost_center_id);
+          overdueTransactions = overdueTransactions.filter((t: any) => 
+            filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
+          );
+          console.log("Após filtro de centro de custo:", overdueTransactions.length);
+        }
+        
+        // Filtro de status de pagamento - mostrar apenas vencidos
+        console.log("Filtro de status de pagamento:", filters.payment_status_id);
+        overdueTransactions = overdueTransactions.filter((t: any) => {
+          // Para registros vencidos, verificar se 'overdue' está nos filtros
+          const result = filters.payment_status_id.length === 0 || filters.payment_status_id.includes('overdue');
+          console.log(`Verificando filtro de status para transação ${t.id}: filtro=${filters.payment_status_id}, resultado=${result}`);
+          return result;
+        });
+        console.log("Após filtro de status de pagamento:", overdueTransactions.length);
+      } catch (error) {
+        console.error('Erro ao carregar transações vencidas:', error);
+        // Se houver erro ao carregar transações vencidas, continuar com lista vazia
+        overdueTransactions = [];
       }
       
-      // Sempre incluir registros vencidos (data < hoje e em aberto), independentemente dos filtros de data
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Agora buscar as transações do período selecionado
+      let periodTransactions: any[] = [];
       
-      // Buscar registros vencidos separadamente apenas se o filtro incluir 'overdue'
-      let overdueTransactions: any[] = [];
-      
-      if (filters.payment_status_id.length === 0 || filters.payment_status_id.includes('overdue')) {
-        
-        const overdueParams = { ...baseParams };
-        // Remover filtros de data para buscar todos os vencidos
-        delete overdueParams.start_date;
-        delete overdueParams.end_date;
-        delete overdueParams.month;
-        delete overdueParams.year;
-        delete overdueParams.customStartDate;
-        delete overdueParams.customEndDate;
-        overdueParams.dateFilterType = 'all'; // Buscar todas as datas para encontrar vencidos
-        
+      // Se não estivermos filtrando apenas por vencidos, buscar também as transações do período
+      if (filters.payment_status_id.length === 0 || !filters.payment_status_id.includes('overdue') || filters.payment_status_id.length > 1) {
         try {
-          const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);
+          // Parâmetros para buscar transações do período
+          const periodParams: any = {
+            dateFilterType,
+            ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
+              if (key === 'payment_status_id') {
+                // Tratar payment_status_id separadamente
+                return false;
+              }
+              if (key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
+                return value.length > 0; // Apenas incluir se não estiver vazio
+              }
+              return value !== '';
+            }))
+          };
+          
+          // Adicionar parâmetros específicos de data
+          if (dateFilterType === 'month') {
+            periodParams.month = currentDate.getMonth();
+            periodParams.year = currentDate.getFullYear();
+          } else if (dateFilterType === 'year') {
+            periodParams.year = selectedYear;
+          } else if (dateFilterType === 'custom') {
+            if (customStartDate) periodParams.customStartDate = formatDateToLocal(customStartDate);
+            if (customEndDate) periodParams.customEndDate = formatDateToLocal(customEndDate);
+          }
+          
+          // Adicionar payment_status_id se houver filtros
+          if (filters.payment_status_id.length > 0) {
+            periodParams.payment_status_id = filters.payment_status_id.join(',');
+          }
+          
+          console.log("Parâmetros da requisição para transações do período:", periodParams);
+          
+          const periodResponse = await api.get(`/transactions/filtered?${new URLSearchParams(periodParams)}`);
+          console.log("Resposta da API para transações do período:", periodResponse.data);
+          
           // Converter o campo is_paid baseado no payment_status_id
-          const overdueData = overdueResponse.data.map((t: any) => ({
+          periodTransactions = periodResponse.data.map((t: any) => ({
             ...t,
             is_paid: t.payment_status_id === 2
           }));
           
-          // Filtrar apenas transações vencidas (data < hoje) e não pagas
-          overdueTransactions = overdueData.filter((t: any) => {
-            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
-            transactionDate.setHours(0, 0, 0, 0);
-            return !t.is_paid && transactionDate < today;
-          });
-          
-          // Aplicar os mesmos filtros aos registros vencidos (exceto data)
-          // Filtro de tipo de transação
-          if (filters.transaction_type.length > 0) {
-            overdueTransactions = overdueTransactions.filter((t: any) => 
-              filters.transaction_type.includes(t.transaction_type)
-            );
-          }
-          
-          // Filtro de contato
-          if (filters.contact_id.length > 0) {
-            overdueTransactions = overdueTransactions.filter((t: any) => 
-              filters.contact_id.includes(t.contact_id?.toString() || '')
-            );
-          }
-          
-          // Filtro de categoria
-          if (filters.category_id.length > 0) {
-            overdueTransactions = overdueTransactions.filter((t: any) => 
-              filters.category_id.includes(t.category_id?.toString() || '')
-            );
-          }
-          
-          // Filtro de centro de custo
-          if (filters.cost_center_id.length > 0) {
-            overdueTransactions = overdueTransactions.filter((t: any) => 
-              filters.cost_center_id.includes(t.cost_center_id?.toString() || '')
-            );
-          }
-          
-          // Filtro de status de pagamento - aplicar também aos vencidos
-          if (filters.payment_status_id.length > 0) {
-            overdueTransactions = overdueTransactions.filter((t: any) => {
-              // Para registros vencidos, verificar se 'overdue' ou 'unpaid' estão nos filtros
-              return (filters.payment_status_id.includes('overdue') || filters.payment_status_id.includes('unpaid')) && 
-                     !t.is_paid; // Garantir que registros vencidos não estão pagos
-            });
-          } else {
-            // Se não houver filtro de status, mostrar apenas vencidos não pagos
-            overdueTransactions = overdueTransactions.filter((t: any) => !t.is_paid);
-          }
+          console.log("Transações do período recebidas:", periodTransactions.length);
         } catch (error) {
-          console.error('Erro ao carregar transações vencidas:', error);
-          // Se houver erro ao carregar transações vencidas, continuar com a lista filtrada normalmente
-          overdueTransactions = [];
+          console.error('Erro ao carregar transações do período:', error);
+          periodTransactions = [];
         }
       }
       
-      // Combinar transações filtradas com transações vencidas
-      const combinedTransactions = [...filteredTransactions, ...overdueTransactions];
+      // Combinar transações vencidas com transações do período
+      // Remover duplicatas baseadas no ID
+      const allTransactionsMap = new Map();
       
-      // Garantir que não há transações duplicadas baseado no ID
-      const uniqueTransactions = combinedTransactions.reduce((acc: any[], transaction: any) => {
-        if (!acc.some((t: any) => t.id === transaction.id)) {
-          acc.push(transaction);
-        }
-        return acc;
-      }, []);
+      // Adicionar transações vencidas
+      overdueTransactions.forEach((t: any) => {
+        allTransactionsMap.set(t.id, t);
+      });
       
-      setTransactions(uniqueTransactions.map((transaction: any) => ({
+      // Adicionar transações do período
+      periodTransactions.forEach((t: any) => {
+        allTransactionsMap.set(t.id, t);
+      });
+      
+      const allTransactions = Array.from(allTransactionsMap.values());
+      
+      console.log("Transações finais a serem exibidas:", allTransactions);
+      console.log("Quantidade de transações finais:", allTransactions.length);
+      
+      setTransactions(allTransactions.map((transaction: any) => ({
         ...transaction,
         // Mapear os dados relacionados para o formato esperado pelo frontend
         contact: transaction.contact_name ? { 
@@ -711,6 +719,14 @@ export default function MonthlyControl() {
         // Manter os IDs originais para edição
         original_cost_center_id: transaction.cost_center_id,
         original_contact_id: transaction.contact_id
+      })));
+      
+      console.log("Transações definidas no estado:", Array.from(allTransactionsMap.values()).map(t => ({
+        id: t.id,
+        transaction_date: t.transaction_date,
+        payment_status_id: t.payment_status_id,
+        is_paid: t.is_paid,
+        transaction_type: t.transaction_type
       })));
     } catch (error) {
       console.error('Erro detalhado ao carregar transações:', error);

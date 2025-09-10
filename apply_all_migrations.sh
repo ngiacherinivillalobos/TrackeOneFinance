@@ -48,6 +48,22 @@ else
 fi
 
 echo ""
+echo "=== Verificando campo payment_date ==="
+RESULT_PAYMENT_DATE=$(sqlite3 database/database.db "PRAGMA table_info(transactions);" | grep "payment_date")
+
+if [ -z "$RESULT_PAYMENT_DATE" ]; then
+    echo "❌ Campo payment_date NÃO encontrado. Aplicando migração..."
+    
+    # Aplicar migração de campo payment_date
+    sqlite3 database/database.db < ../database/migrations/add_payment_date_to_transactions.sql
+    
+    echo "✅ Migração de campo payment_date aplicada com sucesso!"
+else
+    echo "✅ Campo payment_date já existe:"
+    echo "$RESULT_PAYMENT_DATE"
+fi
+
+echo ""
 echo "=== Ajustando valores booleanos ==="
 echo "Aplicando ajustes para garantir que valores booleanos sejam 0 ou 1..."
 

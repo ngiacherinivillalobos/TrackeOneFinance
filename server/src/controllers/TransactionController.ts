@@ -4,12 +4,41 @@ import { toDatabaseBoolean } from '../utils/booleanUtils';
 
 // Função helper para criar Date segura para timezone
 const createSafeDate = (dateString: string): Date => {
-  // Se a string já tem T12:00:00, usar diretamente
-  if (dateString.includes('T12:00:00')) {
-    return new Date(dateString);
+  if (!dateString || typeof dateString !== 'string') return new Date();
+  
+  try {
+    // Se a string já tem T12:00:00, usar diretamente
+    if (dateString.includes('T12:00:00')) {
+      const date = new Date(dateString);
+      // Verifica se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida recebida:', dateString);
+        return new Date();
+      }
+      return date;
+    }
+    // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const date = new Date(dateString + 'T12:00:00');
+      // Verifica se a data é válida
+      if (isNaN(date.getTime())) {
+        console.warn('Data inválida recebida:', dateString);
+        return new Date();
+      }
+      return date;
+    }
+    // Para outros formatos, tentar criar a data diretamente
+    const date = new Date(dateString);
+    // Verifica se a data é válida
+    if (isNaN(date.getTime())) {
+      console.warn('Data inválida recebida:', dateString);
+      return new Date();
+    }
+    return date;
+  } catch (error) {
+    console.warn('Erro ao criar data:', error, 'dateString:', dateString);
+    return new Date();
   }
-  // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
-  return new Date(dateString + 'T12:00:00');
 };
 
 // Função helper para obter data local no formato YYYY-MM-DD
@@ -37,6 +66,9 @@ const getLocalDateString = (): string => {
 
 const getFilteredTransactions = async (req: Request, res: Response) => {
   console.log('===== TRANSACTION CONTROLLER - GET FILTERED TRANSACTIONS =====');
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('Request query:', req.query);
+  
   const {
     dateFilterType,
     month,
@@ -88,11 +120,24 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       conditions.push('t.transaction_date BETWEEN ? AND ?');
       values.push(startDate, endDate);
     } else if (dateFilterType === 'year' && year) {
-      conditions.push("strftime('%Y', t.transaction_date) = ?");
+      // Corrigir para funcionar tanto no SQLite quanto no PostgreSQL
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction) {
+        // PostgreSQL - usar EXTRACT para obter o ano
+        conditions.push('EXTRACT(YEAR FROM t.transaction_date) = ?');
+        console.log('Using PostgreSQL EXTRACT for year filter');
+      } else {
+        // SQLite - usar strftime
+        conditions.push("strftime('%Y', t.transaction_date) = ?");
+        console.log('Using SQLite strftime for year filter');
+      }
       values.push(year as string);
     } else if (dateFilterType === 'custom' && customStartDate && customEndDate) {
       conditions.push('t.transaction_date BETWEEN ? AND ?');
       values.push(customStartDate, customEndDate);
+      console.log('Custom date filter applied:', { customStartDate, customEndDate });
+    } else {
+      console.log('No date filter applied, dateFilterType:', dateFilterType);
     }
 
     // Other filters
@@ -100,47 +145,79 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       const types = (transaction_type as string).split(',');
       conditions.push(`t.type IN (${types.map(() => '?').join(',')})`);
       values.push(...types);
+      console.log('Added transaction type filter:', types);
     }
     if (payment_status_id) {
       const statuses = (payment_status_id as string).split(',');
       const statusConditions: string[] = [];
       const today = getLocalDateString();
+      console.log('Today date for filtering:', today);
+      console.log('Payment statuses:', statuses);
+      console.log('Environment:', process.env.NODE_ENV);
 
       statuses.forEach(status => {
-        if (status === 'paid') statusConditions.push('t.payment_status_id = 2');
-        if (status === 'unpaid') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date >= ?)');
-        if (status === 'overdue') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date < ?)');
-        if (status === 'cancelled') statusConditions.push('t.payment_status_id = 3'); // Assuming 3 is 'cancelled'
+        console.log('Processing status:', status);
+        if (status === 'paid') {
+          statusConditions.push('t.payment_status_id = 2');
+          console.log('Added paid condition');
+        }
+        if (status === 'unpaid') {
+          statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date >= ?)');
+          console.log('Added unpaid condition');
+        }
+        if (status === 'overdue') {
+          statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date < ?)');
+          console.log('Added overdue condition');
+        }
+        if (status === 'cancelled') {
+          statusConditions.push('t.payment_status_id = 3'); // Assuming 3 is 'cancelled'
+          console.log('Added cancelled condition');
+        }
       });
       
       if (statusConditions.length > 0) {
         conditions.push(`(${statusConditions.join(' OR ')})`);
-        if ((payment_status_id as string).includes('unpaid')) values.push(today);
-        if ((payment_status_id as string).includes('overdue')) values.push(today);
+        console.log('Added status conditions to query');
+        if ((payment_status_id as string).includes('unpaid')) {
+          values.push(today);
+          console.log('Added today value for unpaid');
+        }
+        if ((payment_status_id as string).includes('overdue')) {
+          values.push(today);
+          console.log('Added today value for overdue');
+        }
       }
+      
+      console.log('Status conditions:', statusConditions);
+      console.log('Values for status conditions:', values);
     }
     if (category_id) {
       const ids = (category_id as string).split(',');
       conditions.push(`t.category_id IN (${ids.map(() => '?').join(',')})`);
       values.push(...ids);
+      console.log('Added category filter:', ids);
     }
     if (subcategory_id) {
       conditions.push('t.subcategory_id = ?');
       values.push(subcategory_id);
+      console.log('Added subcategory filter:', subcategory_id);
     }
     if (contact_id) {
       const ids = (contact_id as string).split(',');
       conditions.push(`t.contact_id IN (${ids.map(() => '?').join(',')})`);
       values.push(...ids);
+      console.log('Added contact filter:', ids);
     }
     if (cost_center_id) {
       const ids = (cost_center_id as string).split(',');
       conditions.push(`t.cost_center_id IN (${ids.map(() => '?').join(',')})`);
       values.push(...ids);
+      console.log('Added cost center filter:', ids);
     }
 
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
+      console.log('Final WHERE clause:', conditions.join(' AND '));
     }
 
     // Sorting
@@ -163,7 +240,17 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       query += ` ORDER BY ${sortColumn} ${sortOrder}`;
     }
 
+    console.log('Final query:', query);
+    console.log('Values:', values);
+    console.log('Conditions:', conditions);
+    console.log('Full query with values:', query, values);
+
     const transactions = await all(db, query, values);
+    console.log('Transactions fetched:', transactions.length);
+    console.log('Sample transactions:', transactions.slice(0, 3));
+    
+    // Log de todas as transações para debug
+    console.log('All transactions fetched:', transactions);
     
     const convertedTransactions = transactions.map((transaction: any) => {
       // Converter tipo do banco para o formato do frontend
@@ -174,8 +261,19 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       
       console.log(`[getFilteredTransactions] Converting type: ${transaction.type} -> ${frontendType} for transaction ${transaction.id}`);
       
+      // Formatar a data consistentemente entre ambientes
+      let formattedDate = transaction.transaction_date;
+      if (transaction.transaction_date instanceof Date) {
+        // Se for um objeto Date (PostgreSQL), converter para string no formato YYYY-MM-DD
+        formattedDate = transaction.transaction_date.toISOString().split('T')[0];
+      }
+      
+      // Log para debug
+      console.log(`Transaction ${transaction.id}: date=${formattedDate}, payment_status_id=${transaction.payment_status_id}, type=${frontendType}`);
+      
       return {
         ...transaction,
+        transaction_date: formattedDate,
         transaction_type: frontendType,
         is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
         is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
@@ -185,6 +283,15 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
 
     console.log(`[getFilteredTransactions] Final converted transactions count: ${convertedTransactions.length}`);
     console.log(`[getFilteredTransactions] Sample transaction types:`, convertedTransactions.slice(0, 3).map(t => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
+    
+    // Log adicional para debug
+    console.log('[getFilteredTransactions] All converted transactions:', convertedTransactions.map(t => ({
+      id: t.id,
+      transaction_date: t.transaction_date,
+      payment_status_id: t.payment_status_id,
+      is_paid: t.is_paid,
+      transaction_type: t.transaction_type
+    })));
 
     res.json(convertedTransactions);
   } catch (error) {
@@ -521,7 +628,7 @@ const create = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 374; // Vencido
+        finalPaymentStatusId = 3; // Vencido (ID 3 é o padrão para vencido)
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
@@ -918,7 +1025,7 @@ const update = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 374; // Vencido
+        finalPaymentStatusId = 3; // Vencido (ID 3 é o padrão para vencido)
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
@@ -1043,7 +1150,7 @@ const markAsPaid = async (req: Request, res: Response) => {
   try {
     const { db, run, get } = getDatabase();
     const transactionId = req.params.id;
-    const { payment_date, payment_method, bank_account_id, card_id } = req.body;
+    const { payment_date, paid_amount, payment_type, bank_account_id, card_id, observations, discount, interest } = req.body;
 
     if (!transactionId) {
       return res.status(400).json({ error: 'Transaction ID is required' });
@@ -1056,23 +1163,63 @@ const markAsPaid = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Atualizar o status de pagamento para "Pago" (ID = 2)
-    const result: any = await run(db, `
-      UPDATE transactions 
-      SET payment_status_id = 2
-      WHERE id = ?
-    `, [transactionId]);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Transaction not found' });
+    // Processar a data de pagamento para evitar problemas de timezone
+    let processedPaymentDate = payment_date;
+    if (typeof payment_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payment_date)) {
+      // Para PostgreSQL em produção, manter como está para evitar conversão
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction) {
+        processedPaymentDate = payment_date; // Manter como YYYY-MM-DD
+      } else {
+        // Em desenvolvimento (SQLite), usar como está
+        processedPaymentDate = payment_date;
+      }
     }
+
+    // Iniciar uma transação para garantir consistência
+    // Atualizar o status de pagamento para "Pago" (ID = 2) e definir a data de pagamento
+    const updateTransactionQuery = `
+      UPDATE transactions 
+      SET payment_status_id = 2, payment_date = ?
+      WHERE id = ?
+    `;
+    
+    await run(db, updateTransactionQuery, [
+      processedPaymentDate || new Date().toISOString().split('T')[0], // Usar data atual se não fornecida
+      transactionId
+    ]);
+
+    // Inserir detalhes do pagamento na tabela payment_details
+    const insertPaymentDetailsQuery = `
+      INSERT INTO payment_details (
+        transaction_id, payment_date, paid_amount, original_amount, 
+        payment_type, bank_account_id, card_id, discount_amount, 
+        interest_amount, observations
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const paymentDetailsValues = [
+      transactionId,
+      processedPaymentDate || new Date().toISOString().split('T')[0], // Usar data atual se não fornecida
+      paid_amount || transaction.amount,
+      transaction.amount,
+      payment_type || 'bank_account',
+      bank_account_id || null,
+      card_id || null,
+      discount || 0,
+      interest || 0,
+      observations || ''
+    ];
+    
+    await run(db, insertPaymentDetailsQuery, paymentDetailsValues);
 
     res.json({ 
       id: transactionId, 
       message: 'Transaction marked as paid successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 2
+        payment_status_id: 2,
+        payment_date: processedPaymentDate
       }
     });
   } catch (error) {
@@ -1100,10 +1247,10 @@ const reversePayment = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Atualizar o status de pagamento (voltar para "Em aberto")
+    // Atualizar o status de pagamento (voltar para "Em aberto") e limpar a data de pagamento
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 1
+      SET payment_status_id = 1, payment_date = NULL
       WHERE id = ?
     `, [transactionId]);
 
@@ -1116,7 +1263,8 @@ const reversePayment = async (req: Request, res: Response) => {
       message: 'Transaction payment reversed successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 1
+        payment_status_id: 1,
+        payment_date: null
       }
     });
   } catch (error) {
