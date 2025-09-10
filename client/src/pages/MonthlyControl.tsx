@@ -211,7 +211,7 @@ export default function MonthlyControl() {
   // Estados para filtros
   const [filters, setFilters] = useState<Filters>({
     transaction_type: [],
-    payment_status_id: ['overdue', 'open'], // Alterado para mostrar vencidos e em aberto por padrão
+    payment_status_id: ['overdue', 'unpaid'], // Corrigido: usar 'unpaid' em vez de 'open'
     category_id: [],
     subcategory_id: '',
     contact_id: [],
