@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     card_id INTEGER,
     contact_id INTEGER,
     transaction_date DATE NOT NULL,
+    payment_date DATE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
