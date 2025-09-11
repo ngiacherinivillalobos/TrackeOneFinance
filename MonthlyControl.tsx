@@ -61,20 +61,61 @@ import {
   AccountBalance as AccountBalanceIcon,
   CreditCard as CreditCardIcon,
   Receipt as ReceiptIcon,
+  CheckCircle as CheckCircleIcon,
+  AccountBalanceWallet as AccountBalanceWalletIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, addMonths, subMonths } from 'date-fns';
-import api from '../services/api';
+import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { useAuth } from '../contexts/AuthContext';
+import { getLocalDateString, createSafeDate } from '../utils/dateUtils';
 
+// Helper function para converter datas de forma segura
+const formatSafeDate = (dateString: string): string => {
+  try {
+    // Se a data já está no formato ISO (PostgreSQL: "2025-09-05T00:00:00.000Z")
+    if (dateString.includes('T')) {
+      // Extrair apenas a parte da data YYYY-MM-DD e criar data local
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day); // mês é 0-indexed
+      return format(localDate, 'dd/MM/yyyy');
+    }
+    // Se é apenas YYYY-MM-DD (SQLite), criar data local diretamente
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return format(localDate, 'dd/MM/yyyy');
+    }
+    // Fallback: tentar converter diretamente
+    return format(new Date(dateString), 'dd/MM/yyyy');
+  } catch (error) {
+    console.warn('Erro ao converter data:', dateString, error);
+    return 'Data inválida';
+  }
+};
+
+// Helper function para converter datas para objeto Date de forma segura
+// Usar createSafeDate do utilitário de datas
+const getSafeDate = createSafeDate;
+
+// Função helper para converter valores monetários de forma segura
+const getSafeAmount = (amount: any): number => {
+  if (typeof amount === 'number') return amount;
+  if (typeof amount === 'string') {
+    const parsed = parseFloat(amount);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
 
 interface Transaction {
   id: number;
@@ -98,7 +139,7 @@ interface Transaction {
   subcategory?: {
     id: number;
     name: string;
-  }
+  };
   cost_center?: {
     id: number;
     name: string;
@@ -147,6 +188,9 @@ interface Filters {
 }
 
 export default function MonthlyControl() {
+  // Hook de autenticação para obter dados do usuário
+  const { user } = useAuth();
+  
   // Responsividade
   const theme = useTheme();
   const isMediumScreen = useMediaQuery(theme.breakpoints.up('md'));
@@ -165,28 +209,14 @@ export default function MonthlyControl() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Estados para filtros
-  const { user } = useAuth();
-  const [filters, setFilters] = useState<Filters>(() => {
-    // Inicializa os filtros com valores padrão
-    const defaultFilters: Filters = {
-      transaction_type: [],
-      payment_status_id: ['unpaid', 'overdue'], // 'unpaid' = 'Em aberto', 'overdue' = 'Vencido'
-      category_id: [],
-      subcategory_id: '',
-      contact_id: [],
-      cost_center_id: [] // Inicialmente vazio
-    };
-    
-    // Se o usuário tem um centro de custo associado, adiciona-o ao filtro por padrão
-    if (user?.cost_center_id) {
-      defaultFilters.cost_center_id = [user.cost_center_id.toString()];
-    }
-    
-    return defaultFilters;
+  const [filters, setFilters] = useState<Filters>({
+    transaction_type: [],
+    payment_status_id: ['unpaid', 'overdue'], // Filtro padrão: Em aberto e Vencido
+    category_id: [],
+    subcategory_id: '',
+    contact_id: [],
+    cost_center_id: user?.cost_center_id ? [user.cost_center_id.toString()] : [] // Centro de custo do usuário logado
   });
-  
-  // O filtro já é inicializado com o centro de custo do usuário, se existir
-  // Não estamos mais utilizando useEffect para atualizar o filtro depois
   
   // Estados para ordenação
   const [orderBy, setOrderBy] = useState<string>('transaction_date');
@@ -213,7 +243,7 @@ export default function MonthlyControl() {
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    transaction_date: new Date().toISOString().split('T')[0],
+    transaction_date: getLocalDateString(),
     category_id: '',
     subcategory_id: '',
     payment_status_id: '',
@@ -266,94 +296,62 @@ export default function MonthlyControl() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  // Garantir que os amounts sejam números válidos antes de somar
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
   const totalDespesas = transactions
     .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-  const totalInvestimentos = transactions
-    .filter(t => t.transaction_type === 'Investimento')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
-
-  // Cálculo dos totalizadores das transações selecionadas
-  const selectedTransactionsData = transactions.filter(t => selectedTransactions.includes(t.id));
-  const totalSelectedReceitas = selectedTransactionsData
-    .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-  const totalSelectedDespesas = selectedTransactionsData
-    .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-  const totalSelectedInvestimentos = selectedTransactionsData
-    .filter(t => t.transaction_type === 'Investimento')
-    .reduce((sum, t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-  const totalSelected = totalSelectedReceitas + totalSelectedDespesas + totalSelectedInvestimentos;
-  const totalPeriodo = totalReceitas + totalDespesas + totalInvestimentos;
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return t.is_paid !== undefined ? !t.is_paid && transactionDate < today : false;
+    return !t.is_paid && transactionDate < today;
   });
 
   const vencemHoje = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return t.is_paid !== undefined ? !t.is_paid && transactionDate.getTime() === today.getTime() : false;
+    return !t.is_paid && transactionDate.getTime() === today.getTime();
   });
 
   const aVencer = transactions.filter(t => {
-    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+    const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return t.is_paid !== undefined ? !t.is_paid && transactionDate > today : false;
+    return !t.is_paid && transactionDate > today;
   });
 
-  const totalVencidos = vencidos.reduce((sum, t) => {
-    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
-  }, 0);
+  const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
+  const totalVencemHoje = vencemHoje.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
+  const totalAVencer = aVencer.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
   
-  const totalVencemHoje = vencemHoje.reduce((sum, t) => {
-    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
-  }, 0);
+  // Total "A Pagar" = Vencidos + Vencem Hoje + A Vencer (todas as transações não pagas)
+  const totalAPagar = totalVencidos + totalVencemHoje + totalAVencer;
   
-  const totalAVencer = aVencer.reduce((sum, t) => {
-    const amount = typeof t.amount === 'number' ? t.amount : parseFloat(t.amount) || 0;
-    return sum + (t.transaction_type === 'Despesa' ? -amount : amount);
+  const saldoPeriodo = totalReceitas - totalDespesas;
+
+  // Calcular totais dos registros selecionados
+  const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
+  const totalSelectedCount = selectedTransactionsData.length;
+  const totalSelectedValue = selectedTransactionsData.reduce((sum, t) => {
+    if (t.transaction_type === 'Despesa') return sum - getSafeAmount(t.amount);
+    return sum + getSafeAmount(t.amount);
   }, 0);
-  
-  // Cálculo do saldo do período (com investimentos)
-  // Quando há transações selecionadas, mostrar o saldo das transações selecionadas
-  // Caso contrário, mostrar o saldo de todas as transações
-  const saldoPeriodo = selectedTransactions.length > 0 
-    ? totalSelectedReceitas - totalSelectedDespesas - totalSelectedInvestimentos
-    : totalReceitas - totalDespesas - totalInvestimentos;
+  const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  const totalSelectedDespesas = selectedTransactionsData.filter(t => t.transaction_type === 'Despesa').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  const totalSelectedInvestimentos = selectedTransactionsData.filter(t => t.transaction_type === 'Investimento').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+  // Configurar centro de custo padrão quando usuário for carregado
+  useEffect(() => {
+    if (user?.cost_center_id && filters.cost_center_id.length === 0) {
+      setFilters(prev => ({
+        ...prev,
+        cost_center_id: [user.cost_center_id!.toString()]
+      }));
+    }
+  }, [user?.cost_center_id]);
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -402,26 +400,14 @@ export default function MonthlyControl() {
       let newYear = year;
       let newMonth = month + months;
       
-      // Ajustar ano e mês
       while (newMonth > 12) {
         newMonth -= 12;
         newYear += 1;
       }
-      while (newMonth < 1) {
-        newMonth += 12;
-        newYear -= 1;
-      }
       
       // Verificar se o dia existe no novo mês
       const daysInMonth = new Date(newYear, newMonth, 0).getDate();
-      let newDay = day;
-      
-      // Se o dia não existe no novo mês, ajustar para o último dia do mês
-      // Mas respeitando a regra: se for dia 31 e o mês não tem 31, usar o dia anterior (30)
-      // e não o próximo (01 do próximo mês)
-      if (newDay > daysInMonth) {
-        newDay = daysInMonth;
-      }
+      const newDay = Math.min(day, daysInMonth);
       
       return newYear + '-' + String(newMonth).padStart(2, '0') + '-' + String(newDay).padStart(2, '0');
     };
@@ -479,14 +465,8 @@ export default function MonthlyControl() {
             resultDate = addMonths(formData.transaction_date, i);
             break;
           case 'anual':
-            const [year, month, day] = formData.transaction_date.split('-').map(Number);
-            let newYear = year + i;
-            
-            // Verificar se o dia existe no novo ano/mês (para 29 de fevereiro em anos não bissextos)
-            const daysInMonth = new Date(newYear, month, 0).getDate();
-            const newDay = Math.min(day, daysInMonth);
-            
-            resultDate = newYear + '-' + String(month).padStart(2, '0') + '-' + String(newDay).padStart(2, '0');
+            const [year, month, day] = formData.transaction_date.split('-');
+            resultDate = (parseInt(year) + i) + '-' + month + '-' + day;
             break;
           case 'personalizada':
             resultDate = addDays(formData.transaction_date, i * (formData.recurrence_interval || 1));
@@ -498,7 +478,7 @@ export default function MonthlyControl() {
       // Garantir valor padrão
       if (!resultDate) resultDate = formData.transaction_date;
       previews.push({
-        creation_date: new Date().toISOString().split('T')[0],
+        creation_date: getLocalDateString(),
         due_date: resultDate,
         description: formData.description || 'Nova transação',
         amount: amount
@@ -528,28 +508,16 @@ export default function MonthlyControl() {
           startDate = format(customStartDate, 'yyyy-MM-dd');
           endDate = format(customEndDate, 'yyyy-MM-dd');
         }
-      } else {
-        // Para "Todo o período", não aplicar filtros de data
-        startDate = undefined;
-        endDate = undefined;
       }
       
       // Preparar parâmetros de filtro
       const baseParams: any = {
         ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
           // Tratar filtros de array e payment_status_id separadamente
-          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'category_id') {
+          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
             return false; // Não incluir nos parâmetros da URL (serão aplicados no frontend)
           }
-          // Tratar filtro de centro de custo separadamente
-          if (key === 'cost_center_id') {
-            return false; // Não incluir nos parâmetros da URL (será aplicado no frontend)
-          }
-          // Tratar filtro de subcategoria separadamente
-          if (key === 'subcategory_id') {
-            return false; // Não incluir nos parâmetros da URL (será aplicado no frontend)
-          }
-          return Array.isArray(value) ? value.length > 0 : value !== '';
+          return value !== '';
         }))
       };
       
@@ -557,30 +525,11 @@ export default function MonthlyControl() {
       if (dateFilterType !== 'all' && startDate && endDate) {
         baseParams.start_date = startDate;
         baseParams.end_date = endDate;
-      } else if (dateFilterType === 'all') {
-        // Para "Todo o período", remover quaisquer filtros de data existentes
-        delete baseParams.start_date;
-        delete baseParams.end_date;
-      }
-      
-      // Adicionar filtro de centro de custo
-      if (filters.cost_center_id.length > 0) {
-        // Converter para string separada por vírgula para o backend
-        baseParams.cost_center_id = filters.cost_center_id.join(',');
-        console.log('Centro de custo selecionados - array:', JSON.stringify(filters.cost_center_id));
-        console.log('Centro de custo selecionados - string:', filters.cost_center_id.join(','));
-      } else {
-        // Se nenhum filtro estiver selecionado, mostrar todos os registros
-        baseParams.cost_center_id = 'all';
-        console.log('Mostrando todos os centros de custo (sem filtro)');
       }
       
       const params = new URLSearchParams(baseParams);
       
       console.log('Enviando requisição para /api/transactions com os parâmetros:', params.toString());
-      console.log('Parâmetros originais:', baseParams);
-      console.log('Filtro de centro de custo atual:', filters.cost_center_id);
-      
       
       const response = await api.get(`/transactions?${params}`);
       console.log("Resposta da API recebida:", response.data);
@@ -588,24 +537,15 @@ export default function MonthlyControl() {
       // Aplicar filtros no frontend
       let filteredTransactions = response.data;
       
-      // Converter o campo is_paid baseado no payment_status_id antes de aplicar filtros
-      filteredTransactions = filteredTransactions.map((t: any) => ({
-        ...t,
-        is_paid: t.payment_status_id === 2
-      }));
-      
       // Filtro de status de pagamento
       if (filters.payment_status_id.length > 0) {
         filteredTransactions = filteredTransactions.filter((t: any) => {
-          if (filters.payment_status_id.includes('paid') && t.is_paid) return true;
-          if (filters.payment_status_id.includes('unpaid') && !t.is_paid) return true;
-          if (filters.payment_status_id.includes('overdue') && !t.is_paid && new Date(t.transaction_date) < new Date()) return true;
+          if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
+          if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
+          if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
           if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
           return false;
         });
-      } else {
-        // Se não houver filtro de status, mostrar apenas registros não pagos
-        filteredTransactions = filteredTransactions.filter((t: any) => !t.is_paid);
       }
       
       // Filtro de tipo de transação
@@ -633,13 +573,6 @@ export default function MonthlyControl() {
       if (filters.category_id.length > 0) {
         filteredTransactions = filteredTransactions.filter((t: any) => 
           filters.category_id.includes(t.category_id?.toString() || '')
-        );
-      }
-      
-      // Filtro de subcategoria
-      if (filters.subcategory_id) {
-        filteredTransactions = filteredTransactions.filter((t: any) => 
-          t.subcategory_id?.toString() === filters.subcategory_id
         );
       }
       
@@ -703,13 +636,6 @@ export default function MonthlyControl() {
             );
           }
           
-          // Filtro de subcategoria
-          if (filters.subcategory_id) {
-            overdueTransactions = overdueTransactions.filter((t: any) => 
-              t.subcategory_id?.toString() === filters.subcategory_id
-            );
-          }
-          
           // Filtro de status de pagamento - aplicar também aos vencidos
           if (filters.payment_status_id.length > 0) {
             overdueTransactions = overdueTransactions.filter((t: any) => {
@@ -759,8 +685,8 @@ export default function MonthlyControl() {
           name: transaction.cost_center_name,
           number: transaction.cost_center_number
         } : null,
-        // Garantir que o campo is_paid esteja corretamente definido
-        is_paid: transaction.is_paid !== undefined ? transaction.is_paid : transaction.payment_status_id === 2,
+        // Converter o campo is_paid baseado no payment_status_id
+        is_paid: transaction.payment_status_id === 2,
         // Campos de parcelamento
         is_installment: transaction.is_installment || false,
         installment_number: transaction.installment_number || null,
@@ -779,8 +705,6 @@ export default function MonthlyControl() {
           status: error.response?.status,
         });
       }
-      // Em caso de erro, definir transações como array vazio para evitar estado inconsistente
-      setTransactions([]);
     } finally {
       console.log("Finalizando loadTransactions.");
       setLoading(false);
@@ -820,7 +744,7 @@ export default function MonthlyControl() {
     setSelectedTransactions(
       selectedTransactions.length === transactions.length 
         ? [] 
-        : transactions.map(t => t.id)
+        : transactions.map(t => t.id).filter(id => id !== undefined) as number[]
     );
   };
 
@@ -838,6 +762,7 @@ export default function MonthlyControl() {
   // Ações de transação
   const handleDuplicateTransaction = async (id: number) => {
     try {
+      console.log('Duplicando transação com ID:', id);
       // Buscar dados da transação original
       const response = await api.get(`/transactions/${id}`);
       const original = response.data;
@@ -845,7 +770,7 @@ export default function MonthlyControl() {
       const duplicated = {
         ...original,
         id: undefined,
-        transaction_date: new Date().toISOString().split('T')[0], // opcional: data atual
+        transaction_date: getLocalDateString(), // data local corrigida
         description: original.description + ' (cópia)'
       };
       await api.post('/transactions', duplicated);
@@ -895,7 +820,7 @@ export default function MonthlyControl() {
       id: 0, // Indica modo lote
       description: `Pagamento em lote (${selectedTransactions.length} transações)`,
       amount: 0, // Será calculado individualmente
-      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_date: getLocalDateString(),
       transaction_type: 'Despesa',
       is_recurring: false
     });
@@ -1002,14 +927,13 @@ export default function MonthlyControl() {
         showSnackbar('Nenhum campo foi preenchido para edição', 'warning');
         return;
       }
-      
-      // Atualizar todas as transações selecionadas usando PATCH
-      await Promise.all(
-        selectedTransactions.map(id => 
-          api.patch(`/transactions/${id}`, updateData)
-        )
-      );
-      
+
+      // Usar o endpoint de batch edit ao invés de múltiplas requisições PATCH
+      await api.post('/transactions/batch-edit', {
+        transactionIds: selectedTransactions,
+        updates: updateData
+      });
+
       setSelectedTransactions([]);
       setBatchEditDialogOpen(false);
       loadTransactions();
@@ -1121,7 +1045,7 @@ export default function MonthlyControl() {
     setFormData({
       description: '',
       amount: '',
-      transaction_date: new Date().toISOString().split('T')[0],
+      transaction_date: getLocalDateString(),
       category_id: '',
       subcategory_id: '',
       payment_status_id: '',
@@ -1146,8 +1070,9 @@ export default function MonthlyControl() {
   const handleEditTransaction = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     
-    // Formatar o valor para o padrão brasileiro (substituir ponto por vírgula)
-    const formattedAmount = transaction.amount.toFixed(2).replace('.', ',');
+    // Converter amount para número e formatar para o padrão brasileiro
+    const numericAmount = parseFloat(transaction.amount.toString()) || 0;
+    const formattedAmount = numericAmount.toFixed(2).replace('.', ',');
     
     setFormData({
       description: transaction.description,
@@ -1247,6 +1172,8 @@ export default function MonthlyControl() {
         total_installments: formData.is_installment ? (typeof formData.total_installments === 'string' ? parseInt(formData.total_installments) || 1 : formData.total_installments) : null
       };
 
+      console.log('Dados sendo enviados:', transactionData);
+
       if (editingTransaction) {
         await api.put(`/transactions/${editingTransaction.id}`, transactionData);
         showSnackbar('Transação atualizada com sucesso!');
@@ -1279,8 +1206,8 @@ export default function MonthlyControl() {
 
     switch (orderBy) {
       case 'transaction_date':
-        aValue = new Date(a.transaction_date);
-        bValue = new Date(b.transaction_date);
+        aValue = getSafeDate(a.transaction_date);
+        bValue = getSafeDate(b.transaction_date);
         break;
       case 'description':
         aValue = a.description.toLowerCase();
@@ -1320,15 +1247,9 @@ export default function MonthlyControl() {
       : (a: any, b: any) => -descendingComparator(a, b, orderBy);
   };
 
-  // Aplicar ordenação às transações e remover possíveis duplicatas
+  // Aplicar ordenação às transações
   const sortedTransactions = React.useMemo(() => {
-    // Primeiro, garantimos que não há duplicatas por ID
-    const uniqueTransactions = Array.from(
-      new Map(transactions.map(item => [item.id, item])).values()
-    );
-    
-    // Depois aplicamos a ordenação
-    return [...uniqueTransactions].sort(getComparator(order, orderBy));
+    return [...transactions].sort(getComparator(order, orderBy));
   }, [transactions, order, orderBy]);
 
   // Componente para cabeçalho ordenável
@@ -1411,72 +1332,22 @@ export default function MonthlyControl() {
 
   // Verificar se transação está vencida
   const isTransactionOverdue = (transaction: Transaction) => {
-      try {
-        // Verificamos se a data da transação é válida antes de criar a data
-        if (!transaction.transaction_date) return false;
-        
-        if (transaction.is_paid) return false;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Processar a data da transação para garantir formato válido
-        let transactionDate;
-        
-        if (transaction.transaction_date.includes('T')) {
-          // Se já está no formato ISO completo com timestamp
-          transactionDate = new Date(transaction.transaction_date);
-        } else {
-          // Se está apenas no formato YYYY-MM-DD
-          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-        }
-        
-        // Verificar se a data é válida
-        if (isNaN(transactionDate.getTime())) {
-          console.error('Data inválida:', transaction.transaction_date);
-          return false;
-        }
-        
-        transactionDate.setHours(0, 0, 0, 0);
-        return transactionDate < today;
-      } catch (error) {
-        console.error('Erro ao verificar se transação está vencida:', error);
-        return false;
-      }
+    if (transaction.is_paid) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const transactionDate = getSafeDate(transaction.transaction_date);
+    transactionDate.setHours(0, 0, 0, 0);
+    return transactionDate < today;
   };
 
   // Verificar se transação vence hoje
   const isTransactionDueToday = (transaction: Transaction) => {
-      try {
-        // Verificamos se a data da transação é válida antes de criar a data
-        if (!transaction.transaction_date) return false;
-        
-        if (transaction.is_paid) return false;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        // Processar a data da transação para garantir formato válido
-        let transactionDate;
-        
-        if (transaction.transaction_date.includes('T')) {
-          // Se já está no formato ISO completo com timestamp
-          transactionDate = new Date(transaction.transaction_date);
-        } else {
-          // Se está apenas no formato YYYY-MM-DD
-          transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
-        }
-        
-        // Verificar se a data é válida
-        if (isNaN(transactionDate.getTime())) {
-          console.error('Data inválida:', transaction.transaction_date);
-          return false;
-        }
-        
-        transactionDate.setHours(0, 0, 0, 0);
-        return transactionDate.getTime() === today.getTime();
-      } catch (error) {
-        console.error('Erro ao verificar se transação vence hoje:', error);
-        return false;
-      }
+    if (transaction.is_paid) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const transactionDate = getSafeDate(transaction.transaction_date);
+    transactionDate.setHours(0, 0, 0, 0);
+    return transactionDate.getTime() === today.getTime();
   };
 
   // Obter status da transação
@@ -1778,7 +1649,7 @@ export default function MonthlyControl() {
                       sx={{ mr: 1, p: 0 }}
                     />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <ExpenseIcon sx={{ fontSize: 16, color: colors.error[600] }} />
+                      <ExpenseIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
                       Despesa
                     </Box>
                   </MenuItem>
@@ -1789,7 +1660,7 @@ export default function MonthlyControl() {
                       sx={{ mr: 1, p: 0 }}
                     />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <IncomeIcon sx={{ fontSize: 16, color: colors.success[600] }} />
+                      <IncomeIcon sx={{ fontSize: 16, color: '#2e7d32' }} />
                       Receita
                     </Box>
                   </MenuItem>
@@ -1800,7 +1671,7 @@ export default function MonthlyControl() {
                       sx={{ mr: 1, p: 0 }}
                     />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <InvestmentIcon sx={{ fontSize: 16, color: colors.primary[600] }} />
+                      <InvestmentIcon sx={{ fontSize: 16, color: '#1976d2' }} />
                       Investimento
                     </Box>
                   </MenuItem>
@@ -2089,11 +1960,11 @@ export default function MonthlyControl() {
                 onClick={() => {
                   setFilters({
                     transaction_type: [],
-                    payment_status_id: ['unpaid', 'overdue'], // 'unpaid' = 'Em aberto', 'overdue' = 'Vencido'
+                    payment_status_id: ['unpaid', 'overdue'], // Manter filtros padrão
                     category_id: [],
                     subcategory_id: '',
                     contact_id: [],
-                    cost_center_id: user?.cost_center_id ? [user.cost_center_id.toString()] : []
+                    cost_center_id: user?.cost_center_id ? [user.cost_center_id.toString()] : [] // Manter centro de custo do usuário
                   });
                   setDateFilterType('month');
                   setCustomStartDate(null);
@@ -2178,7 +2049,7 @@ export default function MonthlyControl() {
                           sx={{ mr: 1, p: 0 }}
                         />
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Box sx={{ color: category.source_type === 'Despesa' ? colors.error[600] : category.source_type === 'Receita' ? colors.success[600] : colors.primary[600] }}>
+                          <Box sx={{ color: category.source_type === 'Despesa' ? '#d32f2f' : category.source_type === 'Receita' ? '#2e7d32' : '#1976d2' }}>
                             {category.source_type === 'Despesa' && <ExpenseIcon sx={{ fontSize: 16 }} />}
                             {category.source_type === 'Receita' && <IncomeIcon sx={{ fontSize: 16 }} />}
                             {category.source_type === 'Investimento' && <InvestmentIcon sx={{ fontSize: 16 }} />}
@@ -2310,7 +2181,7 @@ export default function MonthlyControl() {
               title="Vencidos"
               value={formatCurrency(Math.abs(totalVencidos))}
               subtitle="Pagamentos em atraso"
-              icon={<ExpenseIcon sx={{ fontSize: 16 }} />}
+              icon={<UndoIcon sx={{ fontSize: 16 }} />}
               color="error"
               trend={{ value: 12.5, isPositive: false }}
             />
@@ -2324,9 +2195,9 @@ export default function MonthlyControl() {
             />
             
             <ModernStatsCard
-              title="A Vencer"
-              value={formatCurrency(Math.abs(totalAVencer))}
-              subtitle="Próximos vencimentos"
+              title="A Pagar"
+              value={formatCurrency(Math.abs(totalAPagar))}
+              subtitle="Total pendente (inclui vencidos)"
               icon={<ReceiptIcon sx={{ fontSize: 16 }} />}
               color="primary"
             />
@@ -2349,6 +2220,83 @@ export default function MonthlyControl() {
               trend={{ value: Math.abs((saldoPeriodo / 10000) * 100), isPositive: saldoPeriodo >= 0 }}
             />
           </Box>
+
+          {/* Totalizador dos registros selecionados */}
+          {selectedTransactions.length > 0 && (
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 2, 
+              mb: 3,
+              p: 2,
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              border: '2px solid',
+              borderColor: 'primary.main',
+              overflow: 'hidden',
+              '& > *': {
+                flex: '1 1 0',
+                minWidth: 0
+              }
+            }}>
+              {/* 1. Registros Selecionados */}
+              <ModernStatsCard
+                title="Registros Selecionados"
+                value={`${totalSelectedCount} ${totalSelectedCount === 1 ? 'registro' : 'registros'}`}
+                subtitle="Total selecionado"
+                icon={<CheckCircleIcon sx={{ fontSize: 16 }} />}
+                color="primary"
+              />
+
+              {/* 2. Receitas */}
+              {totalSelectedReceitas > 0 && (
+                <ModernStatsCard
+                  title="Receitas"
+                  value={formatCurrency(totalSelectedReceitas)}
+                  subtitle="Selecionadas"
+                  icon={<TrendingUp sx={{ fontSize: 16 }} />}
+                  color="success"
+                />
+              )}
+
+              {/* 3. Despesas */}
+              {totalSelectedDespesas > 0 && (
+                <ModernStatsCard
+                  title="Despesas"
+                  value={formatCurrency(totalSelectedDespesas)}
+                  subtitle="Selecionadas"
+                  icon={<TrendingDown sx={{ fontSize: 16 }} />}
+                  color="error"
+                />
+              )}
+
+              {/* 4. Valor Total - com cores condicionais */}
+              <ModernStatsCard
+                title="Valor Total"
+                value={
+                  <span style={{ 
+                    color: totalSelectedValue >= 0 ? colors.success[600] : colors.error[600],
+                    fontWeight: 'bold'
+                  }}>
+                    {formatCurrency(totalSelectedValue)}
+                  </span>
+                }
+                subtitle={totalSelectedValue >= 0 ? 'Saldo positivo' : 'Saldo negativo'}
+                icon={<AccountBalanceWalletIcon sx={{ fontSize: 16 }} />}
+                color={totalSelectedValue >= 0 ? 'success' : 'error'}
+              />
+
+              {/* 5. Investimentos - opcional */}
+              {totalSelectedInvestimentos > 0 && (
+                <ModernStatsCard
+                  title="Investimentos"
+                  value={formatCurrency(totalSelectedInvestimentos)}
+                  subtitle="Selecionados"
+                  icon={<ShowChart sx={{ fontSize: 16 }} />}
+                  color="warning"
+                />
+              )}
+            </Box>
+          )}
 
           {/* Modern Transaction Counter and Actions */}
           <Box sx={{ 
@@ -2439,14 +2387,14 @@ export default function MonthlyControl() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                {sortedTransactions.map((transaction) => {
+                {sortedTransactions.filter(transaction => transaction.id).map((transaction) => {
                   const statusColors = getStatusColor(transaction);
                   const isOverdue = isTransactionOverdue(transaction);
                   const isDueToday = isTransactionDueToday(transaction);
                   
                   // Definir cor de fundo baseada no status da transação
                   const getRowBackgroundColor = () => {
-                    if (selectedTransactions.includes(transaction.id)) {
+                    if (selectedTransactions.includes(transaction.id!)) {
                       if (isOverdue) return colors.error[50];
                       if (isDueToday) return '#fff3e0'; // Amarelo claro como no cartão "Vencem Hoje"
                       return colors.primary[50];
@@ -2464,7 +2412,7 @@ export default function MonthlyControl() {
                   
                   return (
                   <TableRow 
-                    key={transaction.id}
+                    key={transaction.id!}
                     sx={{ 
                       '&:hover': { 
                         bgcolor: getHoverBackgroundColor(),
@@ -2478,19 +2426,14 @@ export default function MonthlyControl() {
                   >
                     <TableCell padding="checkbox">
                       <Checkbox
-                        checked={selectedTransactions.includes(transaction.id)}
-                        onChange={() => handleSelectTransaction(transaction.id)}
+                        checked={selectedTransactions.includes(transaction.id!)}
+                        onChange={() => handleSelectTransaction(transaction.id!)}
                       />
                     </TableCell>
                     
                     <TableCell sx={{ minWidth: 90 }}>
                       <Typography variant="body2">
-                        {format(
-                          transaction.transaction_date.includes('T') 
-                            ? new Date(transaction.transaction_date) 
-                            : new Date(transaction.transaction_date + 'T00:00:00'), 
-                          'dd/MM/yyyy'
-                        )}
+                        {formatSafeDate(transaction.transaction_date)}
                       </Typography>
                     </TableCell>
                     
@@ -2499,23 +2442,26 @@ export default function MonthlyControl() {
                         {/* Ícone específico por tipo de transação */}
                         <Box 
                           sx={{ 
-                            p: 0.5,
-                            mt: 0.5,
-                            borderRadius: 1,
+                            p: 1,
+                            mt: 0.25,
+                            borderRadius: 1.5,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: transaction.transaction_type === 'Despesa' ? '#ffebee' : 
-                                   transaction.transaction_type === 'Receita' ? '#e8f5e8' : 
-                                   '#e3f2fd',
-                            color: transaction.transaction_type === 'Despesa' ? '#f44336' : 
-                                  transaction.transaction_type === 'Receita' ? '#4caf50' : 
-                                  '#2196f3'
+                            minWidth: 32,
+                            height: 32,
+                            bgcolor: transaction.transaction_type === 'Despesa' ? '#FFEBEE' : 
+                                   transaction.transaction_type === 'Receita' ? '#E8F5E8' : 
+                                   '#E3F2FD', // Azul mais claro para investimentos
+                            color: transaction.transaction_type === 'Despesa' ? colors.error[600] : 
+                                  transaction.transaction_type === 'Receita' ? colors.success[600] : 
+                                  colors.primary[600],
+                            flexShrink: 0
                           }}
                         >
-                          {transaction.transaction_type === 'Despesa' && <ExpenseIcon fontSize="small" />}
-                          {transaction.transaction_type === 'Receita' && <IncomeIcon fontSize="small" />}
-                          {transaction.transaction_type === 'Investimento' && <InvestmentIcon fontSize="small" />}
+                          {transaction.transaction_type === 'Despesa' && <TrendingDown sx={{ fontSize: 18, color: '#d32f2f' }} />}
+                          {transaction.transaction_type === 'Receita' && <TrendingUp sx={{ fontSize: 18, color: '#2e7d32' }} />}
+                          {transaction.transaction_type === 'Investimento' && <ShowChart sx={{ fontSize: 18, color: '#1976d2' }} />}
                         </Box>
                         
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -2633,7 +2579,7 @@ export default function MonthlyControl() {
                     <TableCell sx={{ minWidth: 60 }}>
                       <IconButton
                         size="small"
-                        onClick={(e) => handleActionMenuOpen(e, transaction.id)}
+                        onClick={(e) => handleActionMenuOpen(e, transaction.id!)}
                         sx={{ color: '#666' }}
                       >
                         <MoreVertIcon fontSize="small" />
@@ -2652,53 +2598,9 @@ export default function MonthlyControl() {
                     </TableCell>
                   </TableRow>
                 )}
-                
-                {/* Totalizador das transações filtradas */}
-                {transactions.length > 0 && (
-                  <TableRow sx={{ 
-                    bgcolor: colors.gray[50], 
-                    '& td': { 
-                      fontWeight: 'bold', 
-                      borderTop: `2px solid ${colors.gray[300]}`,
-                      borderBottom: 'none'
-                    } 
-                  }}>
-                    <TableCell colSpan={3} align="right">
-                      Total do Período:
-                    </TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(totalPeriodo)}
-                    </TableCell>
-                    <TableCell colSpan={2} />
-                  </TableRow>
-                )}
-                
-                {/* Totalizador das transações selecionadas */}
-                {selectedTransactions.length > 0 && (
-                  <TableRow sx={{ 
-                    bgcolor: colors.primary[100], 
-                    '& td': { 
-                      fontWeight: 'bold',
-                      fontSize: '0.85rem',
-                      fontStyle: 'italic',
-                      color: colors.primary[800],
-                      borderTop: `1px dashed ${colors.primary[300]}`,
-                      borderBottom: 'none'
-                    } 
-                  }}>
-                    <TableCell colSpan={3} align="right">
-                      Total Selecionado ({selectedTransactions.length} registro{selectedTransactions.length !== 1 ? 's' : ''}):
-                    </TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(totalSelected)}
-                    </TableCell>
-                    <TableCell colSpan={2} />
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </TableContainer>
-          </Box>
           </Box>
 
         {/* Batch Actions Menu */}
@@ -2884,7 +2786,7 @@ export default function MonthlyControl() {
             onClick={() => handleNewTransaction('Despesa')}
           >
             <ListItemIcon>
-              <TrendingDown sx={{ color: '#f44336' }} />
+              <ExpenseIcon sx={{ color: '#d32f2f' }} />
             </ListItemIcon>
             <ListItemText>Despesa</ListItemText>
           </MenuItem>
@@ -2892,7 +2794,7 @@ export default function MonthlyControl() {
             onClick={() => handleNewTransaction('Receita')}
           >
             <ListItemIcon>
-              <TrendingUp sx={{ color: '#4caf50' }} />
+              <IncomeIcon sx={{ color: '#2e7d32' }} />
             </ListItemIcon>
             <ListItemText>Receita</ListItemText>
           </MenuItem>
@@ -2900,7 +2802,7 @@ export default function MonthlyControl() {
             onClick={() => handleNewTransaction('Investimento')}
           >
             <ListItemIcon>
-              <ShowChart sx={{ color: '#2196f3' }} />
+              <InvestmentIcon sx={{ color: '#1976d2' }} />
             </ListItemIcon>
             <ListItemText>Investimento</ListItemText>
           </MenuItem>
@@ -2942,19 +2844,19 @@ export default function MonthlyControl() {
                     >
                       <MenuItem value="Despesa">
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <ExpenseIcon sx={{ color: '#f44336', mr: 1 }} />
+                          <ExpenseIcon sx={{ color: '#d32f2f', mr: 1 }} />
                           Despesa
                         </Box>
                       </MenuItem>
                       <MenuItem value="Receita">
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <IncomeIcon sx={{ color: '#4caf50', mr: 1 }} />
+                          <IncomeIcon sx={{ color: '#2e7d32', mr: 1 }} />
                           Receita
                         </Box>
                       </MenuItem>
                       <MenuItem value="Investimento">
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <InvestmentIcon sx={{ color: '#2196f3', mr: 1 }} />
+                          <InvestmentIcon sx={{ color: '#1976d2', mr: 1 }} />
                           Investimento
                         </Box>
                       </MenuItem>
@@ -3355,26 +3257,8 @@ export default function MonthlyControl() {
                       <TableBody>
                         {recurrencePreview.map((item, index) => (
                           <TableRow key={index}>
-                            <TableCell>
-                              {(() => {
-                                if (item.creation_date.includes('T')) {
-                                  return new Date(item.creation_date).toLocaleDateString('pt-BR');
-                                } else {
-                                  // Usar formato local para evitar problemas de fuso horário
-                                  return new Date(item.creation_date + 'T12:00:00').toLocaleDateString('pt-BR');
-                                }
-                              })()}
-                            </TableCell>
-                            <TableCell>
-                              {(() => {
-                                if (item.due_date.includes('T')) {
-                                  return new Date(item.due_date).toLocaleDateString('pt-BR');
-                                } else {
-                                  // Usar formato local para evitar problemas de fuso horário
-                                  return new Date(item.due_date + 'T12:00:00').toLocaleDateString('pt-BR');
-                                }
-                              })()}
-                            </TableCell>
+                            <TableCell>{getSafeDate(item.creation_date).toLocaleDateString('pt-BR')}</TableCell>
+                            <TableCell>{getSafeDate(item.due_date).toLocaleDateString('pt-BR')}</TableCell>
                             <TableCell>{item.description}</TableCell>
                             <TableCell align="right">
                               {item.amount.toLocaleString('pt-BR', { 
@@ -3613,7 +3497,7 @@ export default function MonthlyControl() {
                   {categories.map((category) => (
                     <MenuItem key={category.id} value={category.id.toString()}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ color: category.source_type === 'Despesa' ? colors.error[600] : category.source_type === 'Receita' ? colors.success[600] : colors.primary[600] }}>
+                        <Box sx={{ color: category.source_type === 'Despesa' ? '#d32f2f' : category.source_type === 'Receita' ? '#2e7d32' : '#1976d2' }}>
                           {category.source_type === 'Despesa' && <ExpenseIcon sx={{ fontSize: 16 }} />}
                           {category.source_type === 'Receita' && <IncomeIcon sx={{ fontSize: 16 }} />}
                           {category.source_type === 'Investimento' && <InvestmentIcon sx={{ fontSize: 16 }} />}
@@ -3696,6 +3580,7 @@ export default function MonthlyControl() {
             </Button>
           </DialogActions>
         </Dialog>
+        </Box>
       </Box>
     </LocalizationProvider>
   );
