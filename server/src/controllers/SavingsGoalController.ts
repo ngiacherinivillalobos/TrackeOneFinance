@@ -48,8 +48,15 @@ export const savingsGoalController = {
       // Se a data vem como YYYY-MM-DD, garantir que seja salva corretamente
       let processedDate = target_date;
       if (typeof target_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target_date)) {
-        // Para ambos os ambientes, usar a data como está para evitar conversão de timezone
-        processedDate = target_date; // Manter como YYYY-MM-DD
+        // Para PostgreSQL em produção, adicionar indicador de timezone UTC para evitar conversão
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (isProduction) {
+          // Em produção (PostgreSQL), usar apenas a data sem timezone para evitar conversão
+          processedDate = target_date; // Manter como YYYY-MM-DD
+        } else {
+          // Em desenvolvimento (SQLite), usar como está
+          processedDate = target_date;
+        }
       }
       
       // Sempre usar o centro de custo do usuário logado
@@ -63,24 +70,24 @@ export const savingsGoalController = {
       let result;
       if (existingGoal) {
         // Atualizar meta existente
-        const updateQuery = effectiveCostCenterId !== undefined
+        const query = effectiveCostCenterId !== undefined
           ? 'UPDATE savings_goals SET target_amount = ?, target_date = ?, cost_center_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
           : 'UPDATE savings_goals SET target_amount = ?, target_date = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
-        const updateParams = effectiveCostCenterId !== undefined
+        const params = effectiveCostCenterId !== undefined
           ? [target_amount, processedDate, effectiveCostCenterId, userId]
           : [target_amount, processedDate, userId];
             
-        await run(db, updateQuery, updateParams);
+        await run(db, query, params);
       } else {
         // Criar nova meta
-        const insertQuery = effectiveCostCenterId !== undefined
+        const query = effectiveCostCenterId !== undefined
           ? 'INSERT INTO savings_goals (user_id, target_amount, target_date, cost_center_id) VALUES (?, ?, ?, ?)'
           : 'INSERT INTO savings_goals (user_id, target_amount, target_date) VALUES (?, ?, ?)';
-        const insertParams = effectiveCostCenterId !== undefined
+        const params = effectiveCostCenterId !== undefined
           ? [userId, target_amount, processedDate, effectiveCostCenterId]
           : [userId, target_amount, processedDate];
             
-        result = await run(db, insertQuery, insertParams);
+        result = await run(db, query, params);
       }
       
       res.json({ 

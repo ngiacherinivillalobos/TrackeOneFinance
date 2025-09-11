@@ -76,7 +76,7 @@ export default function BankAccounts() {
   const handleEdit = (bankAccount: BankAccount) => {
     setEditingBankAccount(bankAccount);
     const balanceValue = getSafeAmount(bankAccount.balance);
-    const formattedBalance = balanceValue !== 0 ? 
+    const formattedBalance = balanceValue > 0 ? 
       balanceValue.toLocaleString('pt-BR', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2

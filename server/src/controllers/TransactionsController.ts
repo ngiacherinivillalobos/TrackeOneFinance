@@ -26,41 +26,12 @@ const getLocalDateString = (): string => {
 
 // Função helper para criar Date segura para timezone
 const createSafeDate = (dateString: string): Date => {
-  if (!dateString || typeof dateString !== 'string') return new Date();
-  
-  try {
-    // Se a string já tem T12:00:00, usar diretamente
-    if (dateString.includes('T12:00:00')) {
-      const date = new Date(dateString);
-      // Verifica se a data é válida
-      if (isNaN(date.getTime())) {
-        console.warn('Data inválida recebida:', dateString);
-        return new Date();
-      }
-      return date;
-    }
-    // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
-    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const date = new Date(dateString + 'T12:00:00');
-      // Verifica se a data é válida
-      if (isNaN(date.getTime())) {
-        console.warn('Data inválida recebida:', dateString);
-        return new Date();
-      }
-      return date;
-    }
-    // Para outros formatos, tentar criar a data diretamente
-    const date = new Date(dateString);
-    // Verifica se a data é válida
-    if (isNaN(date.getTime())) {
-      console.warn('Data inválida recebida:', dateString);
-      return new Date();
-    }
-    return date;
-  } catch (error) {
-    console.warn('Erro ao criar data:', error, 'dateString:', dateString);
-    return new Date();
+  // Se a string já tem T12:00:00, usar diretamente
+  if (dateString.includes('T12:00:00')) {
+    return new Date(dateString);
   }
+  // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
+  return new Date(dateString + 'T12:00:00');
 };
 
 export interface Transaction {
