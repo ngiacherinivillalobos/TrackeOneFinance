@@ -1,73 +1,99 @@
-// Script para verificar a configuração do banco de dados do Render
-const fs = require('fs');
-const path = require('path');
+#!/usr/bin/env node
 
-console.log('=== VERIFICAÇÃO DA CONFIGURAÇÃO DO BANCO DE DADOS DO RENDER ===\n');
+// Script para verificar a estrutura do banco de dados no Render
+const { Pool } = require('pg');
+require('dotenv').config();
 
-// Verificar se o arquivo de configuração do Render existe
-const renderYamlPath = path.resolve(__dirname, 'server', 'render.yaml');
-console.log('1. Verificando arquivo de configuração do Render...');
-if (fs.existsSync(renderYamlPath)) {
-  console.log('  ✅ render.yaml encontrado');
-  const renderYaml = fs.readFileSync(renderYamlPath, 'utf8');
-  console.log('  Conteúdo do render.yaml:');
-  console.log(renderYaml);
-} else {
-  console.log('  ❌ render.yaml não encontrado');
+// Configuração do banco de dados
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+async function checkDatabaseStructure() {
+  try {
+    console.log('🔍 Verificando estrutura do banco de dados no Render...');
+    
+    // Verificar se a tabela transactions existe
+    const transactionsResult = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'transactions'
+      )
+    `);
+    
+    const transactionsExists = transactionsResult.rows[0].exists;
+    console.log('Tabela transactions existe:', transactionsExists);
+    
+    if (transactionsExists) {
+      // Verificar colunas da tabela transactions
+      const columnsResult = await pool.query(`
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns 
+        WHERE table_name = 'transactions'
+        ORDER BY ordinal_position
+      `);
+      
+      console.log('\nColunas da tabela transactions:');
+      columnsResult.rows.forEach(row => {
+        console.log(`  - ${row.column_name} (${row.data_type}) ${row.is_nullable === 'YES' ? 'NULL' : 'NOT NULL'} ${row.column_default ? `DEFAULT ${row.column_default}` : ''}`);
+      });
+      
+      // Verificar se a coluna payment_status_id existe
+      const hasPaymentStatusId = columnsResult.rows.some(row => row.column_name === 'payment_status_id');
+      console.log('\nColuna payment_status_id existe:', hasPaymentStatusId);
+      
+      // Verificar se a coluna transaction_type existe
+      const hasTransactionType = columnsResult.rows.some(row => row.column_name === 'transaction_type');
+      console.log('Coluna transaction_type existe:', hasTransactionType);
+      
+      if (hasTransactionType) {
+        // Verificar os valores permitidos para transaction_type
+        const constraintResult = await pool.query(`
+          SELECT pg_get_constraintdef(pg_constraint.oid) as constraint_def
+          FROM pg_constraint
+          INNER JOIN pg_class ON pg_constraint.conrelid = pg_class.oid
+          INNER JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+          WHERE pg_class.relname = 'transactions'
+          AND pg_constraint.contype = 'c'
+          AND pg_get_constraintdef(pg_constraint.oid) LIKE '%transaction_type%'
+        `);
+        
+        if (constraintResult.rows.length > 0) {
+          console.log('Constraint de transaction_type:', constraintResult.rows[0].constraint_def);
+        }
+      }
+    }
+    
+    // Verificar se a tabela payment_status existe
+    const paymentStatusResult = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'payment_status'
+      )
+    `);
+    
+    const paymentStatusExists = paymentStatusResult.rows[0].exists;
+    console.log('\nTabela payment_status existe:', paymentStatusExists);
+    
+    if (paymentStatusExists) {
+      // Verificar dados da tabela payment_status
+      const paymentStatusData = await pool.query('SELECT id, name FROM payment_status ORDER BY id');
+      console.log('Dados da tabela payment_status:');
+      paymentStatusData.rows.forEach(row => {
+        console.log(`  - ${row.id}: ${row.name}`);
+      });
+    }
+    
+    console.log('\n✅ Verificação concluída com sucesso!');
+    await pool.end();
+  } catch (error) {
+    console.error('❌ Erro ao verificar estrutura do banco de dados:', error);
+    await pool.end();
+    process.exit(1);
+  }
 }
 
-// Verificar variáveis de ambiente do Render
-console.log('\n2. Verificando variáveis de ambiente do Render...');
-const requiredEnvVars = ['NODE_ENV', 'JWT_SECRET', 'DATABASE_URL', 'PORT'];
-console.log('  Variáveis de ambiente necessárias:', requiredEnvVars);
-
-// Verificar se há um arquivo .env de exemplo
-const envExamplePath = path.resolve(__dirname, 'server', '.env.example');
-if (fs.existsSync(envExamplePath)) {
-  console.log('  ✅ .env.example encontrado');
-  const envExample = fs.readFileSync(envExamplePath, 'utf8');
-  console.log('  Conteúdo do .env.example:');
-  console.log(envExample);
-} else {
-  console.log('  ⚠️  .env.example não encontrado');
-}
-
-// Verificar o arquivo .env atual
-const envPath = path.resolve(__dirname, 'server', '.env');
-if (fs.existsSync(envPath)) {
-  console.log('\n3. Verificando arquivo .env atual...');
-  const envContent = fs.readFileSync(envPath, 'utf8');
-  console.log('  Conteúdo do .env:');
-  console.log(envContent);
-} else {
-  console.log('\n3. ⚠️  .env não encontrado');
-}
-
-// Verificar arquivos de migração do PostgreSQL
-console.log('\n4. Verificando arquivos de migração do PostgreSQL...');
-const migrationsDir = path.resolve(__dirname, 'database', 'migrations');
-if (fs.existsSync(migrationsDir)) {
-  const postgresMigrations = fs.readdirSync(migrationsDir)
-    .filter(file => file.includes('_postgres.sql'))
-    .sort();
-  
-  console.log(`  ✅ Encontradas ${postgresMigrations.length} migrações para PostgreSQL:`);
-  postgresMigrations.forEach(file => {
-    console.log(`    - ${file}`);
-  });
-} else {
-  console.log('  ❌ Diretório de migrações não encontrado');
-}
-
-// Verificar arquivo de inicialização do PostgreSQL
-console.log('\n5. Verificando arquivo de inicialização do PostgreSQL...');
-const initPostgresPath = path.resolve(__dirname, 'database', 'init_postgresql.sql');
-if (fs.existsSync(initPostgresPath)) {
-  console.log('  ✅ init_postgresql.sql encontrado');
-  const initPostgresContent = fs.readFileSync(initPostgresPath, 'utf8');
-  console.log('  Tamanho do arquivo:', initPostgresContent.length, 'caracteres');
-} else {
-  console.log('  ❌ init_postgresql.sql não encontrado');
-}
-
-console.log('\n=== FIM DA VERIFICAÇÃO ===');
+checkDatabaseStructure();

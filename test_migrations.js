@@ -1,100 +1,93 @@
-const sqlite3 = require('sqlite3').verbose();
+#!/usr/bin/env node
+
+// Script para verificar se há problemas com as migrações
+const fs = require('fs');
 const path = require('path');
 
-// Caminho para o banco de dados
-const dbPath = path.resolve(__dirname, 'server/database/database.db');
-
-// Conectar ao banco de dados
-const db = new sqlite3.Database(dbPath);
-
-console.log('=== Testando migrações ===');
-
-// Verificar estrutura da tabela transactions
-db.serialize(() => {
-  // Verificar se os campos de parcelamento existem
-  db.all("PRAGMA table_info(transactions)", (err, rows) => {
-    if (err) {
-      console.error('Erro ao obter informações da tabela transactions:', err);
-    } else {
-      console.log('\n=== Estrutura da tabela transactions ===');
-      rows.forEach(row => {
-        console.log(`${row.name} (${row.type}) ${row.notnull ? 'NOT NULL' : ''} ${row.dflt_value ? `DEFAULT ${row.dflt_value}` : ''}`);
-      });
-      
-      // Verificar especificamente os campos de parcelamento
-      const installmentFields = rows.filter(row => 
-        row.name === 'is_installment' || 
-        row.name === 'installment_number' || 
-        row.name === 'total_installments'
-      );
-      
-      console.log('\n=== Campos de parcelamento ===');
-      if (installmentFields.length === 3) {
-        console.log('✅ Todos os campos de parcelamento estão presentes:');
-        installmentFields.forEach(field => {
-          console.log(`  - ${field.name} (${field.type})`);
-        });
-      } else {
-        console.log('❌ Alguns campos de parcelamento estão faltando');
-        console.log('Campos encontrados:', installmentFields.map(f => f.name));
-      }
-      
-      // Verificar especificamente os campos de recorrência
-      const recurringFields = rows.filter(row => 
-        row.name === 'is_recurring' || 
-        row.name === 'recurrence_type' || 
-        row.name === 'recurrence_count' || 
-        row.name === 'recurrence_end_date'
-      );
-      
-      console.log('\n=== Campos de recorrência ===');
-      if (recurringFields.length === 4) {
-        console.log('✅ Todos os campos de recorrência estão presentes:');
-        recurringFields.forEach(field => {
-          console.log(`  - ${field.name} (${field.type})`);
-        });
-      } else {
-        console.log('❌ Alguns campos de recorrência estão faltando');
-        console.log('Campos encontrados:', recurringFields.map(f => f.name));
-      }
+function checkMigrations() {
+  try {
+    console.log('🔍 Verificando arquivos de migração...');
+    
+    // Diretório de migrações
+    const migrationsDir = path.resolve(__dirname, 'database', 'migrations');
+    
+    if (!fs.existsSync(migrationsDir)) {
+      console.error('❌ Diretório de migrações não encontrado:', migrationsDir);
+      process.exit(1);
     }
-  });
-  
-  // Verificar valores distintos nos campos booleanos
-  setTimeout(() => {
-    console.log('\n=== Valores nos campos booleanos ===');
     
-    db.all("SELECT DISTINCT is_installment FROM transactions", (err, rows) => {
-      if (err) {
-        console.error('Erro ao obter valores de is_installment:', err);
-      } else {
-        console.log('Valores em is_installment:');
-        rows.forEach(row => {
-          console.log(`  - ${row.is_installment} (${typeof row.is_installment})`);
+    // Listar arquivos de migração
+    const migrationFiles = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+    
+    console.log(`\n📁 Encontrados ${migrationFiles.length} arquivos de migração:`);
+    migrationFiles.forEach(file => {
+      console.log(`  - ${file}`);
+    });
+    
+    // Verificar se há migrações específicas para PostgreSQL e SQLite
+    const postgresMigrations = migrationFiles.filter(file => file.includes('_postgres.sql'));
+    const sqliteMigrations = migrationFiles.filter(file => 
+      file.endsWith('.sql') && !file.includes('_postgres.sql') && !file.includes('_sqlite.sql')
+    );
+    
+    console.log(`\n🐘 Migrações específicas para PostgreSQL: ${postgresMigrations.length}`);
+    postgresMigrations.forEach(file => {
+      console.log(`  - ${file}`);
+    });
+    
+    console.log(`\n🐢 Migrações para SQLite: ${sqliteMigrations.length}`);
+    sqliteMigrations.forEach(file => {
+      console.log(`  - ${file}`);
+    });
+    
+    // Verificar pares de migrações
+    console.log('\n🔍 Verificando pares de migrações...');
+    const migrationPairs = new Map();
+    
+    sqliteMigrations.forEach(sqliteFile => {
+      const baseName = sqliteFile.replace('.sql', '');
+      const postgresFile = `${baseName}_postgres.sql`;
+      
+      migrationPairs.set(baseName, {
+        sqlite: sqliteFile,
+        postgres: postgresMigrations.includes(postgresFile) ? postgresFile : null
+      });
+    });
+    
+    // Adicionar migrações específicas do PostgreSQL que não têm equivalentes SQLite
+    postgresMigrations.forEach(postgresFile => {
+      const baseName = postgresFile.replace('_postgres.sql', '');
+      if (!migrationPairs.has(baseName)) {
+        migrationPairs.set(baseName, {
+          sqlite: null,
+          postgres: postgresFile
         });
       }
     });
     
-    db.all("SELECT DISTINCT is_recurring FROM transactions", (err, rows) => {
-      if (err) {
-        console.error('Erro ao obter valores de is_recurring:', err);
-      } else {
-        console.log('Valores em is_recurring:');
-        rows.forEach(row => {
-          console.log(`  - ${row.is_recurring} (${typeof row.is_recurring})`);
-        });
+    console.log('\n🔗 Pares de migrações encontrados:');
+    migrationPairs.forEach((pair, baseName) => {
+      console.log(`  ${baseName}:`);
+      console.log(`    SQLite: ${pair.sqlite || '❌ Não encontrado'}`);
+      console.log(`    PostgreSQL: ${pair.postgres || '❌ Não encontrado'}`);
+      
+      // Verificar se ambos existem
+      if (pair.sqlite && !pair.postgres) {
+        console.log(`    ⚠️  Aviso: Migração SQLite existe mas PostgreSQL não`);
+      } else if (!pair.sqlite && pair.postgres) {
+        console.log(`    ℹ️  Info: Migração específica para PostgreSQL apenas`);
+      } else if (pair.sqlite && pair.postgres) {
+        console.log(`    ✅ OK: Ambas as migrações existem`);
       }
     });
-  }, 1000);
-  
-  // Fechar conexão após um tempo
-  setTimeout(() => {
-    db.close((err) => {
-      if (err) {
-        console.error('Erro ao fechar conexão:', err);
-      } else {
-        console.log('\n✅ Teste de migrações concluído');
-      }
-    });
-  }, 2000);
-});
+    
+    console.log('\n✅ Verificação de migrações concluída com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro ao verificar migrações:', error);
+    process.exit(1);
+  }
+}
+
+checkMigrations();
