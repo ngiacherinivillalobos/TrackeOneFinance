@@ -163,6 +163,7 @@ interface ModernStatsCardProps {
     isPositive: boolean;
   };
   iconBgColor?: string;
+  sx?: any; // Adicionando suporte para estilos customizados
 }
 
 export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
@@ -173,6 +174,7 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
   color = 'primary',
   trend,
   iconBgColor,
+  sx, // Adicionando sx como prop
 }) => {
   // Garantir que sempre temos um colorScheme válido
   const colorScheme = colors[color] || colors.primary;
@@ -190,6 +192,7 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
           boxShadow: shadows.lg,
           transform: 'translateY(-2px)',
         },
+        ...sx, // Aplicando estilos customizados
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -221,6 +224,7 @@ export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
           )}
         </Box>
         <Box
+          className="ModernStatsCard-icon" // Adicionando classe para seleção CSS
           sx={{
             p: 1,
             borderRadius: 1.5,

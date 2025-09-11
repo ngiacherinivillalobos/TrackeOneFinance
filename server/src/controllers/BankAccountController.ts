@@ -122,12 +122,12 @@ class BankAccountController {
       const totalIncome = parseFloat(movements[0]?.total_income || '0');
       const totalExpense = parseFloat(movements[0]?.total_expense || '0');
       const totalMovements = totalIncome - totalExpense;
-      const currentBalance = parseFloat(bankAccount.balance || '0') + totalMovements;
+      const currentBalance = parseFloat(bankAccount.initial_balance || '0') + totalMovements;
 
       res.json({
         ...bankAccount,
         bank_name: bankAccount.type || bankAccount.bank_name,
-        initial_balance: parseFloat(bankAccount.balance || '0'),
+        initial_balance: parseFloat(bankAccount.initial_balance || '0'),
         current_balance: currentBalance,
         total_movements: totalMovements
       });
@@ -158,12 +158,12 @@ class BankAccountController {
           const totalIncome = parseFloat(movements[0]?.total_income || '0');
           const totalExpense = parseFloat(movements[0]?.total_expense || '0');
           const totalMovements = totalIncome - totalExpense;
-          const currentBalance = parseFloat(account.balance || '0') + totalMovements;
+          const currentBalance = parseFloat(account.initial_balance || '0') + totalMovements;
 
           return {
             ...account,
             bank_name: account.type || account.bank_name,
-            initial_balance: parseFloat(account.balance || '0'),
+            initial_balance: parseFloat(account.initial_balance || '0'),
             current_balance: currentBalance,
             total_movements: totalMovements
           };

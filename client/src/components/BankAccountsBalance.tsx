@@ -34,7 +34,10 @@ const BankAccountsBalance: React.FC = () => {
   };
 
   const formatCurrency = (value: number) => {
-    return `R$ ${value.toFixed(2).replace('.', ',')}`;
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
   };
 
   const getBalanceColor = (balance: number) => {
@@ -43,7 +46,7 @@ const BankAccountsBalance: React.FC = () => {
     return 'default';
   };
 
-  const totalBalance = accounts.reduce((sum, account) => sum + account.current_balance, 0);
+  const totalBalance = accounts.reduce((sum, account) => sum + (account.current_balance || 0), 0);
 
   if (loading) {
     return (

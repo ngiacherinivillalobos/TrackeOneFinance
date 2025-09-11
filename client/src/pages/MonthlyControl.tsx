@@ -300,9 +300,13 @@ export default function MonthlyControl() {
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
-    
+
   const totalDespesas = transactions
     .filter(t => t.transaction_type === 'Despesa')
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+  const totalInvestimentos = transactions
+    .filter(t => t.transaction_type === 'Investimento')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
   // Cálculos dos totalizadores
@@ -337,14 +341,15 @@ export default function MonthlyControl() {
   // Total "A Pagar" = Vencidos + Vencem Hoje + A Vencer (todas as transações não pagas)
   const totalAPagar = totalVencidos + totalVencemHoje + totalAVencer;
   
-  const saldoPeriodo = totalReceitas - totalDespesas;
+  // Calcular saldo do período (Receitas - Despesas - Investimentos, incluindo vencidos)
+  const saldoPeriodo = totalReceitas - totalDespesas - totalInvestimentos;
   console.log("Cálculos dos totais:", { totalVencidos, totalVencemHoje, totalAVencer, totalAPagar, saldoPeriodo });
 
   // Calcular totais dos registros selecionados
   const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
   const totalSelectedCount = selectedTransactionsData.length;
   const totalSelectedValue = selectedTransactionsData.reduce((sum, t) => {
-    if (t.transaction_type === 'Despesa') return sum - getSafeAmount(t.amount);
+    if (t.transaction_type === 'Despesa' || t.transaction_type === 'Investimento') return sum - getSafeAmount(t.amount);
     return sum + getSafeAmount(t.amount);
   }, 0);
   const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
@@ -2211,6 +2216,39 @@ export default function MonthlyControl() {
             }
           }}>
             <ModernStatsCard
+              title="Receitas do Mês"
+              value={formatCurrency(totalReceitas)}
+              subtitle="Total de entradas"
+              icon={<TrendingUp sx={{ fontSize: 16 }} />}
+              color="success"
+              trend={{ value: 0, isPositive: true }}
+            />
+            
+            <ModernStatsCard
+              title="Despesas do Mês"
+              value={formatCurrency(totalDespesas)}
+              subtitle="Total de gastos"
+              icon={<TrendingDown sx={{ fontSize: 16 }} />}
+              color="error"
+              trend={{ value: 0, isPositive: false }}
+            />
+            
+            <ModernStatsCard
+              title="Investimentos"
+              value={formatCurrency(totalInvestimentos)}
+              subtitle="Total investido"
+              icon={<ShowChart sx={{ fontSize: 16 }} />}
+              color="warning"
+              trend={{ value: 0, isPositive: true }}
+              sx={{
+                '& .ModernStatsCard-icon': {
+                  bgcolor: '#E3F2FD',
+                  color: '#1976d2'
+                }
+              }}
+            />
+            
+            <ModernStatsCard
               title="Vencidos"
               value={formatCurrency(Math.abs(totalVencidos))}
               subtitle="Pagamentos em atraso"
@@ -2225,23 +2263,6 @@ export default function MonthlyControl() {
               subtitle="Vencimento urgente"
               icon={<CalendarIcon sx={{ fontSize: 16 }} />}
               color="warning"
-            />
-            
-            <ModernStatsCard
-              title="A Pagar"
-              value={formatCurrency(Math.abs(totalAPagar))}
-              subtitle="Total pendente (inclui vencidos)"
-              icon={<ReceiptIcon sx={{ fontSize: 16 }} />}
-              color="primary"
-            />
-            
-            <ModernStatsCard
-              title="Pagos"
-              value={formatCurrency(transactions.filter(t => t.is_paid).reduce((sum, t) => sum + t.amount, 0))}
-              subtitle="Já quitados"
-              icon={<PaidIcon sx={{ fontSize: 16 }} />}
-              color="success"
-              trend={{ value: 8.3, isPositive: true }}
             />
             
             <ModernStatsCard
@@ -2302,7 +2323,24 @@ export default function MonthlyControl() {
                 />
               )}
 
-              {/* 4. Valor Total - com cores condicionais */}
+              {/* 4. Investimentos - com o mesmo estilo da lista de transações */}
+              {totalSelectedInvestimentos > 0 && (
+                <ModernStatsCard
+                  title="Investimentos"
+                  value={formatCurrency(totalSelectedInvestimentos)}
+                  subtitle="Selecionados"
+                  icon={<ShowChart sx={{ fontSize: 16 }} />}
+                  color="primary"
+                  sx={{
+                    '& .ModernStatsCard-icon': {
+                      bgcolor: '#E3F2FD',
+                      color: '#1976d2'
+                    }
+                  }}
+                />
+              )}
+
+              {/* 5. Valor Total - com cores condicionais */}
               <ModernStatsCard
                 title="Valor Total"
                 value={
@@ -2317,17 +2355,6 @@ export default function MonthlyControl() {
                 icon={<AccountBalanceWalletIcon sx={{ fontSize: 16 }} />}
                 color={totalSelectedValue >= 0 ? 'success' : 'error'}
               />
-
-              {/* 5. Investimentos - opcional */}
-              {totalSelectedInvestimentos > 0 && (
-                <ModernStatsCard
-                  title="Investimentos"
-                  value={formatCurrency(totalSelectedInvestimentos)}
-                  subtitle="Selecionados"
-                  icon={<ShowChart sx={{ fontSize: 16 }} />}
-                  color="warning"
-                />
-              )}
             </Box>
           )}
 

@@ -39,7 +39,6 @@ import {
   Clear as ClearIcon,
   TrendingDown as ExpenseIcon,
   ShowChart as InvestmentIcon,
-  ShowChart,
 } from '@mui/icons-material';
 import { ModernHeader, ModernStatsCard, ModernSection, ModernCard } from '../components/modern/ModernComponents';
 import { colors, gradients } from '../theme/modernTheme';
@@ -178,55 +177,110 @@ export default function Dashboard() {
       } else if (user?.cost_center_id) {
         // Se o usuário tem um centro de custo associado, usar o dele por padrão
         params.cost_center_id = user.cost_center_id;
-      } else {
-        // Se não houver filtro específico e nem usuário com centro de custo, mostrar todos
-        params.cost_center_id = 'all';
       }
+      // Se não houver filtro específico e nem usuário com centro de custo, não enviar o parâmetro
+      // para que o backend retorne todos os centros de custo
       
       console.log('Carregando transações com params:', params);
-      const response = await api.get('/transactions', { params });
-      console.log('Resposta da API para transações:', response.data);
       
-      let filteredTransactions = response.data;
+      // Sempre buscar todas as transações vencidas, independentemente da data
       let overdueTransactions: any[] = [];
       
-      // Se estivermos filtrando por período específico, buscar também transações vencidas de todo o período
-      if (startDate && endDate) {
-        try {
-          console.log('Buscando transações vencidas...');
-          const overdueParams = {
-            payment_status_id: 374, // Status "Vencido"
-            cost_center_id: params.cost_center_id
-          };
-          
-          const overdueResponse = await api.get('/transactions', { params: overdueParams });
-          console.log('Transações vencidas encontradas:', overdueResponse.data);
-          
-          if (overdueResponse.data && Array.isArray(overdueResponse.data)) {
-            overdueTransactions = overdueResponse.data.filter((t: any) => 
-              t.payment_status_id === 374 && // Apenas transações vencidas
-              t.transaction_date < startDate // Garantir que são de períodos anteriores
-            );
-            console.log('Transações vencidas filtradas:', overdueTransactions);
-          }
-        } catch (error) {
-          console.error('Erro ao buscar transações vencidas:', error);
+      try {
+        console.log('Buscando transações vencidas...');
+        const overdueParams: any = {
+          dateFilterType: 'all', // Sempre buscar todas as datas
+          payment_status_id: 'overdue', // Status "Vencido" - usar string como no Controle Mensal
+        };
+        
+        // Adicionar filtro de centro de custo se houver
+        if (params.cost_center_id) {
+          overdueParams.cost_center_id = params.cost_center_id;
         }
+        
+        const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);
+        console.log('Transações vencidas encontradas:', overdueResponse.data);
+        
+        if (overdueResponse.data && Array.isArray(overdueResponse.data)) {
+          // Para "Todo o período", incluir todas as transações vencidas
+          // Para períodos específicos, filtrar transações vencidas por data
+          if (startDate && endDate) {
+            // Se estivermos filtrando por período específico, filtrar transações vencidas por data
+            // Mas manter todas as transações vencidas (não filtrar por data)
+            overdueTransactions = overdueResponse.data.filter((t: any) => 
+              t.payment_status_id === 374 // Apenas transações vencidas (ID correto é 374)
+            );
+          } else {
+            // Para "Todo o período", incluir todas as transações vencidas
+            overdueTransactions = overdueResponse.data.filter((t: any) => 
+              t.payment_status_id === 374 // Apenas transações vencidas (ID correto é 374)
+            );
+          }
+          
+          // Garantir que as transações vencidas não estão marcadas como pagas
+          overdueTransactions = overdueTransactions.filter((t: any) => {
+            // Verificar se a transação está realmente vencida (não paga)
+            return t.payment_status_id === 374; // ID 374 = Vencido
+          });
+          
+          console.log('Transações vencidas filtradas:', overdueTransactions);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar transações vencidas:', error);
       }
       
-      // Combinar transações filtradas com transações vencidas
-      const combinedTransactions = [...filteredTransactions, ...overdueTransactions];
+      // Buscar transações do período selecionado
+      let periodTransactions: any[] = [];
       
-      // Garantir que não há transações duplicadas baseado no ID
-      const uniqueTransactions = combinedTransactions.reduce((acc: any[], transaction: any) => {
-        if (!acc.some((t: any) => t.id === transaction.id)) {
-          acc.push(transaction);
+      try {
+        // Se não estivermos filtrando apenas por vencidos, buscar também as transações do período
+        const periodParams: any = {
+          dateFilterType,
+          ...Object.fromEntries(Object.entries(params).filter(([key, value]) => {
+            return value !== undefined && value !== '';
+          }))
+        };
+        
+        // Adicionar parâmetros específicos de data
+        if (dateFilterType === 'month') {
+          periodParams.month = currentDate.getMonth();
+          periodParams.year = currentDate.getFullYear();
+        } else if (dateFilterType === 'year') {
+          periodParams.year = currentDate.getFullYear();
+        } else if (dateFilterType === 'custom') {
+          if (startDate) periodParams.customStartDate = startDate;
+          if (endDate) periodParams.customEndDate = endDate;
         }
-        return acc;
-      }, []);
+        
+        console.log("Parâmetros da requisição para transações do período:", periodParams);
+        
+        const periodResponse = await api.get(`/transactions/filtered?${new URLSearchParams(periodParams)}`);
+        console.log("Resposta da API para transações do período:", periodResponse.data);
+        
+        periodTransactions = periodResponse.data;
+      } catch (error) {
+        console.error('Erro ao carregar transações do período:', error);
+        periodTransactions = [];
+      }
+      
+      // Combinar transações vencidas com transações do período
+      // Remover duplicatas baseadas no ID
+      const allTransactionsMap = new Map();
+      
+      // Adicionar transações vencidas
+      overdueTransactions.forEach((t: any) => {
+        allTransactionsMap.set(t.id, t);
+      });
+      
+      // Adicionar transações do período
+      periodTransactions.forEach((t: any) => {
+        allTransactionsMap.set(t.id, t);
+      });
+      
+      const combinedTransactions = Array.from(allTransactionsMap.values());
       
       // Mapear os dados para incluir informações do centro de custo e tipo correto
-      const mappedTransactions = uniqueTransactions.map((transaction: any) => {
+      const mappedTransactions = combinedTransactions.map((transaction: any) => {
         // Mapear transaction_type (português) para type (inglês)
         let type: 'expense' | 'income' | 'investment' = 'expense';
         if (transaction.transaction_type === 'Receita') type = 'income';
@@ -240,7 +294,9 @@ export default function Dashboard() {
             id: transaction.cost_center_id,
             name: transaction.cost_center_name,
             number: transaction.cost_center_number
-          } : null
+          } : null,
+          // Converter o campo is_paid baseado no payment_status_id
+          is_paid: transaction.payment_status_id === 2
         };
       });
       
@@ -259,7 +315,7 @@ export default function Dashboard() {
   // Carregar dados das contas bancárias
   const loadBankAccounts = async () => {
     try {
-      const response = await api.get('/bank-accounts');
+      const response = await api.get('/bank-accounts/balances');
       setBankAccounts(response.data);
     } catch (error) {
       console.error('Erro ao carregar contas bancárias:', error);
@@ -288,12 +344,12 @@ export default function Dashboard() {
     const interval = setInterval(() => {
       // Só atualiza se a página estiver visível
       if (document.visibilityState === 'visible') {
-        loadTransactions();
+        setRefreshTrigger(prev => prev + 1);
       }
     }, 30000); // 30 segundos
 
     return () => clearInterval(interval);
-  }, [currentDate, selectedCostCenter, dateFilterType]);
+  }, []); // Array de dependências vazio para evitar looping
 
   const calculateDashboardData = (transactionsData: Transaction[], currentParams: any) => {
     console.log('Calculando dashboard data com transactions:', transactionsData);
@@ -322,8 +378,29 @@ export default function Dashboard() {
       .filter(t => t.type === 'investment')
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    // Calcular saldo previsto (Receitas - Despesas - Investimentos do período, independente do status)
+    // Calcular saldo previsto (Receitas - Despesas - Investimentos)
     const saldoPrevisto = totalReceitas - totalDespesas - totalInvestimentos;
+    
+    // Calcular saldo previsto do próximo mês
+    // Vamos calcular com base no mês seguinte ao período atual
+    let saldoPrevistoProximoMes = 0;
+    
+    // Se estivermos filtrando por mês, calcular o próximo mês
+    if (dateFilterType === 'month') {
+      // Para calcular corretamente o próximo mês, precisamos buscar as transações do próximo mês
+      // Por enquanto, vamos manter o cálculo atual como placeholder
+      saldoPrevistoProximoMes = totalReceitas - totalDespesas - totalInvestimentos;
+    }
+    
+    // Se estivermos filtrando por ano, usar o mesmo cálculo
+    if (dateFilterType === 'year') {
+      saldoPrevistoProximoMes = totalReceitas - totalDespesas - totalInvestimentos;
+    }
+    
+    // Se estivermos filtrando por "Todo o período", usar o mesmo cálculo
+    if (dateFilterType === 'all') {
+      saldoPrevistoProximoMes = totalReceitas - totalDespesas - totalInvestimentos;
+    }
     
     // Calcular saldo atual real considerando:
     // 1. Saldo Inicial das contas bancárias
@@ -334,7 +411,7 @@ export default function Dashboard() {
 
     // 1. Saldo inicial das contas bancárias
     const saldoInicialBancos = bankAccounts.reduce((sum, account) => 
-      sum + getSafeAmount(account.initial_balance || account.balance), 0);
+      sum + getSafeAmount(account.initial_balance), 0);
 
     // 2. Receitas pagas do controle mensal
     const receitasPagasControle = transactionsData
@@ -371,7 +448,7 @@ export default function Dashboard() {
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const receitasNaoPagas = transactionsData
-      .filter(t => t.type === 'income' && t.payment_status_id === 1)
+      .filter(t => t.type === 'income' && (t.payment_status_id === 1 || t.payment_status_id === 374))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
     // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (não incluir investimentos)
@@ -401,6 +478,7 @@ export default function Dashboard() {
     console.log('Total despesas (TODAS):', totalDespesas);
     console.log('Total investimentos (TODAS):', totalInvestimentos);
     console.log('Saldo previsto (todas as transações):', saldoPrevisto);
+    console.log('Saldo previsto próximo mês:', saldoPrevistoProximoMes);
     console.log('=== Cálculo Saldo Atual Real ===');
     console.log('Saldo inicial bancos:', saldoInicialBancos);
     console.log('Receitas pagas (controle):', receitasPagasControle);
@@ -419,6 +497,7 @@ export default function Dashboard() {
       expenses: totalDespesas,
       savings: totalInvestimentos, // Agora mostra todos os investimentos do período, independentemente do status
       expectedBalance: saldoPrevisto,
+      expectedBalanceNextMonth: saldoPrevistoProximoMes, // Novo campo para saldo previsto do próximo mês
       currentBalance: saldoAtualReal, // Novo campo para saldo atual real
       received: receitasPagas,
       paid: totalPago,
@@ -436,19 +515,19 @@ export default function Dashboard() {
   // Função para carregar o total de investimentos pagos de todos os períodos (Meta de Economia)
   const loadTotalInvestmentsPaid = async (costCenterId: number | string | null) => {
     try {
+      // Buscar todos os investimentos pagos, independentemente do período
       const params: any = {
-        type: 'investment',
+        transaction_type: 'Investimento',
         payment_status_id: 2 // Apenas investimentos com status "Pago"
       };
       
       // Adicionar filtro de centro de custo se selecionado
-      // Só adiciona o filtro se não for 'all' (que significa todos os centros de custo)
-      if (costCenterId && costCenterId !== 'all') {
+      if (costCenterId) {
         params.cost_center_id = costCenterId;
       }
       
       console.log('Carregando total de investimentos pagos com params:', params);
-      const response = await api.get('/transactions', { params });
+      const response = await api.get('/transactions/filtered', { params });
       console.log('Response investimentos pagos:', response.data);
       
       const totalInvestimentosPagos = response.data
@@ -466,6 +545,16 @@ export default function Dashboard() {
   };
   
   const calculateWeeklyBalances = (transactionsData: Transaction[]) => {
+    // Função auxiliar para converter valores para número
+    const getSafeAmount = (amount: any): number => {
+      if (typeof amount === 'number') return amount;
+      if (typeof amount === 'string') {
+        const parsed = parseFloat(amount);
+        return isNaN(parsed) ? 0 : parsed;
+      }
+      return 0;
+    };
+    
     // Criar semanas do mês
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -507,15 +596,15 @@ export default function Dashboard() {
         
         const previousIncome = previousWeekTransactions
           .filter(t => t.type === 'income')
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
           
         const previousExpenses = previousWeekTransactions
           .filter(t => t.type === 'expense')
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
           
         const previousInvestments = previousWeekTransactions
           .filter(t => t.type === 'investment')
-          .reduce((sum, t) => sum + t.amount, 0);
+          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
           
         balance = previousIncome - previousExpenses - previousInvestments;
       }
@@ -529,7 +618,7 @@ export default function Dashboard() {
       // Calcular gastos da semana (despesas + investimentos)
       const spent = weekTransactions
         .filter(t => t.type === 'expense' || t.type === 'investment')
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
       // Calcular saldo restante
       const remaining = balance - spent;
@@ -551,6 +640,7 @@ export default function Dashboard() {
     expenses: 0,
     savings: 0,
     expectedBalance: 0,
+    expectedBalanceNextMonth: 0, // Novo campo
     currentBalance: 0, // Novo campo
     received: 0,
     paid: 0,
@@ -758,45 +848,22 @@ export default function Dashboard() {
         {/* Cards de Estatísticas */}
         <Box>
           <ModernStatsCard
-            title="Receitas do Mês"
-            value={formatCurrency(monthSummary.income)}
-            subtitle="Total de entradas"
-            icon={<TrendingUp sx={{ fontSize: 28 }} />}
-            color="success"
-            trend={{ value: 0, isPositive: true }}
-          />
-        </Box>
-
-        <Box>
-          <ModernStatsCard
-            title="Despesas do Mês"
-            value={formatCurrency(monthSummary.expenses)}
-            subtitle="Total de gastos"
-            icon={<TrendingDown sx={{ fontSize: 28 }} />}
-            color="error"
-            trend={{ value: 0, isPositive: false }}
-          />
-        </Box>
-
-        <Box>
-          <ModernStatsCard
-            title="Investimentos"
-            value={formatCurrency(monthSummary.savings)}
-            subtitle="Total investido"
-            icon={<InvestmentIcon sx={{ fontSize: 28, color: colors.primary[600] }} />}
-            color="warning"
-            trend={{ value: 0, isPositive: true }}
-            iconBgColor="#E6F2FC"
-          />
-        </Box>
-
-        <Box>
-          <ModernStatsCard
             title="Saldo Previsto"
             value={formatCurrency(monthSummary.expectedBalance)}
             subtitle="Baseado no período"
-            icon={<Timeline sx={{ fontSize: 28 }} />}
+            icon={<AccountBalance sx={{ fontSize: 28 }} />}
             color="secondary"
+            trend={{ value: 0, isPositive: true }}
+          />
+        </Box>
+
+        <Box>
+          <ModernStatsCard
+            title="Saldo Previsto Próximo Mês"
+            value={formatCurrency(monthSummary.expectedBalanceNextMonth)}
+            subtitle="Projeção do próximo mês"
+            icon={<AccountBalance sx={{ fontSize: 28 }} />}
+            color="primary"
             trend={{ value: 0, isPositive: true }}
           />
         </Box>
@@ -940,7 +1007,7 @@ export default function Dashboard() {
           <ModernSection
             title="Meta de Economia"
             subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${formatToBrazilianDate(createSafeDate(savingsGoal.target_date))}` : "Progresso até o final do mês"}
-            icon={<ShowChart sx={{ fontSize: 24 }} />}
+            icon={<InvestmentIcon sx={{ fontSize: 24, color: '#1976d2' }} />}
             headerGradient
           >
             <Box sx={{ mb: 3 }}>
