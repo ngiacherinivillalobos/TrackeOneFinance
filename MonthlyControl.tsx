@@ -601,7 +601,7 @@ export default function MonthlyControl() {
           }));
           
           overdueTransactions = overdueData.filter((t: any) => {
-            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+            const transactionDate = getSafeDate(t.transaction_date);
             transactionDate.setHours(0, 0, 0, 0);
             // Verificar se a transação está vencida (data < hoje) e não paga
             return !t.is_paid && transactionDate < today;
