@@ -24,11 +24,12 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
-    "concurrently": "^8.0.1",
+    "concurrently": "^8.2.2",
     "dotenv": "^17.2.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "typescript": "^5.9.2"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

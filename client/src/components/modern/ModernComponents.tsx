@@ -78,6 +78,7 @@ interface ModernSectionProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   headerGradient?: boolean;
+  sx?: any;
 }
 
 export const ModernSection: React.FC<ModernSectionProps> = ({
@@ -86,6 +87,7 @@ export const ModernSection: React.FC<ModernSectionProps> = ({
   icon,
   children,
   headerGradient = false,
+  sx = {},
 }) => {
   return (
     <Paper
@@ -94,6 +96,7 @@ export const ModernSection: React.FC<ModernSectionProps> = ({
         overflow: 'hidden',
         border: '1px solid #e2e8f0',
         boxShadow: shadows.md,
+        ...sx,
       }}
     >
       {/* Header */}

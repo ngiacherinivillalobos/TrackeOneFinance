@@ -304,7 +304,7 @@ export default function Dashboard() {
       setTransactions(mappedTransactions);
       
       // Calcular dados para o dashboard após carregar as transações
-      calculateDashboardData(mappedTransactions, params);
+      await calculateDashboardData(mappedTransactions, params);
     } catch (error) {
       console.error('Erro ao carregar transações:', error);
     } finally {
@@ -351,7 +351,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []); // Array de dependências vazio para evitar looping
 
-  const calculateDashboardData = (transactionsData: Transaction[], currentParams: any) => {
+  const calculateDashboardData = async (transactionsData: Transaction[], currentParams: any) => {
     console.log('Calculando dashboard data com transactions:', transactionsData);
     console.log('Current params:', currentParams);
     
@@ -382,13 +382,73 @@ export default function Dashboard() {
     const saldoPrevisto = totalReceitas - totalDespesas - totalInvestimentos;
     
     // Calcular saldo previsto do próximo mês
-    // Vamos calcular com base no mês seguinte ao período atual
     let saldoPrevistoProximoMes = 0;
     
-    // Se estivermos filtrando por mês, calcular o próximo mês
+    // Se estivermos filtrando por mês, calcular com base nas transações do próximo mês
     if (dateFilterType === 'month') {
-      // Para calcular corretamente o próximo mês, precisamos buscar as transações do próximo mês
-      // Por enquanto, vamos manter o cálculo atual como placeholder
+      // Carregar transações do próximo mês
+      const nextMonthTransactions = await loadNextMonthTransactions(currentDate, selectedCostCenter?.id || user?.cost_center_id || null);
+      
+      // Carregar também transações vencidas do próximo mês
+      let nextMonthOverdueTransactions: any[] = [];
+      
+      try {
+        const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+        const overdueParams: any = {
+          dateFilterType: 'all', // Sempre buscar todas as datas
+          payment_status_id: 'overdue', // Status "Vencido"
+        };
+        
+        // Adicionar filtro de centro de custo se houver
+        if (selectedCostCenter?.id || user?.cost_center_id) {
+          overdueParams.cost_center_id = selectedCostCenter?.id || user?.cost_center_id;
+        }
+        
+        const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);
+        
+        if (overdueResponse.data && Array.isArray(overdueResponse.data)) {
+          // Filtrar apenas transações vencidas do próximo mês
+          nextMonthOverdueTransactions = overdueResponse.data.filter((t: any) => {
+            // Verificar se a transação está vencida e não paga
+            return t.payment_status_id === 374; // ID 374 = Vencido
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar transações vencidas do próximo mês:', error);
+      }
+      
+      // Combinar transações do próximo mês com transações vencidas
+      const allNextMonthTransactionsMap = new Map();
+      
+      // Adicionar transações do próximo mês
+      nextMonthTransactions.forEach((t: any) => {
+        allNextMonthTransactionsMap.set(t.id, t);
+      });
+      
+      // Adicionar transações vencidas do próximo mês
+      nextMonthOverdueTransactions.forEach((t: any) => {
+        allNextMonthTransactionsMap.set(t.id, t);
+      });
+      
+      const combinedNextMonthTransactions = Array.from(allNextMonthTransactionsMap.values());
+      
+      // Calcular totais para o próximo mês
+      const nextMonthReceitas = combinedNextMonthTransactions
+        .filter((t: any) => t.transaction_type === 'Receita')
+        .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+        
+      const nextMonthDespesas = combinedNextMonthTransactions
+        .filter((t: any) => t.transaction_type === 'Despesa')
+        .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+        
+      const nextMonthInvestimentos = combinedNextMonthTransactions
+        .filter((t: any) => t.transaction_type === 'Investimento')
+        .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+      
+      // Calcular saldo previsto do próximo mês
+      saldoPrevistoProximoMes = nextMonthReceitas - nextMonthDespesas - nextMonthInvestimentos;
+    } else {
+      // Para outros tipos de filtro, usar o cálculo padrão
       saldoPrevistoProximoMes = totalReceitas - totalDespesas - totalInvestimentos;
     }
     
@@ -527,6 +587,8 @@ export default function Dashboard() {
       }
       
       console.log('Carregando total de investimentos pagos com params:', params);
+      
+      // Usar o endpoint correto com parâmetros na query string
       const response = await api.get('/transactions/filtered', { params });
       console.log('Response investimentos pagos:', response.data);
       
@@ -541,6 +603,36 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Erro ao carregar total de investimentos pagos:', error);
       setTotalInvestmentsPaid(0);
+    }
+  };
+  
+  // Função para carregar transações do próximo mês
+  const loadNextMonthTransactions = async (currentDate: Date, costCenterId: number | string | null) => {
+    try {
+      // Calcular o próximo mês
+      const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+      
+      // Parâmetros para buscar transações do próximo mês
+      const params: any = {
+        dateFilterType: 'month',
+        month: nextMonth.getMonth(),
+        year: nextMonth.getFullYear()
+      };
+      
+      // Adicionar filtro de centro de custo se houver
+      if (costCenterId) {
+        params.cost_center_id = costCenterId;
+      }
+      
+      console.log('Carregando transações do próximo mês com params:', params);
+      
+      const response = await api.get('/transactions/filtered', { params });
+      console.log('Transações do próximo mês:', response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao carregar transações do próximo mês:', error);
+      return [];
     }
   };
   
@@ -840,7 +932,7 @@ export default function Dashboard() {
           xs: '1fr',
           sm: 'repeat(2, 1fr)',
           md: 'repeat(3, 1fr)',
-          lg: 'repeat(5, 1fr)'
+          lg: 'repeat(3, 1fr)'
         },
         gap: 3,
         mb: 3
@@ -848,9 +940,20 @@ export default function Dashboard() {
         {/* Cards de Estatísticas */}
         <Box>
           <ModernStatsCard
+            title="Saldo Atual"
+            value={formatCurrency(monthSummary.currentBalance)}
+            subtitle={`Contas + Fluxo + Transações - ${formatPeriod(currentDate)}`}
+            icon={<AccountBalance sx={{ fontSize: 28 }} />}
+            color="primary"
+            trend={{ value: 0, isPositive: monthSummary.currentBalance >= 0 }}
+          />
+        </Box>
+
+        <Box>
+          <ModernStatsCard
             title="Saldo Previsto"
             value={formatCurrency(monthSummary.expectedBalance)}
-            subtitle="Baseado no período"
+            subtitle={`Baseado no período - ${formatPeriod(currentDate)}`}
             icon={<AccountBalance sx={{ fontSize: 28 }} />}
             color="secondary"
             trend={{ value: 0, isPositive: true }}
@@ -861,21 +964,10 @@ export default function Dashboard() {
           <ModernStatsCard
             title="Saldo Previsto Próximo Mês"
             value={formatCurrency(monthSummary.expectedBalanceNextMonth)}
-            subtitle="Projeção do próximo mês"
-            icon={<AccountBalance sx={{ fontSize: 28 }} />}
-            color="primary"
+            subtitle={`Projeção para ${format(addMonths(currentDate, 1), 'MMMM yyyy', { locale: ptBR })}`}
+            icon={<Timeline sx={{ fontSize: 28 }} />}
+            color="warning"
             trend={{ value: 0, isPositive: true }}
-          />
-        </Box>
-
-        <Box>
-          <ModernStatsCard
-            title="Saldo Atual"
-            value={formatCurrency(monthSummary.currentBalance)}
-            subtitle="Contas + Fluxo + Transações"
-            icon={<AccountBalance sx={{ fontSize: 28 }} />}
-            color="primary"
-            trend={{ value: 0, isPositive: monthSummary.currentBalance >= 0 }}
           />
         </Box>
       </Box>
@@ -891,7 +983,7 @@ export default function Dashboard() {
         mb: 3
       }}>
         {/* Seção de Resumo Mensal */}
-        <Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <ModernSection
             title="Resumo Mensal"
             subtitle="Controle financeiro detalhado"
@@ -1003,7 +1095,7 @@ export default function Dashboard() {
         </Box>
 
         {/* Meta de Economia - Alterada para ModernSection com gradiente azul */}
-        <Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <ModernSection
             title="Meta de Economia"
             subtitle={savingsGoal && savingsGoal.target_date ? `Prazo: ${formatToBrazilianDate(savingsGoal.target_date)}` : "Progresso até o final do mês"}

@@ -304,6 +304,11 @@ export default function MonthlyControl() {
     .filter(t => t.transaction_type === 'Despesa')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
+  // Adicionando o cálculo de investimentos
+  const totalInvestimentos = transactions
+    .filter(t => t.transaction_type === 'Investimento')
+    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
   // Cálculos dos totalizadores
   const vencidos = transactions.filter(t => {
     const transactionDate = getSafeDate(t.transaction_date);
@@ -330,13 +335,15 @@ export default function MonthlyControl() {
   // Total "A Pagar" = Vencidos + Vencem Hoje + A Vencer (todas as transações não pagas)
   const totalAPagar = totalVencidos + totalVencemHoje + totalAVencer;
   
-  const saldoPeriodo = totalReceitas - totalDespesas;
+  // Corrigindo o cálculo do saldo do período para incluir investimentos
+  const saldoPeriodo = totalReceitas - totalDespesas - totalInvestimentos;
 
   // Calcular totais dos registros selecionados
   const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
   const totalSelectedCount = selectedTransactionsData.length;
   const totalSelectedValue = selectedTransactionsData.reduce((sum, t) => {
     if (t.transaction_type === 'Despesa') return sum - getSafeAmount(t.amount);
+    if (t.transaction_type === 'Investimento') return sum - getSafeAmount(t.amount);
     return sum + getSafeAmount(t.amount);
   }, 0);
   const totalSelectedReceitas = selectedTransactionsData.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
@@ -1481,40 +1488,74 @@ export default function MonthlyControl() {
 
               {/* Modern Calendar Picker */}
               {dateFilterType === 'month' && (
-                <Box sx={{ minWidth: 180, flex: '0 0 auto' }}>
-                  <DatePicker
-                    views={['month', 'year']}
-                    label="Mês e Ano"
-                    value={currentDate}
-                    onChange={(newValue) => newValue && setCurrentDate(newValue)}
-                    slotProps={{
-                      textField: { 
-                        size: 'small',
-                        fullWidth: true,
-                        sx: { 
-                          '& .MuiOutlinedInput-root': {
-                            bgcolor: '#FFFFFF',
-                            borderRadius: 1.5,
-                            fontSize: '0.875rem',
-                            boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
-                            '& .MuiOutlinedInput-notchedOutline': {
-                              borderColor: 'transparent'
-                            },
-                            '&:hover .MuiOutlinedInput-notchedOutline': {
-                              borderColor: colors.primary[300]
-                            },
-                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                              borderColor: colors.primary[500],
-                              borderWidth: 1
-                            }
-                          },
-                          '& .MuiInputLabel-root': {
-                            fontSize: '0.875rem'
-                          }
-                        }
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <IconButton 
+                    onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+                    size="small"
+                    sx={{ 
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1.5,
+                      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                      '&:hover': { 
+                        bgcolor: colors.gray[50],
+                        boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.15)'
                       }
                     }}
-                  />
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  
+                  <Box sx={{ minWidth: 180, flex: '0 0 auto' }}>
+                    <DatePicker
+                      views={['month', 'year']}
+                      label="Mês e Ano"
+                      value={currentDate}
+                      onChange={(newValue) => newValue && setCurrentDate(newValue)}
+                      slotProps={{
+                        textField: { 
+                          size: 'small',
+                          fullWidth: true,
+                          sx: { 
+                            '& .MuiOutlinedInput-root': {
+                              bgcolor: '#FFFFFF',
+                              borderRadius: 1.5,
+                              fontSize: '0.875rem',
+                              boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                              '& .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'transparent'
+                              },
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: colors.primary[300]
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: colors.primary[500],
+                                borderWidth: 1
+                              }
+                            },
+                            '& .MuiInputLabel-root': {
+                              fontSize: '0.875rem'
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </Box>
+                  
+                  <IconButton 
+                    onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+                    size="small"
+                    sx={{ 
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1.5,
+                      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                      '&:hover': { 
+                        bgcolor: colors.gray[50],
+                        boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.15)'
+                      }
+                    }}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
                 </Box>
               )}
 
@@ -2195,6 +2236,34 @@ export default function MonthlyControl() {
             }
           }}>
             <ModernStatsCard
+              title="Receitas do Mês"
+              value={formatCurrency(totalReceitas)}
+              subtitle="Total de entradas"
+              icon={<TrendingUp sx={{ fontSize: 16 }} />}
+              color="success"
+              trend={{ value: 0, isPositive: true }}
+            />
+            
+            <ModernStatsCard
+              title="Despesas do Mês"
+              value={formatCurrency(totalDespesas)}
+              subtitle="Total de gastos"
+              icon={<TrendingDown sx={{ fontSize: 16 }} />}
+              color="error"
+              trend={{ value: 0, isPositive: false }}
+            />
+            
+            <ModernStatsCard
+              title="Investimentos"
+              value={formatCurrency(totalInvestimentos)}
+              subtitle="Total investido"
+              icon={<ShowChart sx={{ fontSize: 16, color: '#3761E2' }} />}
+              color="warning"
+              trend={{ value: 0, isPositive: true }}
+              iconBgColor="#E7F2FB"
+            />
+            
+            <ModernStatsCard
               title="Vencidos"
               value={formatCurrency(Math.abs(totalVencidos))}
               subtitle="Pagamentos em atraso"
@@ -2212,26 +2281,8 @@ export default function MonthlyControl() {
             />
             
             <ModernStatsCard
-              title="A Pagar"
-              value={formatCurrency(Math.abs(totalAPagar))}
-              subtitle="Total pendente (inclui vencidos)"
-              icon={<ReceiptIcon sx={{ fontSize: 16 }} />}
-              color="primary"
-            />
-            
-            <ModernStatsCard
-              title="Pagos"
-              value={formatCurrency(transactions.filter(t => t.is_paid).reduce((sum, t) => sum + t.amount, 0))}
-              subtitle="Já quitados"
-              icon={<PaidIcon sx={{ fontSize: 16 }} />}
-              color="success"
-              trend={{ value: 8.3, isPositive: true }}
-            />
-            
-            <ModernStatsCard
               title="Saldo do Período"
               value={formatCurrency(saldoPeriodo)}
-              subtitle="Receitas - Despesas"
               icon={<AccountBalanceIcon sx={{ fontSize: 16 }} />}
               color={saldoPeriodo >= 0 ? 'success' : 'error'}
               trend={{ value: Math.abs((saldoPeriodo / 10000) * 100), isPositive: saldoPeriodo >= 0 }}
@@ -2286,7 +2337,19 @@ export default function MonthlyControl() {
                 />
               )}
 
-              {/* 4. Valor Total - com cores condicionais */}
+              {/* 4. Investimentos - opcional */}
+              {totalSelectedInvestimentos > 0 && (
+                <ModernStatsCard
+                  title="Investimentos"
+                  value={formatCurrency(totalSelectedInvestimentos)}
+                  subtitle="Selecionados"
+                  icon={<ShowChart sx={{ fontSize: 16, color: '#3761E2' }} />}
+                  color="warning"
+                  iconBgColor="#E7F2FB"
+                />
+              )}
+
+              {/* 5. Valor Total - com cores condicionais */}
               <ModernStatsCard
                 title="Valor Total"
                 value={
@@ -2301,17 +2364,6 @@ export default function MonthlyControl() {
                 icon={<AccountBalanceWalletIcon sx={{ fontSize: 16 }} />}
                 color={totalSelectedValue >= 0 ? 'success' : 'error'}
               />
-
-              {/* 5. Investimentos - opcional */}
-              {totalSelectedInvestimentos > 0 && (
-                <ModernStatsCard
-                  title="Investimentos"
-                  value={formatCurrency(totalSelectedInvestimentos)}
-                  subtitle="Selecionados"
-                  icon={<ShowChart sx={{ fontSize: 16 }} />}
-                  color="warning"
-                />
-              )}
             </Box>
           )}
 
@@ -2762,6 +2814,31 @@ export default function MonthlyControl() {
                 if (newValue) {
                   setCurrentDate(newValue);
                   setDatePickerOpen(false);
+                }
+              }}
+              slotProps={{
+                textField: { 
+                  sx: { 
+                    '& .MuiOutlinedInput-root': {
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1.5,
+                      fontSize: '0.875rem',
+                      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'transparent'
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: colors.primary[300]
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: colors.primary[500],
+                        borderWidth: 1
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      fontSize: '0.875rem'
+                    }
+                  }
                 }
               }}
             />

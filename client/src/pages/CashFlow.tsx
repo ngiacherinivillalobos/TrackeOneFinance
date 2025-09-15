@@ -45,8 +45,8 @@ import {
   AccountBalance as AccountBalanceIcon,
   Receipt as ReceiptIcon,
   DeleteSweep,
-  KeyboardArrowLeft,
-  KeyboardArrowRight,
+  KeyboardArrowLeft as ChevronLeftIcon,
+  KeyboardArrowRight as ChevronRightIcon,
   ShowChart as InvestmentIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -1002,39 +1002,82 @@ export default function CashFlowPage() {
 
               {/* Month navigation for month filter */}
               {dateFilterType === 'month' && (
-                <Box sx={{ minWidth: 180, flex: '0 0 auto' }}>
-                  <DatePicker
-                    views={['month', 'year']}
-                    label="Mês e Ano"
-                    value={currentDate}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        console.log('Data selecionada:', newValue);
-                        console.log('Mês:', newValue.getMonth() + 1);
-                        console.log('Ano:', newValue.getFullYear());
-                        setCurrentDate(newValue);
-                        // Removendo o timeout e deixando o useEffect cuidar do carregamento
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <IconButton 
+                    onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+                    size="small"
+                    sx={{ 
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1.5,
+                      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                      '&:hover': { 
+                        bgcolor: colors.gray[50],
+                        boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.15)'
                       }
                     }}
-                    slotProps={{
-                      textField: { 
-                        size: 'small',
-                        fullWidth: true,
-                        sx: { 
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: 1.5,
-                            boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)'
-                          },
-                          '&:hover .MuiOutlinedInput-root': {
-                            boxShadow: '0 2px 6px 0 rgb(0 0 0 / 0.1)'
-                          },
-                          '&.Mui-focused .MuiOutlinedInput-root': {
-                            boxShadow: '0 4px 8px 0 rgb(0 0 0 / 0.1)'
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  
+                  <Box sx={{ minWidth: 180, flex: '0 0 auto' }}>
+                    <DatePicker
+                      views={['month', 'year']}
+                      label="Mês e Ano"
+                      value={currentDate}
+                      onChange={(newValue) => {
+                        if (newValue) {
+                          console.log('Data selecionada:', newValue);
+                          console.log('Mês:', newValue.getMonth() + 1);
+                          console.log('Ano:', newValue.getFullYear());
+                          setCurrentDate(newValue);
+                          // Removendo o timeout e deixando o useEffect cuidar do carregamento
+                        }
+                      }}
+                      slotProps={{
+                        textField: { 
+                          size: 'small',
+                          fullWidth: true,
+                          sx: { 
+                            '& .MuiOutlinedInput-root': {
+                              bgcolor: '#FFFFFF',
+                              borderRadius: 1.5,
+                              fontSize: '0.875rem',
+                              boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                              '& .MuiOutlinedInput-notchedOutline': {
+                                borderColor: 'transparent'
+                              },
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: colors.primary[300]
+                              },
+                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                borderColor: colors.primary[500],
+                                borderWidth: 1
+                              }
+                            },
+                            '& .MuiInputLabel-root': {
+                              fontSize: '0.875rem'
+                            }
                           }
                         }
+                      }}
+                    />
+                  </Box>
+                  
+                  <IconButton 
+                    onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+                    size="small"
+                    sx={{ 
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1.5,
+                      boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
+                      '&:hover': { 
+                        bgcolor: colors.gray[50],
+                        boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.15)'
                       }
                     }}
-                  />
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
                 </Box>
               )}
 

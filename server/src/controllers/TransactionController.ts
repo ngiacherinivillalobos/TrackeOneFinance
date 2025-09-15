@@ -174,12 +174,15 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       
       console.log(`[getFilteredTransactions] Converting type: ${transaction.type} -> ${frontendType} for transaction ${transaction.id}`);
       
+      // Garantir que is_paid está sincronizado com payment_status_id
+      const isPaid = transaction.payment_status_id === 2;
+      
       return {
         ...transaction,
         transaction_type: frontendType,
         is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
         is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-        is_paid: transaction.payment_status_id === 2,
+        is_paid: isPaid,
       };
     });
 
@@ -918,7 +921,7 @@ const update = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 374; // Vencido
+        finalPaymentStatusId = 3; // Vencido (corrigido para o ID correto)
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
@@ -936,8 +939,10 @@ const update = async (req: Request, res: Response) => {
       final_payment_status_id: finalPaymentStatusId
     });
 
-    // Atualizar transação única
+    // Atualizar transação única com sincronização entre payment_status_id e is_paid
     const isProduction = process.env.NODE_ENV === 'production';
+    const isPaidBoolean = toDatabaseBoolean(finalPaymentStatusId === 2, isProduction);
+    
     const result: any = await run(db, `
       UPDATE transactions SET
         description = ?,
@@ -957,7 +962,8 @@ const update = async (req: Request, res: Response) => {
         recurrence_end_date = ?,
         is_installment = ?,
         installment_number = ?,
-        total_installments = ?
+        total_installments = ?,
+        is_paid = ?
       WHERE id = ?
     `, [
       description, amount, dbType, category_id, subcategory_id,
@@ -969,6 +975,7 @@ const update = async (req: Request, res: Response) => {
       toDatabaseBoolean(is_installment, isProduction),
       null, // installment_number
       total_installments,
+      isPaidBoolean, // is_paid sincronizado
       transactionId
     ]);
 
@@ -1056,12 +1063,13 @@ const markAsPaid = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Atualizar o status de pagamento para "Pago" (ID = 2)
+    // Atualizar o status de pagamento para "Pago" (ID = 2) e is_paid = true
+    const isProduction = process.env.NODE_ENV === 'production';
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 2
+      SET payment_status_id = 2, is_paid = ?
       WHERE id = ?
-    `, [transactionId]);
+    `, [toDatabaseBoolean(true, isProduction), transactionId]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -1072,7 +1080,8 @@ const markAsPaid = async (req: Request, res: Response) => {
       message: 'Transaction marked as paid successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 2
+        payment_status_id: 2,
+        is_paid: true
       }
     });
   } catch (error) {
@@ -1100,12 +1109,13 @@ const reversePayment = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    // Atualizar o status de pagamento (voltar para "Em aberto")
+    // Atualizar o status de pagamento (voltar para "Em aberto") e is_paid = false
+    const isProduction = process.env.NODE_ENV === 'production';
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 1
+      SET payment_status_id = 1, is_paid = ?
       WHERE id = ?
-    `, [transactionId]);
+    `, [toDatabaseBoolean(false, isProduction), transactionId]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
@@ -1116,7 +1126,8 @@ const reversePayment = async (req: Request, res: Response) => {
       message: 'Transaction payment reversed successfully',
       transaction: {
         ...transaction,
-        payment_status_id: 1
+        payment_status_id: 1,
+        is_paid: false
       }
     });
   } catch (error) {
