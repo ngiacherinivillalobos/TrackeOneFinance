@@ -199,7 +199,8 @@ export default function MonthlyControl() {
   const isMediumScreen = useMediaQuery(theme.breakpoints.up('md'));
   
   // Estados
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]); // Transações filtradas para exibição na tabela
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // TODAS as transações para cálculo de totalizadores
   const [loading, setLoading] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -297,17 +298,18 @@ export default function MonthlyControl() {
 
   // Cálculo dos totalizadores - CORRIGIDO PARA NÃO CONSIDERAR SITUAÇÃO (STATUS)
   // Os totalizadores de receita, despesa e investimento no Controle Mensal não devem considerar a situação (status)
+  // IMPORTANTE: Usar allTransactions (sem filtros) para totalizadores, não transactions (filtradas)
   
-  const totalReceitas = transactions
+  const totalReceitas = allTransactions
     .filter(t => t.transaction_type === 'Receita')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-  const totalDespesas = transactions
+  const totalDespesas = allTransactions
     .filter(t => t.transaction_type === 'Despesa')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
   // Adicionando o cálculo de investimentos
-  const totalInvestimentos = transactions
+  const totalInvestimentos = allTransactions
     .filter(t => t.transaction_type === 'Investimento')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
@@ -573,6 +575,30 @@ export default function MonthlyControl() {
       console.log("Resposta da API recebida:", response.data);
       console.log("Primeiras 3 transações - tipos:", response.data.slice(0, 3).map((t: any) => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
       
+      // NOVA CHAMADA: Buscar TODAS as transações para cálculo de totalizadores
+      const allTransactionsParams = new URLSearchParams({
+        dateFilterType,
+        ...(dateFilterType === 'month' && {
+          month: currentDate.getMonth().toString(),
+          year: currentDate.getFullYear().toString()
+        }),
+        ...(dateFilterType === 'year' && {
+          year: selectedYear.toString()
+        }),
+        ...(dateFilterType === 'custom' && customStartDate && customEndDate && {
+          customStartDate: format(customStartDate, 'yyyy-MM-dd'),
+          customEndDate: format(customEndDate, 'yyyy-MM-dd')
+        }),
+        ...(dateFilterType !== 'all' && startDate && endDate && {
+          start_date: startDate,
+          end_date: endDate
+        })
+      });
+      
+      console.log('Buscando TODAS as transações para totalizadores:', allTransactionsParams.toString());
+      const allTransactionsResponse = await api.get(`/transactions/filtered?${allTransactionsParams}`);
+      console.log("Todas as transações recebidas:", allTransactionsResponse.data.length);
+      
       // Aplicar filtros no frontend
       let filteredTransactions = response.data;
       
@@ -769,6 +795,35 @@ export default function MonthlyControl() {
         installment_number: transaction.installment_number || null,
         total_installments: transaction.total_installments || null,
         // Manter os IDs originais para edição
+        original_cost_center_id: transaction.cost_center_id,
+        original_contact_id: transaction.contact_id
+      })));
+      
+      // Definir TODAS as transações (sem filtros) para cálculo de totalizadores
+      setAllTransactions(allTransactionsResponse.data.map((transaction: any) => ({
+        ...transaction,
+        // Mapear os dados relacionados para o formato esperado pelo frontend
+        contact: transaction.contact_name ? { 
+          id: transaction.contact_id, 
+          name: transaction.contact_name 
+        } : null,
+        category: transaction.category_name ? { 
+          id: transaction.category_id, 
+          name: transaction.category_name 
+        } : null,
+        subcategory: transaction.subcategory_name ? { 
+          id: transaction.subcategory_id, 
+          name: transaction.subcategory_name 
+        } : null,
+        cost_center: transaction.cost_center_name ? { 
+          id: transaction.cost_center_id,
+          name: transaction.cost_center_name,
+          number: transaction.cost_center_number
+        } : null,
+        is_paid: transaction.is_paid,
+        is_installment: transaction.is_installment || false,
+        installment_number: transaction.installment_number || null,
+        total_installments: transaction.total_installments || null,
         original_cost_center_id: transaction.cost_center_id,
         original_contact_id: transaction.contact_id
       })));

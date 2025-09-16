@@ -4,6 +4,15 @@ import { authMiddleware } from '../controllers/authMiddleware';
 
 const router = Router();
 
+// Log de debug para todas as requisições
+router.use('/', (req, res, next) => {
+  console.log('🚀 ROTA TRANSACTIONS CHAMADA:', req.method, req.path, req.url);
+  if (req.method === 'POST' && req.path === '/') {
+    console.log('📝 CRIAÇÃO DE TRANSAÇÃO - Body:', JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 router.get('/filtered', authMiddleware, transactionController.getFilteredTransactions);
 router.get('/', authMiddleware, transactionController.list);
 router.get('/:id', authMiddleware, transactionController.getById);

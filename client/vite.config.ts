@@ -15,8 +15,8 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '/api')
       }
     },
-    // Permitir que o Vite use qualquer porta disponível se 3000 estiver ocupada
-    strictPort: false,
+    // Forçar uso da porta 3000 para frontend
+    strictPort: true,
     // Configuração para melhor exibição de erros
     hmr: {
       overlay: true

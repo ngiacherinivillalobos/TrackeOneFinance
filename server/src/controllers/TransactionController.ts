@@ -680,16 +680,17 @@ const create = async (req: Request, res: Response) => {
         // A formatação será feita apenas no frontend para exibição
         try {
           const isProduction = process.env.NODE_ENV === 'production';
+          const isPaidBoolean = toDatabaseBoolean(finalPaymentStatusId === 2, isProduction);
           const result: any = await run(db, `
             INSERT INTO transactions (
               description, amount, type, category_id, subcategory_id,
               payment_status_id, bank_account_id, card_id, contact_id, 
-              transaction_date, cost_center_id, is_installment, installment_number, total_installments, is_recurring
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              transaction_date, cost_center_id, is_installment, installment_number, total_installments, is_recurring, is_paid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             cleanDescription, amount, dbType, category_id, subcategory_id,
             finalPaymentStatusId, bank_account_id, card_id, contact_id, 
-            formattedDate, cost_center_id, toDatabaseBoolean(is_installment, isProduction), i, totalInstallmentsNum, toDatabaseBoolean(false, isProduction)
+            formattedDate, cost_center_id, toDatabaseBoolean(is_installment, isProduction), i, totalInstallmentsNum, toDatabaseBoolean(false, isProduction), isPaidBoolean
           ]);
 
           createdTransactions.push({
@@ -809,18 +810,19 @@ const create = async (req: Request, res: Response) => {
           // Salvar a descrição limpa no banco de dados (sem números)
           // A formatação será feita apenas no frontend para exibição
           const isProduction = process.env.NODE_ENV === 'production';
+          const isPaidBoolean = toDatabaseBoolean(finalPaymentStatusId === 2, isProduction);
           const result: any = await run(db, `
             INSERT INTO transactions (
               description, amount, type, category_id, subcategory_id,
               payment_status_id, bank_account_id, card_id, contact_id, 
               transaction_date, cost_center_id, is_recurring, recurrence_type,
-              is_installment, installment_number, total_installments
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              is_installment, installment_number, total_installments, is_paid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             cleanDescription, amount, dbType, category_id, subcategory_id,
             finalPaymentStatusId, bank_account_id, card_id, contact_id, 
             formattedDate, cost_center_id, toDatabaseBoolean(is_recurring, isProduction), recurrence_type,
-            toDatabaseBoolean(false, isProduction), installmentNumber, maxRecurrences
+            toDatabaseBoolean(false, isProduction), installmentNumber, maxRecurrences, isPaidBoolean
           ]);
 
           createdTransactions.push({
@@ -890,20 +892,37 @@ const create = async (req: Request, res: Response) => {
     // Remover espaços extras
     cleanDescription = cleanDescription.replace(/\s+/g, ' ').trim();
     
+    console.log('=== DEBUG TRANSAÇÃO ÚNICA ===');
+    console.log('is_paid recebido:', is_paid);
+    console.log('finalPaymentStatusId calculado:', finalPaymentStatusId);
+    
     const isProduction = process.env.NODE_ENV === 'production';
+    const isPaidBoolean = toDatabaseBoolean(finalPaymentStatusId === 2, isProduction);
+    
+    console.log('=== DEBUG VALORES FINAIS ===');
+    console.log('isProduction:', isProduction);
+    console.log('finalPaymentStatusId === 2:', finalPaymentStatusId === 2);
+    console.log('isPaidBoolean calculado:', isPaidBoolean);
+    console.log('Parâmetros do INSERT (is_paid na posição 15):', [
+      cleanDescription, amount, dbType, category_id, subcategory_id,
+      finalPaymentStatusId, bank_account_id, card_id, contact_id, 
+      transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
+      null, null,
+      toDatabaseBoolean(is_recurring, isProduction), isPaidBoolean
+    ]);
     const result: any = await run(db, `
       INSERT INTO transactions (
         description, amount, type, category_id, subcategory_id,
         payment_status_id, bank_account_id, card_id, contact_id, 
         transaction_date, cost_center_id, is_installment, installment_number, total_installments,
-        is_recurring
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_recurring, is_paid
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       cleanDescription, amount, dbType, category_id, subcategory_id,
       finalPaymentStatusId, bank_account_id, card_id, contact_id, 
       transaction_date, cost_center_id, toDatabaseBoolean(is_installment, isProduction), 
       null, null,
-      toDatabaseBoolean(is_recurring, isProduction)
+      toDatabaseBoolean(is_recurring, isProduction), isPaidBoolean
     ]);
 
     console.log('Transaction created with type:', { dbType, finalType, transaction_type, type });

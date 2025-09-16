@@ -581,8 +581,8 @@ export default function Dashboard() {
       
       // Buscar todos os investimentos pagos, independentemente do período
       const params: any = {
-        transaction_type: 'Investimento',
-        payment_status_id: 'paid', // Usar string como no Controle Mensal para consistência
+        transaction_type: 'investment', // Usar 'investment' em inglês para consistency with API
+        payment_status: 'paid', // Corrigir: usar payment_status ao invés de payment_status_id
         dateFilterType: 'all' // Garantir que não há filtro de data
       };
       

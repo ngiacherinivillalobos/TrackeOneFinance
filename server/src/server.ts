@@ -37,8 +37,19 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '10mb' }));
 
+// Middleware de log para debug
+app.use((req: Request, res: Response, next: NextFunction) => {
+  console.log(`📥 ${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Body:', req.body);
+  }
+  next();
+});
+
 // Rota de teste
 app.get('/api/test', (req: Request, res: Response) => {
+  console.log('📋 Rota de teste chamada');
   res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
 });
 
