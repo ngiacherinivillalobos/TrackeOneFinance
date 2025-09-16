@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createSafeDate } from '../utils/dateUtils';
 import { format } from 'date-fns';
 import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
@@ -146,19 +147,28 @@ export default function useMonthlyControl() {
 
   const isTransactionOverdue = (transaction: Transaction) => {
     if (!transaction.transaction_date || transaction.is_paid) return false;
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+    const transactionDate = createSafeDate(transaction.transaction_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    transactionDate.setHours(0, 0, 0, 0);
     return transactionDate < today;
   };
 
   const vencidos = transactions.filter(t => isTransactionOverdue(t));
   const vencemHoje = transactions.filter(t => {
     if (!t.transaction_date || t.is_paid) return false;
-    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+    const transactionDate = createSafeDate(t.transaction_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    transactionDate.setHours(0, 0, 0, 0);
     return transactionDate.getTime() === today.getTime();
   });
   const aVencer = transactions.filter(t => {
     if (!t.transaction_date || t.is_paid) return false;
-    const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+    const transactionDate = createSafeDate(t.transaction_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    transactionDate.setHours(0, 0, 0, 0);
     return transactionDate > today;
   });
 
@@ -533,7 +543,7 @@ export default function useMonthlyControl() {
   
   const isTransactionDueToday = (transaction: Transaction) => {
     if (!transaction.transaction_date || transaction.is_paid) return false;
-    const transactionDate = new Date(transaction.transaction_date + 'T00:00:00');
+    const transactionDate = createSafeDate(transaction.transaction_date);
     return transactionDate.getTime() === today.getTime();
   };
 

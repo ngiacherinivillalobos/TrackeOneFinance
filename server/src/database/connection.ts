@@ -376,6 +376,36 @@ const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
       } catch (error) {
         console.log('Erro ao verificar payment_methods, pulando...', error.message);
       }
+      
+      // Verificar se a tabela payment_status existe e tem os registros corretos
+      try {
+        const paymentStatusTableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'payment_status'
+          )
+        `);
+        
+        if (paymentStatusTableCheck.rows[0].exists) {
+          const paymentStatusResult = await pool.query('SELECT COUNT(*) as count FROM payment_status');
+          const paymentStatusCount = parseInt(paymentStatusResult.rows[0].count);
+          
+          if (paymentStatusCount === 0) {
+            console.log('Inserindo dados iniciais de status de pagamento...');
+            await pool.query(`
+              INSERT INTO payment_status (id, name) VALUES 
+              (1, 'Em aberto'),
+              (2, 'Pago'),
+              (3, 'Vencido')
+              ON CONFLICT (id) DO NOTHING
+            `);
+          }
+        } else {
+          console.log('Tabela payment_status não existe, pulando verificação...');
+        }
+      } catch (error) {
+        console.log('Erro ao verificar payment_status, pulando...', error.message);
+      }
     }
     
     console.log('Database initialized successfully');

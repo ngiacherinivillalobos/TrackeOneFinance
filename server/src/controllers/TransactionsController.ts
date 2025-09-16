@@ -2,36 +2,33 @@ import { Request, Response } from 'express';
 import { getDatabase } from '../database/connection';
 
 // Função helper para obter data local no formato YYYY-MM-DD
+// Esta função garante consistência entre SQLite e PostgreSQL
 const getLocalDateString = (): string => {
-  // Em produção, usar UTC para ser consistente com PostgreSQL CURRENT_DATE
-  // Em desenvolvimento, usar hora local para ser consistente com SQLite date('now')
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  if (isProduction) {
-    // UTC para produção (PostgreSQL)
-    const now = new Date();
-    const utcYear = now.getUTCFullYear();
-    const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const utcDay = String(now.getUTCDate()).padStart(2, '0');
-    return `${utcYear}-${utcMonth}-${utcDay}`;
-  } else {
-    // Hora local para desenvolvimento (SQLite)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
+  // Usar sempre a data local para consistência entre ambientes
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 // Função helper para criar Date segura para timezone
+// Esta função garante consistência entre SQLite e PostgreSQL
 const createSafeDate = (dateString: string): Date => {
-  // Se a string já tem T12:00:00, usar diretamente
-  if (dateString.includes('T12:00:00')) {
-    return new Date(dateString);
+  // Se a string já tem T, usar diretamente
+  if (dateString.includes('T')) {
+    // Extrair apenas a parte da data YYYY-MM-DD
+    const [datePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
   }
-  // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
-  return new Date(dateString + 'T12:00:00');
+  // Se é só a data (YYYY-MM-DD), criar data local
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 export interface Transaction {
@@ -61,9 +58,10 @@ export interface Transaction {
 
 const transactionController = {
   // Função auxiliar para determinar o status de pagamento baseado na regra de negócio
+  // Esta função garante consistência entre SQLite e PostgreSQL
   getPaymentStatusId(transaction_date: string, requested_payment_status_id?: number): number {
     const today = getLocalDateString();
-    const transactionDate = createSafeDate(transaction_date).toISOString().split('T')[0];
+    const transactionDate = getLocalDateString(); // Usar a data local para consistência
     
     // Se a transação é de hoje ou futuro, sempre usar "Em aberto" (id 1)
     if (transactionDate >= today) {

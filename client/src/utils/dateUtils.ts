@@ -84,15 +84,21 @@ export const createSafeDate = (dateStr: string): Date => {
       const [datePart] = dateStr.split('T');
       const [year, month, day] = datePart.split('-').map(Number);
       // Criar data no timezone local
-      return new Date(year, month - 1, day);
+      const date = new Date(year, month - 1, day);
+      date.setHours(0, 0, 0, 0);
+      return date;
     }
     
     // Para formato YYYY-MM-DD
     const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
   } catch (error) {
     console.warn('Erro ao criar data:', error, 'dateStr:', dateStr);
-    return new Date();
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
   }
 };
 

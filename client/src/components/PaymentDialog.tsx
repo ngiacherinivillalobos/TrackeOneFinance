@@ -235,9 +235,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       
       // Fechar o diálogo apenas após a confirmação bem-sucedida
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao processar pagamento:', error);
-      alert('Erro ao processar pagamento');
+      // Mostrar mensagem de erro mais detalhada
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao processar pagamento';
+      alert(`Erro ao processar pagamento: ${errorMessage}`);
     } finally {
       setSubmitting(false);
     }

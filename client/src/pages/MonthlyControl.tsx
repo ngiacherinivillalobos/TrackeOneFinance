@@ -63,6 +63,7 @@ import {
   Receipt as ReceiptIcon,
   CheckCircle as CheckCircleIcon,
   AccountBalanceWallet as AccountBalanceWalletIcon,
+  Redo as RedoIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -145,6 +146,8 @@ interface Transaction {
     name: string;
     number?: string;
   };
+  // Adicionar campo payment_status_id para consistência entre ambientes
+  payment_status_id?: number;
   // Campos originais para edição
   original_cost_center_id?: number;
   original_contact_id?: number;
@@ -292,9 +295,8 @@ export default function MonthlyControl() {
     cost_center_id: ''
   });
 
-  // Cálculo dos totais e status de vencimento
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Cálculo dos totalizadores - CORRIGIDO PARA NÃO CONSIDERAR SITUAÇÃO (STATUS)
+  // Os totalizadores de receita, despesa e investimento no Controle Mensal não devem considerar a situação (status)
   
   const totalReceitas = transactions
     .filter(t => t.transaction_type === 'Receita')
@@ -309,23 +311,38 @@ export default function MonthlyControl() {
     .filter(t => t.transaction_type === 'Investimento')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
-  // Cálculos dos totalizadores
+  // Cálculos dos totalizadores - CORRIGIDO PARA USAR DATAS CONSISTENTES E VERIFICAR AMBOS OS CAMPOS DE STATUS
   const vencidos = transactions.filter(t => {
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = t.is_paid || t.payment_status_id === 2;
+    if (!t.transaction_date || isPaid) return false;
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate < today;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return transactionDate < today;
   });
 
   const vencemHoje = transactions.filter(t => {
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = t.is_paid || t.payment_status_id === 2;
+    if (!t.transaction_date || isPaid) return false;
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate.getTime() === today.getTime();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return transactionDate.getTime() === today.getTime();
   });
 
   const aVencer = transactions.filter(t => {
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = t.is_paid || t.payment_status_id === 2;
+    if (!t.transaction_date || isPaid) return false;
     const transactionDate = getSafeDate(t.transaction_date);
     transactionDate.setHours(0, 0, 0, 0);
-    return !t.is_paid && transactionDate > today;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return transactionDate > today;
   });
 
   const totalVencidos = vencidos.reduce((sum, t) => sum + (t.transaction_type === 'Despesa' ? -getSafeAmount(t.amount) : getSafeAmount(t.amount)), 0);
@@ -342,6 +359,8 @@ export default function MonthlyControl() {
   const selectedTransactionsData = transactions.filter(t => t.id && selectedTransactions.includes(t.id));
   const totalSelectedCount = selectedTransactionsData.length;
   const totalSelectedValue = selectedTransactionsData.reduce((sum, t) => {
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = t.is_paid || t.payment_status_id === 2;
     if (t.transaction_type === 'Despesa') return sum - getSafeAmount(t.amount);
     if (t.transaction_type === 'Investimento') return sum - getSafeAmount(t.amount);
     return sum + getSafeAmount(t.amount);
@@ -560,11 +579,35 @@ export default function MonthlyControl() {
       // Filtro de status de pagamento
       if (filters.payment_status_id.length > 0) {
         filteredTransactions = filteredTransactions.filter((t: any) => {
-          if (filters.payment_status_id.includes('paid') && t.payment_status_id === 2) return true;
-          if (filters.payment_status_id.includes('unpaid') && t.payment_status_id !== 2) return true;
-          // REMOVIDO: Não filtrar vencidas aqui, será feito separadamente
-          // if (filters.payment_status_id.includes('overdue') && t.payment_status_id !== 2 && getSafeDate(t.transaction_date) < new Date()) return true;
-          if (filters.payment_status_id.includes('cancelled') && t.payment_status_id === 3) return true; // Assumindo status 3 para cancelado
+          // Para manter consistência entre ambientes, verificar ambos os campos
+          const isPaid = t.is_paid || t.payment_status_id === 2;
+          const isUnpaid = !t.is_paid && t.payment_status_id !== 2;
+          
+          if (filters.payment_status_id.includes('paid')) {
+            if (isPaid) return true;
+          }
+          
+          if (filters.payment_status_id.includes('unpaid')) {
+            if (isUnpaid) return true;
+          }
+          
+          if (filters.payment_status_id.includes('overdue')) {
+            // Para registros vencidos, verificar data < hoje e não pago
+            // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+            const isPaid = t.is_paid || t.payment_status_id === 2;
+            const transactionDate = getSafeDate(t.transaction_date);
+            transactionDate.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            if (!isPaid && transactionDate < today) return true;
+          }
+          
+          if (filters.payment_status_id.includes('cancelled')) {
+            // Verificar status de cancelamento
+            if (t.payment_status_id === 3 || !t.is_paid) return true; // Assumindo que cancelado = não pago
+          }
+          
           return false;
         });
       }
@@ -596,6 +639,13 @@ export default function MonthlyControl() {
           filters.category_id.includes(t.category_id?.toString() || '')
         );
       }
+
+      // Filtro de subcategoria
+      if (filters.subcategory_id) {
+        filteredTransactions = filteredTransactions.filter((t: any) => 
+          t.subcategory_id === filters.subcategory_id
+        );
+      }
       
       // Sempre incluir registros vencidos (data < hoje e em aberto), independentemente dos filtros de data
       const today = new Date();
@@ -605,7 +655,7 @@ export default function MonthlyControl() {
       let overdueTransactions: any[] = [];
       
       if (filters.payment_status_id.length === 0 || filters.payment_status_id.includes('overdue')) {
-        
+      
         const overdueParams = { ...baseParams };
         // Remover filtros de data para buscar todos os vencidos
         delete overdueParams.start_date;
@@ -618,17 +668,14 @@ export default function MonthlyControl() {
         
         try {
           const overdueResponse = await api.get(`/transactions/filtered?${new URLSearchParams(overdueParams)}`);
-          // Converter o campo is_paid baseado no payment_status_id
-          const overdueData = overdueResponse.data.map((t: any) => ({
-            ...t,
-            is_paid: t.payment_status_id === 2
-          }));
           
           // Filtrar apenas transações vencidas (data < hoje) e não pagas
-          overdueTransactions = overdueData.filter((t: any) => {
-            const transactionDate = new Date(t.transaction_date + 'T00:00:00');
+          // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+          overdueTransactions = overdueResponse.data.filter((t: any) => {
+            const isPaid = t.is_paid || t.payment_status_id === 2;
+            const transactionDate = getSafeDate(t.transaction_date);
             transactionDate.setHours(0, 0, 0, 0);
-            return !t.is_paid && transactionDate < today;
+            return !isPaid && transactionDate < today;
           });
           
           // Aplicar os mesmos filtros aos registros vencidos (exceto data)
@@ -664,12 +711,18 @@ export default function MonthlyControl() {
           if (filters.payment_status_id.length > 0) {
             overdueTransactions = overdueTransactions.filter((t: any) => {
               // Para registros vencidos, verificar se 'overdue' ou 'unpaid' estão nos filtros
+              // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+              const isPaid = t.is_paid || t.payment_status_id === 2;
               return (filters.payment_status_id.includes('overdue') || filters.payment_status_id.includes('unpaid')) && 
-                     !t.is_paid; // Garantir que registros vencidos não estão pagos
+                     !isPaid; // Garantir que registros vencidos não estão pagos
             });
           } else {
             // Se não houver filtro de status, mostrar apenas vencidos não pagos
-            overdueTransactions = overdueTransactions.filter((t: any) => !t.is_paid);
+            // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+            overdueTransactions = overdueTransactions.filter((t: any) => {
+              const isPaid = t.is_paid || t.payment_status_id === 2;
+              return !isPaid;
+            });
           }
         } catch (error) {
           console.error('Erro ao carregar transações vencidas:', error);
@@ -710,7 +763,7 @@ export default function MonthlyControl() {
           number: transaction.cost_center_number
         } : null,
         // Converter o campo is_paid baseado no payment_status_id
-        is_paid: transaction.payment_status_id === 2,
+        is_paid: transaction.is_paid,
         // Campos de parcelamento
         is_installment: transaction.is_installment || false,
         installment_number: transaction.installment_number || null,
@@ -980,7 +1033,12 @@ export default function MonthlyControl() {
               ...paymentData,
               paid_amount: transaction.amount // Usar valor original de cada transação
             };
-            await transactionService.markAsPaid(transactionId, batchPaymentData);
+            try {
+              await transactionService.markAsPaid(transactionId, batchPaymentData);
+            } catch (error) {
+              console.error(`Erro ao marcar transação ${transactionId} como paga:`, error);
+              throw error;
+            }
           }
         });
         
@@ -989,8 +1047,13 @@ export default function MonthlyControl() {
         setSelectedTransactions([]); // Limpar seleção
       } else if (selectedTransactionForPayment?.id) {
         // Processar pagamento individual
-        await transactionService.markAsPaid(selectedTransactionForPayment.id, paymentData);
-        showSnackbar('Transação marcada como paga com sucesso!', 'success');
+        try {
+          await transactionService.markAsPaid(selectedTransactionForPayment.id, paymentData);
+          showSnackbar('Transação marcada como paga com sucesso!', 'success');
+        } catch (error) {
+          console.error('Erro ao marcar transação como paga:', error);
+          throw error;
+        }
       }
       
       loadTransactions(); // Recarregar a lista
@@ -1244,7 +1307,9 @@ export default function MonthlyControl() {
       case 'status':
         // Ordenar por: Vencido -> Em aberto -> Pago
         const getStatusOrder = (transaction: Transaction) => {
-          if (transaction.is_paid) return 3; // Pago
+          // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+          const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+          if (isPaid) return 3; // Pago
           if (isTransactionOverdue(transaction)) return 1; // Vencido
           return 2; // Em aberto
         };
@@ -1356,7 +1421,9 @@ export default function MonthlyControl() {
 
   // Verificar se transação está vencida
   const isTransactionOverdue = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+    if (isPaid) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const transactionDate = getSafeDate(transaction.transaction_date);
@@ -1366,7 +1433,9 @@ export default function MonthlyControl() {
 
   // Verificar se transação vence hoje
   const isTransactionDueToday = (transaction: Transaction) => {
-    if (transaction.is_paid) return false;
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+    if (isPaid) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const transactionDate = getSafeDate(transaction.transaction_date);
@@ -1376,14 +1445,18 @@ export default function MonthlyControl() {
 
   // Obter status da transação
   const getTransactionStatus = (transaction: Transaction) => {
-    if (transaction.is_paid) return 'Pago';
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+    if (isPaid) return 'Pago';
     if (isTransactionOverdue(transaction)) return 'Vencido';
     return 'Em aberto';
   };
 
   // Obter cor do status
   const getStatusColor = (transaction: Transaction) => {
-    if (transaction.is_paid) return { bg: '#e8f5e8', color: '#2e7d32', border: '#4caf50' };
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+    if (isPaid) return { bg: '#e8f5e8', color: '#2e7d32', border: '#4caf50' };
     if (isTransactionOverdue(transaction)) return { bg: '#ffebee', color: '#d32f2f', border: '#f44336' };
     return { bg: '#fff3e0', color: '#f57c00', border: '#ff9800' };
   };
@@ -2742,12 +2815,14 @@ export default function MonthlyControl() {
             onClick={() => selectedTransactionId && handleMarkAsPaid(selectedTransactionId)}
             disabled={(() => {
               const transaction = transactions.find(t => t.id === selectedTransactionId);
-              return transaction?.is_paid || false;
+              // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+              return transaction ? (transaction.is_paid || transaction.payment_status_id === 2) : false;
             })()}
             sx={{
               opacity: (() => {
                 const transaction = transactions.find(t => t.id === selectedTransactionId);
-                return transaction?.is_paid ? 0.5 : 1;
+                // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+                return transaction ? (transaction.is_paid || transaction.payment_status_id === 2) ? 0.5 : 1 : 1;
               })()
             }}
           >
@@ -2757,7 +2832,8 @@ export default function MonthlyControl() {
                 sx={{ 
                   color: (() => {
                     const transaction = transactions.find(t => t.id === selectedTransactionId);
-                    return transaction?.is_paid ? colors.gray[400] : colors.success[600];
+                    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+                    return transaction ? (transaction.is_paid || transaction.payment_status_id === 2) ? colors.gray[400] : colors.success[600] : colors.gray[400];
                   })() 
                 }} 
               />
@@ -2779,23 +2855,12 @@ export default function MonthlyControl() {
             }}
           >
             <ListItemIcon>
-              <UndoIcon 
-                fontSize="small" 
-                sx={{ 
-                  color: (() => {
-                    const transaction = transactions.find(t => t.id === selectedTransactionId);
-                    return !transaction?.is_paid ? colors.gray[400] : colors.warning[600];
-                  })() 
-                }} 
-              />
+              <RedoIcon fontSize="small" sx={{ color: colors.primary[600] }} />
             </ListItemIcon>
-            <ListItemText>Estornar</ListItemText>
+            <ListItemText>Reverter Pagamento</ListItemText>
           </MenuItem>
           
-          <MenuItem 
-            onClick={() => selectedTransactionId && handleDeleteTransaction(selectedTransactionId)}
-            sx={{ color: colors.error[600] }}
-          >
+          <MenuItem onClick={() => selectedTransactionId && handleDeleteTransaction(selectedTransactionId)}>
             <ListItemIcon>
               <DeleteIcon fontSize="small" sx={{ color: colors.error[600] }} />
             </ListItemIcon>
@@ -2902,7 +2967,7 @@ export default function MonthlyControl() {
           </MenuItem>
         </Menu>
 
-        {/* Dialog para criar/editar transação */}
+        {/* Date Picker Dialog */}
         <Dialog 
           open={transactionDialogOpen} 
           onClose={handleCloseTransactionDialog} 

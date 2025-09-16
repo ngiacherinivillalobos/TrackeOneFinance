@@ -190,7 +190,7 @@ export default function Dashboard() {
         console.log('Buscando transações vencidas...');
         const overdueParams: any = {
           dateFilterType: 'all', // Sempre buscar todas as datas
-          payment_status_id: 'overdue', // Status "Vencido" - usar string como no Controle Mensal
+          payment_status: 'overdue', // Status "Vencido" - usar string como no Controle Mensal
         };
         
         // Adicionar filtro de centro de custo se houver
@@ -208,19 +208,19 @@ export default function Dashboard() {
             // Se estivermos filtrando por período específico, filtrar transações vencidas por data
             // Mas manter todas as transações vencidas (não filtrar por data)
             overdueTransactions = overdueResponse.data.filter((t: any) => 
-              t.payment_status_id === 374 // Apenas transações vencidas (ID correto é 374)
+              !t.is_paid // Apenas transações não pagas
             );
           } else {
             // Para "Todo o período", incluir todas as transações vencidas
             overdueTransactions = overdueResponse.data.filter((t: any) => 
-              t.payment_status_id === 374 // Apenas transações vencidas (ID correto é 374)
+              !t.is_paid // Apenas transações não pagas
             );
           }
           
           // Garantir que as transações vencidas não estão marcadas como pagas
           overdueTransactions = overdueTransactions.filter((t: any) => {
             // Verificar se a transação está realmente vencida (não paga)
-            return t.payment_status_id === 374; // ID 374 = Vencido
+            return !t.is_paid; // Apenas transações não pagas
           });
           
           console.log('Transações vencidas filtradas:', overdueTransactions);
@@ -296,7 +296,7 @@ export default function Dashboard() {
             number: transaction.cost_center_number
           } : null,
           // Converter o campo is_paid baseado no payment_status_id
-          is_paid: transaction.payment_status_id === 2
+          is_paid: transaction.is_paid
         };
       });
       
@@ -410,7 +410,9 @@ export default function Dashboard() {
           // Filtrar apenas transações vencidas do próximo mês
           nextMonthOverdueTransactions = overdueResponse.data.filter((t: any) => {
             // Verificar se a transação está vencida e não paga
-            return t.payment_status_id === 374; // ID 374 = Vencido
+            // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+            const isPaid = t.is_paid || t.payment_status_id === 2;
+            return !isPaid && t.payment_status_id === 3; // ID 3 = Vencido (corrigido)
           });
         }
       } catch (error) {
@@ -475,17 +477,17 @@ export default function Dashboard() {
 
     // 2. Receitas pagas do controle mensal
     const receitasPagasControle = transactionsData
-      .filter(t => t.type === 'income' && t.payment_status_id === 2)
+      .filter(t => t.type === 'income' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
     // 3. Despesas pagas do controle mensal
     const despesasPagasControle = transactionsData
-      .filter(t => t.type === 'expense' && t.payment_status_id === 2)
+      .filter(t => t.type === 'expense' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
     // 4. Investimentos pagos do controle mensal
     const investimentosPagosControle = transactionsData
-      .filter(t => t.type === 'investment' && t.payment_status_id === 2)
+      .filter(t => t.type === 'investment' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
     // 5. Total do fluxo de caixa - TODAS as transações (subtrair despesas, somar receitas)
@@ -504,20 +506,20 @@ export default function Dashboard() {
     
     // Calcular "A Receber" e "Recebido" com base em transações de receita
     const receitasPagas = transactionsData
-      .filter(t => t.type === 'income' && t.payment_status_id === 2)
+      .filter(t => t.type === 'income' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const receitasNaoPagas = transactionsData
-      .filter(t => t.type === 'income' && (t.payment_status_id === 1 || t.payment_status_id === 374))
+      .filter(t => t.type === 'income' && !(t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
     // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (não incluir investimentos)
     const despesasPagas = transactionsData
-      .filter(t => t.type === 'expense' && t.payment_status_id === 2)
+      .filter(t => t.type === 'expense' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const despesasNaoPagas = transactionsData
-      .filter(t => t.type === 'expense' && (t.payment_status_id === 1 || t.payment_status_id === 374))
+      .filter(t => t.type === 'expense' && !(t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
     const totalPago = despesasPagas; // Apenas despesas pagas
@@ -575,10 +577,13 @@ export default function Dashboard() {
   // Função para carregar o total de investimentos pagos de todos os períodos (Meta de Economia)
   const loadTotalInvestmentsPaid = async (costCenterId: number | string | null) => {
     try {
+      console.log('Iniciando loadTotalInvestmentsPaid com costCenterId:', costCenterId);
+      
       // Buscar todos os investimentos pagos, independentemente do período
       const params: any = {
         transaction_type: 'Investimento',
-        payment_status_id: 2 // Apenas investimentos com status "Pago"
+        payment_status_id: 'paid', // Usar string como no Controle Mensal para consistência
+        dateFilterType: 'all' // Garantir que não há filtro de data
       };
       
       // Adicionar filtro de centro de custo se selecionado
@@ -592,9 +597,25 @@ export default function Dashboard() {
       const response = await api.get('/transactions/filtered', { params });
       console.log('Response investimentos pagos:', response.data);
       
+      // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
       const totalInvestimentosPagos = response.data
+        .filter((t: any) => {
+          // Verificar se está pago em ambos os ambientes
+          const isPaid = t.is_paid || t.payment_status_id === 2;
+          console.log(`Transação ${t.id}: is_paid=${t.is_paid}, payment_status_id=${t.payment_status_id}, isPaid=${isPaid}`);
+          return isPaid;
+        })
         .reduce((sum: number, t: any) => {
-          const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0);
+          // Garantir que o amount seja um número
+          let amount: number;
+          if (typeof t.amount === 'string') {
+            amount = parseFloat(t.amount.replace(',', '.'));
+          } else if (typeof t.amount === 'number') {
+            amount = t.amount;
+          } else {
+            amount = 0;
+          }
+          console.log(`Adicionando valor ${amount} da transação ${t.id}`);
           return sum + amount;
         }, 0);
       
@@ -741,12 +762,20 @@ export default function Dashboard() {
   });
   
   const [totalInvestmentsPaid, setTotalInvestmentsPaid] = useState(0);
+  
+  // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
+  useEffect(() => {
+    console.log('totalInvestmentsPaid atualizado:', totalInvestmentsPaid);
+  }, [totalInvestmentsPaid]);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
+    console.log('Formatando valor:', value);
+    const formatted = new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+    console.log('Valor formatado:', formatted);
+    return formatted;
   };
 
   // Função para forçar refresh dos dados (útil após estornos)

@@ -3,36 +3,33 @@ import { getDatabase } from '../database/connection';
 import { toDatabaseBoolean } from '../utils/booleanUtils';
 
 // Função helper para criar Date segura para timezone
+// Esta função garante consistência entre SQLite e PostgreSQL
 const createSafeDate = (dateString: string): Date => {
-  // Se a string já tem T12:00:00, usar diretamente
-  if (dateString.includes('T12:00:00')) {
-    return new Date(dateString);
+  // Se a string já tem T, usar diretamente
+  if (dateString.includes('T')) {
+    // Extrair apenas a parte da data YYYY-MM-DD
+    const [datePart] = dateString.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
   }
-  // Se é só a data (YYYY-MM-DD), adicionar T12:00:00 para evitar timezone offset
-  return new Date(dateString + 'T12:00:00');
+  // Se é só a data (YYYY-MM-DD), criar data local
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 // Função helper para obter data local no formato YYYY-MM-DD
+// Esta função garante consistência entre SQLite e PostgreSQL
 const getLocalDateString = (): string => {
-  // Em produção, usar UTC para ser consistente com PostgreSQL CURRENT_DATE
-  // Em desenvolvimento, usar hora local para ser consistente com SQLite date('now')
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  if (isProduction) {
-    // UTC para produção (PostgreSQL)
-    const now = new Date();
-    const utcYear = now.getUTCFullYear();
-    const utcMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const utcDay = String(now.getUTCDate()).padStart(2, '0');
-    return `${utcYear}-${utcMonth}-${utcDay}`;
-  } else {
-    // Hora local para desenvolvimento (SQLite)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
+  // Usar sempre a data local para consistência entre ambientes
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const getFilteredTransactions = async (req: Request, res: Response) => {
@@ -44,7 +41,7 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     customStartDate,
     customEndDate,
     transaction_type,
-    payment_status_id,
+    payment_status,
     category_id,
     subcategory_id,
     contact_id,
@@ -61,7 +58,8 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
         c.name as category_name,
         sc.name as subcategory_name,
         co.name as contact_name,
-        cc.name as cost_center_name
+        cc.name as cost_center_name,
+        cc.number as cost_center_number
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN subcategories sc ON t.subcategory_id = sc.id
@@ -70,6 +68,7 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     `;
     const conditions: string[] = [];
     const values: any[] = [];
+    const isProduction = process.env.NODE_ENV === 'production';
 
     // Date filters
     if (dateFilterType === 'month' && month && year) {
@@ -101,24 +100,61 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       conditions.push(`t.type IN (${types.map(() => '?').join(',')})`);
       values.push(...types);
     }
-    if (payment_status_id) {
-      const statuses = (payment_status_id as string).split(',');
+    
+    // Corrigir o tratamento de payment_status para funcionar corretamente em ambos os ambientes
+    if (payment_status) {
+      const statuses = (payment_status as string).split(',');
       const statusConditions: string[] = [];
       const today = getLocalDateString();
 
       statuses.forEach(status => {
-        if (status === 'paid') statusConditions.push('t.payment_status_id = 2');
-        if (status === 'unpaid') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date >= ?)');
-        if (status === 'overdue') statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date < ?)');
-        if (status === 'cancelled') statusConditions.push('t.payment_status_id = 3'); // Assuming 3 is 'cancelled'
+        if (status === 'paid') {
+          // Em produção, verificar payment_status_id = 2
+          // Em desenvolvimento, verificar is_paid = 1
+          if (isProduction) {
+            statusConditions.push('t.payment_status_id = 2');
+          } else {
+            statusConditions.push('t.is_paid = 1');
+          }
+        }
+        if (status === 'unpaid') {
+          // Em produção, verificar payment_status_id != 2 e data >= hoje
+          // Em desenvolvimento, verificar is_paid != 1 e data >= hoje
+          if (isProduction) {
+            statusConditions.push('(t.payment_status_id != 2 AND t.transaction_date >= ?)');
+          } else {
+            statusConditions.push('(t.is_paid != 1 AND t.transaction_date >= ?)');
+          }
+        }
+        if (status === 'overdue') {
+          // Em produção, verificar payment_status_id = 3 (Vencido)
+          // Em desenvolvimento, verificar is_paid = 0 e data < hoje
+          if (isProduction) {
+            statusConditions.push('(t.payment_status_id = 3 AND t.transaction_date < ?)');
+          } else {
+            statusConditions.push('(t.is_paid = 0 AND t.transaction_date < ?)');
+          }
+        }
+        if (status === 'cancelled') {
+          // Em produção, verificar payment_status_id = 3 (Vencido)
+          // Em desenvolvimento, verificar is_paid = 0 (assumindo que cancelado = não pago)
+          if (isProduction) {
+            statusConditions.push('t.payment_status_id = 3');
+          } else {
+            statusConditions.push('t.is_paid = 0');
+          }
+        }
       });
       
       if (statusConditions.length > 0) {
         conditions.push(`(${statusConditions.join(' OR ')})`);
-        if ((payment_status_id as string).includes('unpaid')) values.push(today);
-        if ((payment_status_id as string).includes('overdue')) values.push(today);
+        // Adicionar a data de hoje para os filtros que precisam
+        if ((payment_status as string).includes('unpaid') || (payment_status as string).includes('overdue')) {
+          values.push(today);
+        }
       }
     }
+    
     if (category_id) {
       const ids = (category_id as string).split(',');
       conditions.push(`t.category_id IN (${ids.map(() => '?').join(',')})`);
@@ -148,15 +184,14 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     const sortColumn = validOrderBy.includes(orderBy as string) ? orderBy : 'transaction_date';
     const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
     
-    const isProduction = process.env.NODE_ENV === 'production';
     const currentDateFunction = isProduction ? 'CURRENT_DATE' : "date('now')";
     
     if (sortColumn === 'status') {
       query += ` ORDER BY CASE 
-        WHEN t.payment_status_id != 2 AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
-        WHEN t.payment_status_id != 2 AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
-        WHEN t.payment_status_id != 2 AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
-        WHEN t.payment_status_id = 2 THEN 4 -- Pago
+        WHEN ${isProduction ? 't.payment_status_id = 3' : 't.is_paid = 0'} AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
+        WHEN ${isProduction ? 't.payment_status_id != 2' : 't.is_paid != 1'} AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
+        WHEN ${isProduction ? 't.payment_status_id != 2' : 't.is_paid != 1'} AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
+        WHEN ${isProduction ? 't.payment_status_id = 2' : 't.is_paid = 1'} THEN 4 -- Pago
         ELSE 5
       END ${sortOrder}, t.transaction_date DESC`;
     } else {
@@ -175,7 +210,12 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
       console.log(`[getFilteredTransactions] Converting type: ${transaction.type} -> ${frontendType} for transaction ${transaction.id}`);
       
       // Garantir que is_paid está sincronizado com payment_status_id
-      const isPaid = transaction.payment_status_id === 2;
+      let isPaid = false;
+      if (isProduction) {
+        isPaid = transaction.payment_status_id === 2;
+      } else {
+        isPaid = transaction.is_paid === 1 || transaction.is_paid === true;
+      }
       
       return {
         ...transaction,
@@ -183,6 +223,7 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
         is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
         is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
         is_paid: isPaid,
+        payment_status_id: isProduction ? transaction.payment_status_id : (isPaid ? 2 : 1) // Sincronizar payment_status_id para frontend
       };
     });
 
@@ -225,9 +266,23 @@ const createSingleTransaction = async (db: any, params: {
   `;
 
   const { db: database, run } = getDatabase();
+  
+  // Garantir consistência entre payment_status_id e is_paid
+  let paymentStatusId = params.currentPaymentStatusId;
+  let isPaidValue: number | boolean = paymentStatusId === 2;
+  
+  // Ajustar valores de acordo com o ambiente
+  if (isProduction) {
+    // PostgreSQL usa booleanos
+    isPaidValue = paymentStatusId === 2;
+  } else {
+    // SQLite usa 0/1
+    isPaidValue = paymentStatusId === 2 ? 1 : 0;
+  }
+  
   return run(database, query, [
     params.description, params.amount, params.dbType, params.category_id, params.subcategory_id,
-    params.currentPaymentStatusId, params.bank_account_id, params.card_id, params.contact_id, 
+    paymentStatusId, params.bank_account_id, params.card_id, params.contact_id, 
     params.formattedDate, params.cost_center_id, toDatabaseBoolean(params.is_installment, isProduction), 
     params.installment_number || null, params.total_installments || null,
     toDatabaseBoolean(params.is_recurring, isProduction), params.recurrence_type || null
@@ -240,6 +295,7 @@ const list = async (req: Request, res: Response) => {
   
   try {
     const { db, all } = getDatabase();
+    const isProduction = process.env.NODE_ENV === 'production';
     
     // Construir query base
     let query = `
@@ -262,6 +318,7 @@ const list = async (req: Request, res: Response) => {
         t.is_installment,
         t.installment_number,
         t.total_installments,
+        ${isProduction ? 't.is_paid as is_paid,' : ''}
         c.name as category_name,
         sc.name as subcategory_name,
         co.name as contact_name,
@@ -313,15 +370,39 @@ const list = async (req: Request, res: Response) => {
       values.push(req.query.end_date);
     }
     
+    // Corrigir o tratamento de payment_status_id para funcionar corretamente em ambos os ambientes
     if (req.query.payment_status_id) {
-      conditions.push('t.payment_status_id = ?');
-      values.push(req.query.payment_status_id);
+      const statusId = parseInt(req.query.payment_status_id as string);
+      if (isProduction) {
+        conditions.push('t.payment_status_id = ?');
+        values.push(statusId);
+      } else {
+        // Converter payment_status_id para is_paid no SQLite
+        if (statusId === 2) {
+          // Pago
+          conditions.push('t.is_paid = ?');
+          values.push(1);
+        } else if (statusId === 1) {
+          // Em aberto
+          conditions.push('t.is_paid = ?');
+          values.push(0);
+        } else if (statusId === 3) {
+          // Vencido - tratar como não pago
+          conditions.push('t.is_paid = ?');
+          values.push(0);
+        }
+      }
     }
     
     if (req.query.is_paid !== undefined) {
       const isPaidValue = req.query.is_paid === 'true' || req.query.is_paid === '1';
-      conditions.push('t.payment_status_id = ?');
-      values.push(isPaidValue ? 2 : 1); // 2 = Pago, 1 = Em aberto
+      if (isProduction) {
+        conditions.push('t.payment_status_id = ?');
+        values.push(isPaidValue ? 2 : 1); // 2 = Pago, 1 = Em aberto
+      } else {
+        conditions.push('t.is_paid = ?');
+        values.push(isPaidValue ? 1 : 0); // 1 = Pago, 0 = Em aberto
+      }
     }
     
     // Adicionar condições à query
@@ -339,7 +420,6 @@ const list = async (req: Request, res: Response) => {
     
     // Converter booleanos do banco de dados para valores JavaScript
     // Converter tipos do banco (inglês) para frontend (português)
-    const isProduction = process.env.NODE_ENV === 'production';
     const convertedTransactions = transactions.map((transaction: any) => {
       let frontendType = transaction.transaction_type;
       if (transaction.transaction_type === 'expense') frontendType = 'Despesa';
@@ -348,12 +428,20 @@ const list = async (req: Request, res: Response) => {
       
       console.log(`[list] Converting type: ${transaction.transaction_type} -> ${frontendType} for transaction ${transaction.id}`);
       
+      // Garantir consistência do campo is_paid entre ambientes
+      let isPaid = false;
+      if (isProduction) {
+        isPaid = transaction.payment_status_id === 2;
+      } else {
+        isPaid = transaction.is_paid === 1 || transaction.is_paid === true;
+      }
+      
       return {
         ...transaction,
         transaction_type: frontendType,
         is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
         is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-        is_paid: transaction.payment_status_id === 2
+        is_paid: isPaid
       };
     });
     
@@ -430,12 +518,21 @@ const getById = async (req: Request, res: Response) => {
     if (transaction.transaction_type === 'investment') frontendType = 'Investimento';
     
     const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Garantir que is_paid está sincronizado com payment_status_id
+    let isPaid = false;
+    if (isProduction) {
+      isPaid = transaction.payment_status_id === 2;
+    } else {
+      isPaid = transaction.is_paid === 1 || transaction.is_paid === true;
+    }
+    
     const convertedTransaction = {
       ...transaction,
       transaction_type: frontendType,
       is_recurring: transaction.is_recurring === 1 || transaction.is_recurring === true,
       is_installment: transaction.is_installment === 1 || transaction.is_installment === true,
-      is_paid: transaction.payment_status_id === 2
+      is_paid: isPaid
     };
     
     res.json(convertedTransaction);
@@ -524,7 +621,7 @@ const create = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 374; // Vencido
+        finalPaymentStatusId = 3; // Vencido (corrigido)
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
@@ -921,7 +1018,7 @@ const update = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 3; // Vencido (corrigido para o ID correto)
+        finalPaymentStatusId = 3; // Vencido
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
@@ -1050,7 +1147,16 @@ const markAsPaid = async (req: Request, res: Response) => {
   try {
     const { db, run, get } = getDatabase();
     const transactionId = req.params.id;
-    const { payment_date, payment_method, bank_account_id, card_id } = req.body;
+    const { 
+      payment_date, 
+      paid_amount, 
+      payment_type, 
+      bank_account_id, 
+      card_id, 
+      observations,
+      discount,
+      interest
+    } = req.body;
 
     if (!transactionId) {
       return res.status(400).json({ error: 'Transaction ID is required' });
@@ -1065,21 +1171,75 @@ const markAsPaid = async (req: Request, res: Response) => {
 
     // Atualizar o status de pagamento para "Pago" (ID = 2) e is_paid = true
     const isProduction = process.env.NODE_ENV === 'production';
+    const isPaidValue = toDatabaseBoolean(true, isProduction);
+    
+    // Preparar os campos a serem atualizados
+    const updateFields = ['payment_status_id = 2', 'is_paid = ?'];
+    const updateValues = [isPaidValue];
+    
+    // Adicionar campos de pagamento se fornecidos
+    if (payment_date) {
+      updateFields.push('payment_date = ?');
+      updateValues.push(payment_date);
+    }
+    
+    if (paid_amount !== undefined) {
+      updateFields.push('paid_amount = ?');
+      updateValues.push(paid_amount);
+    }
+    
+    if (payment_type) {
+      updateFields.push('payment_type = ?');
+      updateValues.push(payment_type);
+    }
+    
+    if (bank_account_id !== undefined) {
+      updateFields.push('bank_account_id = ?');
+      updateValues.push(bank_account_id);
+    }
+    
+    if (card_id !== undefined) {
+      updateFields.push('card_id = ?');
+      updateValues.push(card_id);
+    }
+    
+    if (observations !== undefined) {
+      updateFields.push('payment_observations = ?');
+      updateValues.push(observations);
+    }
+    
+    // Adicionar desconto ou juros se fornecidos
+    if (discount !== undefined && discount > 0) {
+      updateFields.push('discount = ?');
+      updateValues.push(discount);
+    }
+    
+    if (interest !== undefined && interest > 0) {
+      updateFields.push('interest = ?');
+      updateValues.push(interest);
+    }
+    
+    // Adicionar o ID da transação aos valores
+    updateValues.push(transactionId);
+    
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 2, is_paid = ?
+      SET ${updateFields.join(', ')}
       WHERE id = ?
-    `, [toDatabaseBoolean(true, isProduction), transactionId]);
+    `, updateValues);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
+    // Buscar a transação atualizada
+    const updatedTransaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
+
     res.json({ 
       id: transactionId, 
       message: 'Transaction marked as paid successfully',
       transaction: {
-        ...transaction,
+        ...updatedTransaction,
         payment_status_id: 2,
         is_paid: true
       }
@@ -1111,11 +1271,12 @@ const reversePayment = async (req: Request, res: Response) => {
 
     // Atualizar o status de pagamento (voltar para "Em aberto") e is_paid = false
     const isProduction = process.env.NODE_ENV === 'production';
+    const isPaidValue = toDatabaseBoolean(false, isProduction);
     const result: any = await run(db, `
       UPDATE transactions 
       SET payment_status_id = 1, is_paid = ?
       WHERE id = ?
-    `, [toDatabaseBoolean(false, isProduction), transactionId]);
+    `, [isPaidValue, transactionId]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
