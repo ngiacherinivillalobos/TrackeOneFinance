@@ -90,14 +90,21 @@ CREATE TABLE IF NOT EXISTS transactions (
     id SERIAL PRIMARY KEY,
     description TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
-    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('Despesa', 'Receita', 'Investimento')),
+    type TEXT NOT NULL CHECK (type IN ('expense', 'income', 'investment')),
     category_id INTEGER,
     subcategory_id INTEGER,
     payment_status_id INTEGER,
+    bank_account_id INTEGER,
+    card_id INTEGER,
     contact_id INTEGER,
-    cost_center_id INTEGER,
     transaction_date DATE NOT NULL,
-    payment_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cost_center_id INTEGER,
+    
+    -- Campos de parcelamento
+    is_installment BOOLEAN DEFAULT false,
+    installment_number INTEGER DEFAULT NULL,
+    total_installments INTEGER DEFAULT NULL,
     
     -- Campos de recorrência
     is_recurring BOOLEAN DEFAULT false,
@@ -105,17 +112,20 @@ CREATE TABLE IF NOT EXISTS transactions (
     recurrence_count INTEGER DEFAULT 1, -- quantas vezes repetir
     recurrence_end_date DATE, -- data para finalizar (para fixo)
     
-    -- Campos de parcelamento
-    is_installment BOOLEAN DEFAULT false,
-    installment_number INTEGER DEFAULT NULL,
-    total_installments INTEGER DEFAULT NULL,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Campos de pagamento (compatíveis com SQLite)
+    is_paid BOOLEAN DEFAULT FALSE,
+    payment_date DATE,
+    paid_amount NUMERIC(10,2),
+    payment_type TEXT,
+    payment_observations TEXT,
+    discount NUMERIC(10,2) DEFAULT 0,
+    interest NUMERIC(10,2) DEFAULT 0,
     
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
     FOREIGN KEY (payment_status_id) REFERENCES payment_status(id),
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id),
+    FOREIGN KEY (card_id) REFERENCES cards(id),
     FOREIGN KEY (contact_id) REFERENCES contacts(id),
     FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id)
 );
