@@ -55,7 +55,7 @@ function TabPanel(props: TabPanelProps) {
 
 export default function Cards() {
   const [cards, setCards] = useState<Card[]>([]);
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [selectedCard, setSelectedCard] = useState<Card | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [tabValue, setTabValue] = useState(0);
@@ -112,7 +112,7 @@ export default function Cards() {
         
         // Se o cartão excluído era o selecionado, limpar a seleção
         if (selectedCard?.id === id) {
-          setSelectedCard(null);
+          setSelectedCard(undefined);
         }
         
         await loadData();
