@@ -8,7 +8,7 @@ const getBaseURL = () => {
     return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com/api';
   }
   // Em desenvolvimento, usar URL absoluta para o backend
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3000/api';
 };
 
 export const api = axios.create({

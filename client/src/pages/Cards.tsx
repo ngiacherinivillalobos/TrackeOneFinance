@@ -14,15 +14,51 @@ import {
   TableRow,
   Paper,
   IconButton,
+  Box,
+  Typography,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import { colors } from '../theme/modernTheme';
 import { Card, cardService } from '../services/cardService';
+import CardTransactions from '../components/CardTransactions';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`cards-tabpanel-${index}`}
+      aria-labelledby={`cards-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
 
 export default function Cards() {
   const [cards, setCards] = useState<Card[]>([]);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [open, setOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [tabValue, setTabValue] = useState(0);
   const [formData, setFormData] = useState<Omit<Card, 'id'>>({
     name: '',
     card_number: '',
@@ -34,6 +70,11 @@ export default function Cards() {
     try {
       const data = await cardService.list();
       setCards(data);
+      
+      // Se não há cartão selecionado e há cartões disponíveis, seleciona o primeiro
+      if (!selectedCard && data.length > 0) {
+        setSelectedCard(data[0]);
+      }
     } catch (error) {
       console.error('Error loading cards:', error);
     }
@@ -68,6 +109,12 @@ export default function Cards() {
     if (window.confirm('Tem certeza que deseja excluir este cartão?')) {
       try {
         await cardService.delete(id);
+        
+        // Se o cartão excluído era o selecionado, limpar a seleção
+        if (selectedCard?.id === id) {
+          setSelectedCard(null);
+        }
+        
         await loadData();
       } catch (error) {
         console.error('Error deleting card:', error);
@@ -90,46 +137,118 @@ export default function Cards() {
     }
   };
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const handleCardSelect = (card: Card) => {
+    setSelectedCard(card);
+    setTabValue(1); // Muda para a aba de transações
+  };
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-        <Button variant="contained" color="primary" onClick={handleOpen}>
-          Novo Cartão
-        </Button>
-      </div>
+    <Box>
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab 
+            icon={<CreditCardIcon />} 
+            label="Cartões" 
+            iconPosition="start"
+            sx={{ textTransform: 'none' }}
+          />
+          <Tab 
+            icon={<ReceiptIcon />} 
+            label="Transações" 
+            iconPosition="start"
+            sx={{ textTransform: 'none' }}
+            disabled={!selectedCard}
+          />
+        </Tabs>
+      </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Número</TableCell>
-              <TableCell>Vencimento</TableCell>
-              <TableCell>Bandeira</TableCell>
-              <TableCell align="right">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {cards.map((card) => (
-              <TableRow key={card.id}>
-                <TableCell>{card.name}</TableCell>
-                <TableCell>{card.card_number ? `**** **** **** ${card.card_number.slice(-4)}` : '-'}</TableCell>
-                <TableCell>{card.expiry_date || '-'}</TableCell>
-                <TableCell>{card.brand || '-'}</TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => handleEdit(card)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(card.id!)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
+      {/* Tab Panel - Cartões */}
+      <TabPanel value={tabValue} index={0}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Gerenciar Cartões
+          </Typography>
+          <Button variant="contained" color="primary" onClick={handleOpen}>
+            Novo Cartão
+          </Button>
+        </Box>
+
+        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: colors.gray[50] }}>
+                <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Bandeira</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>Ações</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {cards.map((card) => (
+                <TableRow 
+                  key={card.id} 
+                  hover
+                  sx={{ 
+                    cursor: 'pointer',
+                    bgcolor: selectedCard?.id === card.id ? colors.primary[50] : 'inherit',
+                    '&:hover': {
+                      bgcolor: selectedCard?.id === card.id ? colors.primary[100] : colors.gray[50]
+                    }
+                  }}
+                  onClick={() => handleCardSelect(card)}
+                >
+                  <TableCell>{card.name}</TableCell>
+                  <TableCell>{card.card_number ? `**** **** **** ${card.card_number.slice(-4)}` : '-'}</TableCell>
+                  <TableCell>{card.expiry_date || '-'}</TableCell>
+                  <TableCell>{card.brand || '-'}</TableCell>
+                  <TableCell align="right">
+                    <IconButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(card);
+                      }}
+                      sx={{ color: colors.primary[600] }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(card.id!);
+                      }}
+                      sx={{ color: colors.error[600] }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {cards.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <Typography color="textSecondary">
+                      Nenhum cartão cadastrado
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
 
+      {/* Tab Panel - Transações */}
+      <TabPanel value={tabValue} index={1}>
+        <CardTransactions selectedCard={selectedCard} />
+      </TabPanel>
+
+      {/* Form Dialog */}
       <Dialog open={open} onClose={handleClose}>
         <form onSubmit={handleSubmit}>
           <DialogTitle>{editingCard ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
@@ -191,6 +310,6 @@ export default function Cards() {
           </DialogActions>
         </form>
       </Dialog>
-    </div>
+    </Box>
   );
 }

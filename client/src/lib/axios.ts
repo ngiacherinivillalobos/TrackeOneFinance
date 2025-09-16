@@ -3,7 +3,7 @@ import axios from 'axios';
 // Configuração da URL base da API
 const baseURL = import.meta.env.PROD 
   ? 'https://trackeone-finance-api.onrender.com/api'  // URL do Render em produção
-  : 'http://localhost:3001/api';  // URL local em desenvolvimento
+  : 'http://localhost:3001/api';  // URL local em desenvolvimento - CORRIGIDO para porta 3001
 
 // Criar instância do axios
 const api = axios.create({

@@ -63,6 +63,9 @@ router.get('/debug/test-fixes', async (req: any, res: any) => {
   }
 });
 
+// Rotas para parcelamento
+router.post('/installments', authMiddleware, transactionController.createInstallments);
+
 // Rotas para pagamento
 router.post('/:id/mark-as-paid', authMiddleware, transactionController.markAsPaid);
 router.post('/:id/reverse-payment', authMiddleware, transactionController.reversePayment);

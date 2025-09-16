@@ -201,6 +201,7 @@ export default function MonthlyControl() {
   // Estados
   const [transactions, setTransactions] = useState<Transaction[]>([]); // Transações filtradas para exibição na tabela
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]); // TODAS as transações para cálculo de totalizadores
+  const [overdueTransactionsForTotals, setOverdueTransactionsForTotals] = useState<Transaction[]>([]); // Transações vencidas para totalizadores
   const [loading, setLoading] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -296,10 +297,12 @@ export default function MonthlyControl() {
     cost_center_id: ''
   });
 
-  // Cálculo dos totalizadores - CORRIGIDO PARA NÃO CONSIDERAR SITUAÇÃO (STATUS)
-  // Os totalizadores de receita, despesa e investimento no Controle Mensal não devem considerar a situação (status)
-  // IMPORTANTE: Usar allTransactions (sem filtros) para totalizadores, não transactions (filtradas)
+  // CÁLCULO DOS TOTALIZADORES - VERSÃO SIMPLIFICADA E DEFINITIVA
+  // Totalizadores devem considerar:
+  // 1. TODAS as transações do período selecionado (qualquer status)
+  // 2. TODAS as transações vencidas (qualquer status)
   
+  // Usar allTransactions que agora contém período + vencidas SEM filtros de status
   const totalReceitas = allTransactions
     .filter(t => t.transaction_type === 'Receita')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
@@ -308,7 +311,6 @@ export default function MonthlyControl() {
     .filter(t => t.transaction_type === 'Despesa')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
-  // Adicionando o cálculo de investimentos
   const totalInvestimentos = allTransactions
     .filter(t => t.transaction_type === 'Investimento')
     .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
@@ -575,30 +577,84 @@ export default function MonthlyControl() {
       console.log("Resposta da API recebida:", response.data);
       console.log("Primeiras 3 transações - tipos:", response.data.slice(0, 3).map((t: any) => ({ id: t.id, type: t.type, transaction_type: t.transaction_type })));
       
-      // NOVA CHAMADA: Buscar TODAS as transações para cálculo de totalizadores
-      const allTransactionsParams = new URLSearchParams({
-        dateFilterType,
-        ...(dateFilterType === 'month' && {
-          month: currentDate.getMonth().toString(),
-          year: currentDate.getFullYear().toString()
-        }),
-        ...(dateFilterType === 'year' && {
-          year: selectedYear.toString()
-        }),
-        ...(dateFilterType === 'custom' && customStartDate && customEndDate && {
-          customStartDate: format(customStartDate, 'yyyy-MM-dd'),
-          customEndDate: format(customEndDate, 'yyyy-MM-dd')
-        }),
-        ...(dateFilterType !== 'all' && startDate && endDate && {
-          start_date: startDate,
-          end_date: endDate
-        })
+      // ***** VERSÃO SIMPLIFICADA PARA TOTALIZADORES *****
+      
+      // 1. Buscar transações do período atual (para lista e totalizadores)
+      const periodTransactions = response.data;
+      
+      // 2. Buscar TODAS as transações para filtrar vencidas
+      const allTransactionsForOverdue = await api.get('/transactions/filtered?dateFilterType=all');
+      
+      // 3. Filtrar apenas vencidas (antes de hoje E não pagas)
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      const overdueTransactionsFiltered = allTransactionsForOverdue.data.filter((t: any) => {
+        const transactionDate = getSafeDate(t.transaction_date);
+        transactionDate.setHours(0, 0, 0, 0);
+        const isPaid = t.is_paid || t.payment_status_id === 2;
+        // Incluir apenas se: data < hoje E não está pago
+        return transactionDate < todayDate && !isPaid;
       });
       
-      console.log('Buscando TODAS as transações para totalizadores:', allTransactionsParams.toString());
-      const allTransactionsResponse = await api.get(`/transactions/filtered?${allTransactionsParams}`);
-      console.log("Todas as transações recebidas:", allTransactionsResponse.data.length);
+      // 4. Combinar período + vencidas para totalizadores (evitando duplicatas)
+      const combinedForTotals = [...periodTransactions];
+      overdueTransactionsFiltered.forEach((overdueTransaction: any) => {
+        if (!combinedForTotals.some((t: any) => t.id === overdueTransaction.id)) {
+          combinedForTotals.push(overdueTransaction);
+        }
+      });
       
+      // 5. Mapear para formato esperado pelo frontend
+      const mappedCombined = combinedForTotals.map((transaction: any) => ({
+        ...transaction,
+        contact: transaction.contact_name ? { 
+          id: transaction.contact_id, 
+          name: transaction.contact_name 
+        } : null,
+        category: transaction.category_name ? { 
+          id: transaction.category_id, 
+          name: transaction.category_name 
+        } : null,
+        subcategory: transaction.subcategory_name ? { 
+          id: transaction.subcategory_id, 
+          name: transaction.subcategory_name 
+        } : null,
+        cost_center: transaction.cost_center_name ? { 
+          id: transaction.cost_center_id,
+          name: transaction.cost_center_name,
+          number: transaction.cost_center_number
+        } : null,
+        is_paid: transaction.is_paid,
+        transaction_type: transaction.transaction_type || 
+          (transaction.type === 'income' ? 'Receita' : 
+           transaction.type === 'expense' ? 'Despesa' : 'Investimento'),
+        is_installment: transaction.is_installment || false,
+        installment_number: transaction.installment_number || null,
+        total_installments: transaction.total_installments || null,
+        original_cost_center_id: transaction.cost_center_id,
+        original_contact_id: transaction.contact_id
+      }));
+      
+      // DEBUG: Verificar os totais
+      const debugReceitas = mappedCombined.filter(t => t.transaction_type === 'Receita').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      const debugDespesas = mappedCombined.filter(t => t.transaction_type === 'Despesa').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      const debugInvestimentos = mappedCombined.filter(t => t.transaction_type === 'Investimento').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+      
+      console.log("=== TOTALIZADORES SIMPLIFICADOS ===");
+      console.log("Período:", periodTransactions.length, "transações");
+      console.log("Vencidas:", overdueTransactionsFiltered.length, "transações");
+      console.log("Combined:", mappedCombined.length, "transações");
+      console.log("Receitas:", debugReceitas);
+      console.log("Despesas:", debugDespesas);
+      console.log("Investimentos:", debugInvestimentos);
+      console.log("Saldo:", debugReceitas - debugDespesas - debugInvestimentos);
+      
+      // 6. Definir estados
+      setAllTransactions(mappedCombined); // Para totalizadores
+      setOverdueTransactionsForTotals(overdueTransactionsFiltered); // Para outras funções
+      
+      // ***** FIM DA VERSÃO SIMPLIFICADA *****
+
       // Aplicar filtros no frontend
       let filteredTransactions = response.data;
       
@@ -800,33 +856,34 @@ export default function MonthlyControl() {
       })));
       
       // Definir TODAS as transações (sem filtros) para cálculo de totalizadores
-      setAllTransactions(allTransactionsResponse.data.map((transaction: any) => ({
-        ...transaction,
-        // Mapear os dados relacionados para o formato esperado pelo frontend
-        contact: transaction.contact_name ? { 
-          id: transaction.contact_id, 
-          name: transaction.contact_name 
-        } : null,
-        category: transaction.category_name ? { 
-          id: transaction.category_id, 
-          name: transaction.category_name 
-        } : null,
-        subcategory: transaction.subcategory_name ? { 
-          id: transaction.subcategory_id, 
-          name: transaction.subcategory_name 
-        } : null,
-        cost_center: transaction.cost_center_name ? { 
-          id: transaction.cost_center_id,
-          name: transaction.cost_center_name,
-          number: transaction.cost_center_number
-        } : null,
-        is_paid: transaction.is_paid,
-        is_installment: transaction.is_installment || false,
-        installment_number: transaction.installment_number || null,
-        total_installments: transaction.total_installments || null,
-        original_cost_center_id: transaction.cost_center_id,
-        original_contact_id: transaction.contact_id
-      })));
+      // setAllTransactions(allTransactionsResponse.data.map((transaction: any) => ({
+      //   ...transaction,
+      //   // Mapear os dados relacionados para o formato esperado pelo frontend
+      //   contact: transaction.contact_name ? { 
+      //     id: transaction.contact_id, 
+      //     name: transaction.contact_name 
+      //   } : null,
+      //   category: transaction.category_name ? { 
+      //     id: transaction.category_id, 
+      //     name: transaction.category_name 
+      //   } : null,
+      //   subcategory: transaction.subcategory_name ? { 
+      //     id: transaction.subcategory_id, 
+      //     name: transaction.subcategory_name 
+      //   } : null,
+      //   cost_center: transaction.cost_center_name ? { 
+      //     id: transaction.cost_center_id,
+      //     name: transaction.cost_center_name,
+      //     number: transaction.cost_center_number
+      //   } : null,
+      //   is_paid: transaction.is_paid,
+      //   is_installment: transaction.is_installment || false,
+      //   installment_number: transaction.installment_number || null,
+      //   total_installments: transaction.total_installments || null,
+      //   original_cost_center_id: transaction.cost_center_id,
+      //   original_contact_id: transaction.contact_id
+      // })));
+      
     } catch (error) {
       console.error('Erro detalhado ao carregar transações:', error);
       if (axios.isAxiosError(error)) {

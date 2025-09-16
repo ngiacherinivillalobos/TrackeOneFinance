@@ -31,7 +31,6 @@ import {
   CreditCard,
   AttachMoney,
   Timeline,
-  CalendarToday,
   Assessment,
   FilterList as FilterIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -48,14 +47,6 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { createSafeDate, formatToBrazilianDate } from '../utils/dateUtils';
-
-interface WeeklyBalance {
-  startDate: string;
-  endDate: string;
-  balance: number;
-  spent: number;
-  remaining: number;
-}
 
 interface Transaction {
   id: number;
@@ -101,7 +92,6 @@ export default function Dashboard() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Estados para exibição
-  const [weeklyBalances, setWeeklyBalances] = useState<WeeklyBalance[]>([]);
   const [savingsGoal, setSavingsGoal] = useState<SavingsGoal | null>(null);
 
   // Carregar centros de custo
@@ -570,8 +560,7 @@ export default function Dashboard() {
     console.log('Novo monthSummary:', newMonthSummary);
     setMonthSummary(newMonthSummary);
     
-    // Calcular dados para o gráfico semanal
-    calculateWeeklyBalances(transactionsData);
+    // REMOVIDO: calculateWeeklyBalances(transactionsData); - Movido para página separada
   };
   
   // Função para carregar o total de investimentos pagos de todos os períodos (Meta de Economia)
@@ -655,97 +644,6 @@ export default function Dashboard() {
       console.error('Erro ao carregar transações do próximo mês:', error);
       return [];
     }
-  };
-  
-  const calculateWeeklyBalances = (transactionsData: Transaction[]) => {
-    // Função auxiliar para converter valores para número
-    const getSafeAmount = (amount: any): number => {
-      if (typeof amount === 'number') return amount;
-      if (typeof amount === 'string') {
-        const parsed = parseFloat(amount);
-        return isNaN(parsed) ? 0 : parsed;
-      }
-      return 0;
-    };
-    
-    // Criar semanas do mês
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    // Primeiro dia do mês
-    const firstDay = new Date(year, month, 1);
-    // Último dia do mês
-    const lastDay = new Date(year, month + 1, 0);
-    
-    // Ajustar para começar na segunda-feira da semana que contém o primeiro dia do mês
-    const firstDayOfWeek = firstDay.getDay(); // 0 = domingo, 1 = segunda, etc.
-    const startDate = new Date(firstDay);
-    startDate.setDate(firstDay.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1)); // Ajustar para segunda-feira
-    
-    const weeklyData: WeeklyBalance[] = [];
-    
-    // Criar dados para cada semana
-    for (let week = 0; week < 5; week++) { // Máximo de 5 semanas
-      const weekStart = new Date(startDate);
-      weekStart.setDate(startDate.getDate() + (week * 7));
-      
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      // Garantir que não ultrapasse o último dia do mês
-      if (weekStart > lastDay) break;
-      
-      // Calcular saldo inicial (acumulado até a semana anterior)
-      let balance = 0;
-      if (week === 0) {
-        // Para a primeira semana, usar saldo acumulado até o mês anterior
-        balance = 0; // Simplificação para este exemplo
-      } else {
-        // Calcular saldo acumulado até esta semana
-        const previousWeekTransactions = transactionsData.filter(t => {
-          const transactionDate = parseISO(t.transaction_date);
-          return transactionDate < weekStart;
-        });
-        
-        const previousIncome = previousWeekTransactions
-          .filter(t => t.type === 'income')
-          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
-          
-        const previousExpenses = previousWeekTransactions
-          .filter(t => t.type === 'expense')
-          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
-          
-        const previousInvestments = previousWeekTransactions
-          .filter(t => t.type === 'investment')
-          .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
-          
-        balance = previousIncome - previousExpenses - previousInvestments;
-      }
-      
-      // Filtrar transações desta semana
-      const weekTransactions = transactionsData.filter(t => {
-        const transactionDate = parseISO(t.transaction_date);
-        return transactionDate >= weekStart && transactionDate <= weekEnd;
-      });
-      
-      // Calcular gastos da semana (despesas + investimentos)
-      const spent = weekTransactions
-        .filter(t => t.type === 'expense' || t.type === 'investment')
-        .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
-      
-      // Calcular saldo restante
-      const remaining = balance - spent;
-      
-      weeklyData.push({
-        startDate: weekStart.toISOString().split('T')[0],
-        endDate: weekEnd.toISOString().split('T')[0],
-        balance,
-        spent,
-        remaining
-      });
-    }
-    
-    setWeeklyBalances(weeklyData);
   };
   
   const [monthSummary, setMonthSummary] = useState({
@@ -1182,85 +1080,7 @@ export default function Dashboard() {
       </Box>
 
       {/* Weekly Balance Table */}
-      <Box>
-          <ModernSection
-            title="Controle Semanal"
-            subtitle="Acompanhamento detalhado por semana"
-            icon={<CalendarToday sx={{ fontSize: 24 }} />}
-          >
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Período</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>Saldo Inicial</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>Gasto na Semana</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>Saldo Final</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 600 }}>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {weeklyBalances.map((week, index) => {
-                    const spentPercentage = week.balance > 0 ? (week.spent / week.balance) * 100 : 0;
-                    const isHighSpending = spentPercentage > 20;
-                    
-                    return (
-                      <TableRow 
-                        key={week.startDate}
-                        sx={{
-                          '&:hover': {
-                            backgroundColor: colors.primary[50],
-                          },
-                        }}
-                      >
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" fontWeight={600}>
-                              {format(parseISO(week.startDate), 'dd/MM')} - {format(parseISO(week.endDate), 'dd/MM')}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Semana {index + 1}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight={600}>
-                            {formatCurrency(week.balance)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography 
-                            variant="body2" 
-                            fontWeight={600}
-                            color={isHighSpending ? colors.error[600] : 'inherit'}
-                          >
-                            {formatCurrency(week.spent)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight={600}>
-                            {formatCurrency(week.remaining)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            label={isHighSpending ? 'Alto Gasto' : 'Controlado'}
-                            size="small"
-                            sx={{
-                              bgcolor: isHighSpending ? colors.error[100] : colors.success[100],
-                              color: isHighSpending ? colors.error[700] : colors.success[700],
-                              fontWeight: 600,
-                            }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </ModernSection>
-        </Box>
+      {/* REMOVIDO: Controle Semanal movido para página separada */}
     </Box>
   );
 }

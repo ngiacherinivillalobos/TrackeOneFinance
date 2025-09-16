@@ -38,6 +38,8 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     dateFilterType,
     month,
     year,
+    startDate,
+    endDate,
     customStartDate,
     customEndDate,
     transaction_type,
@@ -92,6 +94,10 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     } else if (dateFilterType === 'custom' && customStartDate && customEndDate) {
       conditions.push('t.transaction_date BETWEEN ? AND ?');
       values.push(customStartDate, customEndDate);
+    } else if (dateFilterType === 'period' && startDate && endDate) {
+      console.log('Period filter applied:', { startDate, endDate });
+      conditions.push('t.transaction_date BETWEEN ? AND ?');
+      values.push(startDate, endDate);
     }
 
     // Other filters
@@ -1457,6 +1463,110 @@ const getPaymentDetails = async (req: Request, res: Response) => {
   }
 };
 
+const createInstallments = async (req: Request, res: Response) => {
+  console.log('===== TRANSACTION CONTROLLER - CREATE INSTALLMENTS =====');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const { db, run, get } = getDatabase();
+    const {
+      description,
+      total_amount,
+      total_installments,
+      card_id,
+      category_id,
+      subcategory_id,
+      cost_center_id,
+      transaction_date
+    } = req.body;
+
+    // Validações
+    if (!description || !total_amount || !total_installments || !card_id || !transaction_date) {
+      return res.status(400).json({ 
+        error: 'Campos obrigatórios: description, total_amount, total_installments, card_id, transaction_date' 
+      });
+    }
+
+    if (total_installments < 1 || total_installments > 99) {
+      return res.status(400).json({ 
+        error: 'Número de parcelas deve ser entre 1 e 99' 
+      });
+    }
+
+    // Calcular valor de cada parcela
+    const installmentAmount = parseFloat((total_amount / total_installments).toFixed(2));
+    
+    // Calcular diferença para ajustar na última parcela
+    const totalCalculated = installmentAmount * (total_installments - 1);
+    const lastInstallmentAmount = parseFloat((total_amount - totalCalculated).toFixed(2));
+
+    const createdTransactions = [];
+    
+    // Criar todas as parcelas
+    for (let i = 1; i <= total_installments; i++) {
+      // Calcular data da parcela (adicionar meses)
+      const installmentDate = createSafeDate(transaction_date);
+      installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
+      
+      const installmentDateString = installmentDate.toISOString().split('T')[0];
+      
+      // Valor da parcela (última parcela pode ter valor ajustado)
+      const amount = i === total_installments ? lastInstallmentAmount : installmentAmount;
+      
+      const insertQuery = `
+        INSERT INTO transactions (
+          description, 
+          amount, 
+          type, 
+          category_id, 
+          subcategory_id, 
+          card_id, 
+          cost_center_id,
+          transaction_date, 
+          is_installment,
+          installment_number,
+          total_installments,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `;
+      
+      const installmentDescription = `${description} (${i}/${total_installments})`;
+      
+      const result = await run(db, insertQuery, [
+        installmentDescription,
+        amount,
+        'expense', // Alterado para 'expense' para cartão de crédito
+        category_id || null,
+        subcategory_id || null,
+        card_id,
+        cost_center_id || null,
+        installmentDateString,
+        toDatabaseBoolean(true), // is_installment
+        i, // installment_number
+        total_installments
+      ]);
+      
+      // Buscar a transação criada
+      const createdTransaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [result.lastID]);
+      createdTransactions.push(createdTransaction);
+    }
+
+    console.log(`✅ ${total_installments} parcelas criadas com sucesso`);
+    
+    res.json({
+      message: `${total_installments} parcelas criadas com sucesso`,
+      transactions: createdTransactions,
+      total_amount,
+      installment_amount: installmentAmount,
+      last_installment_amount: lastInstallmentAmount
+    });
+    
+  } catch (error) {
+    console.error('Error creating installments:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export default {
   getFilteredTransactions,
   list,
@@ -1469,5 +1579,6 @@ export default {
   batchEdit,
   getTransactionStats,
   patch: update,
-  getPaymentDetails
+  getPaymentDetails,
+  createInstallments
 };

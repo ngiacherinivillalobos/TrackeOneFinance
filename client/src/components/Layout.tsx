@@ -19,6 +19,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
@@ -46,6 +47,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { text: 'Visão Geral', icon: <DashboardOutlinedIcon />, path: '/dashboard' },
   { text: 'Controle Mensal', icon: <InsightsOutlinedIcon />, path: '/monthly-control' },
+  { text: 'Controle Semanal', icon: <CalendarTodayOutlinedIcon />, path: '/weekly-control' },
   { text: 'Fluxo de Caixa', icon: <PaymentsOutlinedIcon />, path: '/cash-flow' },
   { text: 'Cartão de Crédito', icon: <CreditCardOutlinedIcon />, path: '/credit-card' },
   { 

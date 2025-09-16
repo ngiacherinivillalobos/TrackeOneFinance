@@ -3,6 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import modernTheme from './theme/modernTheme';
 import { AuthProvider } from './contexts/AuthContext';
+import { CalculatorProvider } from './contexts/CalculatorContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import MonthlyControl from './pages/MonthlyControl';
@@ -11,6 +12,8 @@ import CreditCard from './pages/CreditCard';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
+import CalculatorModal from './components/CalculatorModal';
+import FloatingCalculatorButton from './components/FloatingCalculatorButton';
 // Páginas de cadastro
 import CategoriesPage from './pages/CategoriesPage';
 import CategoryTypesPage from './pages/CategoryTypesPage';
@@ -20,38 +23,45 @@ import BankAccountsPage from './pages/BankAccountsPage';
 import CardsPage from './pages/CardsPage';
 import ContactsPage from './pages/ContactsPage';
 import CostCentersPage from './pages/CostCentersPage';
+import WeeklyControl from './pages/WeeklyControl';
 
 function App() {
   return (
     <ThemeProvider theme={modernTheme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login" element={<Login />} />
-            
-            {/* Rotas protegidas - todas dentro do Layout */}
-            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/monthly-control" element={<MonthlyControl />} />
-              <Route path="/cash-flow" element={<CashFlow />} />
-              <Route path="/credit-card" element={<CreditCard />} />
-              <Route path="/settings" element={<Settings />} />
-              {/* Rotas de cadastro */}
-              <Route path="/categories" element={<CategoriesPage />} />
-              <Route path="/category-types" element={<CategoryTypesPage />} />
-              <Route path="/subcategories" element={<SubcategoriesPage />} />
-              <Route path="/payment-statuses" element={<PaymentStatusesPage />} />
-              <Route path="/bank-accounts" element={<BankAccountsPage />} />
-              <Route path="/cards" element={<CardsPage />} />
-              <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/cost-centers" element={<CostCentersPage />} />
-            </Route>
-            
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </Router>
+        <CalculatorProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/login" element={<Login />} />
+              
+              {/* Rotas protegidas - todas dentro do Layout */}
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/monthly-control" element={<MonthlyControl />} />
+                <Route path="/weekly-control" element={<WeeklyControl />} />
+                <Route path="/cash-flow" element={<CashFlow />} />
+                <Route path="/credit-card" element={<CreditCard />} />
+                <Route path="/settings" element={<Settings />} />
+                {/* Rotas de cadastro */}
+                <Route path="/categories" element={<CategoriesPage />} />
+                <Route path="/category-types" element={<CategoryTypesPage />} />
+                <Route path="/subcategories" element={<SubcategoriesPage />} />
+                <Route path="/payment-statuses" element={<PaymentStatusesPage />} />
+                <Route path="/bank-accounts" element={<BankAccountsPage />} />
+                <Route path="/cards" element={<CardsPage />} />
+                <Route path="/contacts" element={<ContactsPage />} />
+                <Route path="/cost-centers" element={<CostCentersPage />} />
+              </Route>
+              
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Router>
+          {/* Componentes globais da calculadora */}
+          <CalculatorModal />
+          <FloatingCalculatorButton />
+        </CalculatorProvider>
       </AuthProvider>
     </ThemeProvider>
   );

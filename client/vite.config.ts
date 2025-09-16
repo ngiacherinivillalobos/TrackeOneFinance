@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 3000,
+    port: 5173,
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:3001',
@@ -15,7 +15,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '/api')
       }
     },
-    // Forçar uso da porta 3000 para frontend
+    // Forçar uso da porta 5173 para frontend
     strictPort: true,
     // Configuração para melhor exibição de erros
     hmr: {
