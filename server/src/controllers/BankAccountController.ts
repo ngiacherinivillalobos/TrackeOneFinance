@@ -154,8 +154,8 @@ class BankAccountController {
           
           const movements = await all(db, `
             SELECT 
-              SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
-              SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+              SUM(CASE WHEN transaction_type = 'Receita' THEN amount ELSE 0 END) as total_income,
+              SUM(CASE WHEN transaction_type = 'Despesa' THEN amount ELSE 0 END) as total_expense
             FROM transactions 
             WHERE bank_account_id = ?
           `, [account.id]);

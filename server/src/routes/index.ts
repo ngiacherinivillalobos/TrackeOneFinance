@@ -12,6 +12,7 @@ import cashFlowRouter from './cashFlow';
 import authRouter from './auth';
 import usersRouter from './users';
 import savingsGoalsRouter from './savingsGoals';
+import diagnosticRouter from './diagnostic';
 
 console.log('Loading routes...');
 
@@ -32,6 +33,7 @@ router.use('/transactions', transactionsRouter);
 router.use('/cash-flow', cashFlowRouter);
 router.use('/users', usersRouter);
 router.use('/savings-goals', savingsGoalsRouter);
+router.use('/diagnostic', diagnosticRouter);
 
 console.log('All routes loaded');
 
