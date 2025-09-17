@@ -72,6 +72,10 @@ import { format, addMonths, subMonths } from 'date-fns';
 import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import { bankAccountBalanceService } from '../services/bankAccountBalanceService';
+import { categoryService } from '../services/categoryService';
+import { subcategoryService } from '../services/subcategoryService';
+import { costCenterService } from '../services/costCenterService';
+import { contactService } from '../services/contactService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
@@ -967,26 +971,55 @@ export default function MonthlyControl() {
 
   const loadFilterData = async () => {
     try {
-      const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes, bankAccountsRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/subcategories'),
-        api.get('/contacts'),
-        api.get('/cost-centers'),
-        api.get('/payment-statuses'),
-        bankAccountBalanceService.getBankAccountsWithBalances()
-      ]);
+      console.log('Carregando dados para filtros...');
       
-      setCategories(categoriesRes.data);
-      setSubcategories(subcategoriesRes.data);
-      setContacts(contactsRes.data);
-      setCostCenters(costCentersRes.data);
-      setPaymentStatuses(paymentStatusesRes.data);
+      // Carregar categorias
+      const categoryData = await categoryService.list();
+      console.log('Categorias carregadas:', categoryData.length);
+      setCategories(categoryData.filter(cat => cat.id !== undefined).map(cat => ({
+        ...cat,
+        id: cat.id!
+      })));
       
-      // Calcular saldo inicial total de todas as contas bancárias
-      const totalInitialBalance = bankAccountsRes.reduce((sum, account) => sum + (account.initial_balance || 0), 0);
-      setInitialBankAccountsBalance(totalInitialBalance);
+      // Carregar subcategorias
+      const subcategoryData = await subcategoryService.list();
+      console.log('Subcategorias carregadas:', subcategoryData.length);
+      setSubcategories(subcategoryData.filter(sub => sub.id !== undefined).map(sub => ({
+        ...sub,
+        id: sub.id!
+      })));
+      
+      // Carregar centros de custo
+      const costCenterData = await costCenterService.list();
+      console.log('Centros de custo carregados:', costCenterData.length);
+      setCostCenters(costCenterData.filter(cc => cc.id !== undefined).map(cc => ({
+        ...cc,
+        id: cc.id!
+      })));
+      
+      // Carregar contatos
+      const contactData = await contactService.list();
+      console.log('Contatos carregados:', contactData.length);
+      setContacts(contactData.filter(contact => contact.id !== undefined).map(contact => ({
+        ...contact,
+        id: contact.id!
+      })));
+      
+      // Carregar status de pagamento
+      const paymentStatusData = await api.get('/payment-statuses');
+      console.log('Status de pagamento carregados:', paymentStatusData.data.length);
+      setPaymentStatuses(paymentStatusData.data.filter((status: any) => status.id !== undefined).map((status: any) => ({
+        ...status,
+        id: status.id!
+      })));
+      
     } catch (error) {
-      console.error('Erro ao carregar dados dos filtros:', error);
+      console.error('Erro ao carregar dados para filtros:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Erro ao carregar dados para filtros', 
+        severity: 'error' 
+      });
     }
   };
 
@@ -1006,6 +1039,219 @@ export default function MonthlyControl() {
         : transactions.map(t => t.id).filter(id => id !== undefined) as number[]
     );
   };
+
+  const handleClearSelection = () => {
+    setSelectedTransactions([]);
+  };
+
+  // Funções de controle de data
+  const handlePrevMonth = () => {
+    setCurrentDate(prev => subMonths(prev, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(prev => addMonths(prev, 1));
+  };
+
+  const handlePrevYear = () => {
+    setSelectedYear(prev => prev - 1);
+  };
+
+  const handleNextYear = () => {
+    setSelectedYear(prev => prev + 1);
+  };
+
+  const handleDateFilterChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    setDateFilterType(event.target.value as 'month' | 'year' | 'custom' | 'all');
+  };
+
+  const handleCustomStartDateChange = (date: Date | null) => {
+    setCustomStartDate(date);
+  };
+
+  const handleCustomEndDateChange = (date: Date | null) => {
+    setCustomEndDate(date);
+  };
+
+  const handleYearChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    setSelectedYear(event.target.value as number);
+  };
+
+  const handleDatePickerClose = () => {
+    setDatePickerOpen(false);
+  };
+
+  const handleDatePickerOpen = () => {
+    setDatePickerOpen(true);
+  };
+
+  // Funções de controle de filtros
+  const handleFilterChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = event.target as HTMLInputElement;
+    const { name, value } = target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      transaction_type: [],
+      payment_status_id: ['unpaid', 'overdue'],
+      category_id: [],
+      subcategory_id: '',
+      contact_id: [],
+      cost_center_id: user?.cost_center_id ? [user.cost_center_id.toString()] : []
+    });
+  };
+
+  const handleMoreFiltersToggle = () => {
+    setMoreFiltersOpen(prev => !prev);
+  };
+
+  // Funções de controle de modal de criação/edição de transação
+  const handleTransactionDialogOpen = () => {
+    setTransactionDialogOpen(true);
+  };
+
+  const handleTransactionDialogClose = () => {
+    setTransactionDialogOpen(false);
+    setEditingTransaction(null);
+    setFormData({
+      description: '',
+      amount: '',
+      transaction_date: formatDateToLocal(new Date()),
+      category_id: '',
+      subcategory_id: '',
+      payment_status_id: '',
+      contact_id: '',
+      cost_center_id: '',
+      transaction_type: 'Despesa',
+      is_recurring: false,
+      recurrence_type: 'mensal',
+      recurrence_count: 1,
+      recurrence_interval: 1,
+      recurrence_weekday: 1,
+      is_paid: false,
+      is_installment: false,
+      total_installments: 1
+    });
+  };
+
+  const handleTransactionFormSubmit = async () => {
+    try {
+      const transactionData: any = {
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        transaction_date: formData.transaction_date,
+        category_id: formData.category_id ? parseInt(formData.category_id) : undefined,
+        subcategory_id: formData.subcategory_id ? parseInt(formData.subcategory_id) : undefined,
+        payment_status_id: formData.payment_status_id ? parseInt(formData.payment_status_id) : undefined,
+        contact_id: formData.contact_id ? parseInt(formData.contact_id) : undefined,
+        cost_center_id: formData.cost_center_id ? parseInt(formData.cost_center_id) : undefined,
+        transaction_type: formData.transaction_type,
+        is_recurring: formData.is_recurring,
+        recurrence_type: formData.recurrence_type,
+        recurrence_count: formData.recurrence_count ? parseInt(formData.recurrence_count.toString()) : undefined,
+        recurrence_interval: formData.recurrence_interval ? parseInt(formData.recurrence_interval.toString()) : undefined,
+        recurrence_weekday: formData.recurrence_weekday ? formData.recurrence_weekday.toString() : undefined,
+        is_paid: formData.is_paid,
+        is_installment: formData.is_installment,
+        total_installments: formData.total_installments ? parseInt(formData.total_installments.toString()) : undefined
+      };
+
+      if (editingTransaction) {
+        // Atualizar transação existente
+        await transactionService.update(editingTransaction.id, transactionData);
+        setSnackbar({ open: true, message: 'Transação atualizada com sucesso', severity: 'success' });
+      } else {
+        // Criar nova transação
+        await transactionService.create(transactionData);
+        setSnackbar({ open: true, message: 'Transação criada com sucesso', severity: 'success' });
+      }
+
+      // Recarregar transações
+      loadTransactions();
+
+      // Fechar modal
+      handleTransactionDialogClose();
+    } catch (error) {
+      console.error('Erro ao salvar transação:', error);
+      setSnackbar({ open: true, message: 'Erro ao salvar transação', severity: 'error' });
+    }
+  };
+
+  // Funções de controle de PaymentDialog
+  const handlePaymentDialogOpen = (transaction: ServiceTransaction) => {
+    setSelectedTransactionForPayment(transaction);
+    setPaymentDialogOpen(true);
+  };
+
+  const handlePaymentDialogClose = () => {
+    setSelectedTransactionForPayment(null);
+    setPaymentDialogOpen(false);
+  };
+
+  const handlePaymentDialogSubmit = async (paymentData: PaymentData) => {
+    try {
+      if (selectedTransactionForPayment && selectedTransactionForPayment.id) {
+        await transactionService.markAsPaid(selectedTransactionForPayment.id, paymentData);
+        setSnackbar({ open: true, message: 'Pagamento realizado com sucesso', severity: 'success' });
+        loadTransactions();
+      }
+    } catch (error) {
+      console.error('Erro ao realizar pagamento:', error);
+      setSnackbar({ open: true, message: 'Erro ao realizar pagamento', severity: 'error' });
+    } finally {
+      handlePaymentDialogClose();
+    }
+  };
+
+  // Funções de controle de edição em lote
+  const handleBatchEditDialogOpen = () => {
+    setBatchEditDialogOpen(true);
+  };
+
+  const handleBatchEditDialogClose = () => {
+    setBatchEditDialogOpen(false);
+    setBatchEditData({
+      amount: '',
+      description: '',
+      transaction_date: '',
+      contact_id: '',
+      category_id: '',
+      subcategory_id: '',
+      cost_center_id: ''
+    });
+  };
+
+  const handleBatchEditFormSubmit = async () => {
+    try {
+      const updateData = {
+        amount: batchEditData.amount ? parseFloat(batchEditData.amount) : undefined,
+        description: batchEditData.description || undefined,
+        transaction_date: batchEditData.transaction_date || undefined,
+        contact_id: batchEditData.contact_id ? parseInt(batchEditData.contact_id) : undefined,
+        category_id: batchEditData.category_id ? parseInt(batchEditData.category_id) : undefined,
+        subcategory_id: batchEditData.subcategory_id ? parseInt(batchEditData.subcategory_id) : undefined,
+        cost_center_id: batchEditData.cost_center_id ? parseInt(batchEditData.cost_center_id) : undefined
+      };
+
+      await api.post('/transactions/batch-edit', {
+        transactionIds: selectedTransactions,
+        updates: updateData
+      });
+      setSnackbar({ open: true, message: 'Transações atualizadas com sucesso', severity: 'success' });
+      loadTransactions();
+      handleBatchEditDialogClose();
+    } catch (error) {
+      console.error('Erro ao atualizar transações em lote:', error);
+      setSnackbar({ open: true, message: 'Erro ao atualizar transações em lote', severity: 'error' });
+    }
+  };
+
+  // Menu de ações
 
   // Menu de ações
   const handleActionMenuOpen = (event: React.MouseEvent<HTMLElement>, transactionId: number) => {
