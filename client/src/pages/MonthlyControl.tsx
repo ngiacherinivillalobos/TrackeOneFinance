@@ -72,9 +72,6 @@ import { format, addMonths, subMonths } from 'date-fns';
 import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import { bankAccountBalanceService } from '../services/bankAccountBalanceService';
-import { categoryService } from '../services/categoryService';
-import { subcategoryService } from '../services/subcategoryService';
-import { costCenterService } from '../services/costCenterService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
@@ -966,63 +963,26 @@ export default function MonthlyControl() {
 
   const loadFilterData = async () => {
     try {
-      console.log('🔍 MonthlyControl: Iniciando loadFilterData...');
-      
-      console.log('🔍 MonthlyControl: Carregando dados em paralelo...');
       const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes, bankAccountsRes] = await Promise.all([
-        categoryService.list().then(data => { console.log('✅ Categories loaded:', data.length); return data; }),
-        subcategoryService.list().then(data => { console.log('✅ Subcategories loaded:', data.length); return data; }),
-        api.get('/contacts').then(res => { console.log('✅ Contacts loaded:', res.data.length); return res; }),
-        costCenterService.list().then(data => { console.log('✅ Cost Centers loaded:', data.length); return data; }),
-        api.get('/payment-statuses').then(res => { console.log('✅ Payment Statuses loaded:', res.data.length); return res; }),
-        bankAccountBalanceService.getBankAccountsWithBalances().then(data => { console.log('✅ Bank Accounts loaded:', data.length); return data; })
+        api.get('/categories'),
+        api.get('/subcategories'),
+        api.get('/contacts'),
+        api.get('/cost-centers'),
+        api.get('/payment-statuses'),
+        bankAccountBalanceService.getBankAccountsWithBalances()
       ]);
       
-      console.log('🔍 MonthlyControl: Processando dados...');
-      
-      // Filtrar e mapear dados dos services (similar ao CashFlow)
-      const processedCategories = categoriesRes.filter(cat => cat.id).map(cat => ({ 
-        id: cat.id!, 
-        name: cat.name, 
-        source_type: cat.source_type 
-      }));
-      console.log('📊 Processed categories:', processedCategories.length);
-      
-      const processedSubcategories = subcategoriesRes.filter(sub => sub.id).map(sub => ({ 
-        id: sub.id!, 
-        name: sub.name, 
-        category_id: sub.category_id 
-      }));
-      console.log('📊 Processed subcategories:', processedSubcategories.length);
-      
-      const processedCostCenters = costCentersRes.filter(cc => cc.id).map(cc => ({ 
-        id: cc.id!, 
-        name: cc.name, 
-        number: cc.number 
-      }));
-      console.log('📊 Processed cost centers:', processedCostCenters.length);
-      
-      setCategories(processedCategories);
-      setSubcategories(processedSubcategories);
+      setCategories(categoriesRes.data);
+      setSubcategories(subcategoriesRes.data);
       setContacts(contactsRes.data);
-      setCostCenters(processedCostCenters);
+      setCostCenters(costCentersRes.data);
       setPaymentStatuses(paymentStatusesRes.data);
-      
-      console.log('✅ MonthlyControl: Todos os dados carregados com sucesso!');
       
       // Calcular saldo inicial total de todas as contas bancárias
       const totalInitialBalance = bankAccountsRes.reduce((sum, account) => sum + (account.initial_balance || 0), 0);
       setInitialBankAccountsBalance(totalInitialBalance);
     } catch (error) {
-      console.error('❌ MonthlyControl: Erro ao carregar dados dos filtros:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('❌ MonthlyControl: Detalhes do erro Axios:', {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-          url: error.config?.url,
-        });
-      }
+      console.error('Erro ao carregar dados dos filtros:', error);
     }
   };
 
