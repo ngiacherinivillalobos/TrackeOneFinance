@@ -435,9 +435,14 @@ export default function MonthlyControl() {
     }
   }, [user?.cost_center_id]);
 
-  // Carregar dados iniciais
+  // Carregar dados iniciais dos filtros (apenas uma vez)
   useEffect(() => {
-    console.log("useEffect para carregar dados foi acionado. Dependências:", {
+    loadFilterData();
+  }, []);
+
+  // Carregar transações quando os filtros ou datas mudarem
+  useEffect(() => {
+    console.log("useEffect para carregar transações foi acionado. Dependências:", {
       currentDate,
       filters,
       dateFilterType,
@@ -446,7 +451,6 @@ export default function MonthlyControl() {
       selectedYear,
     });
     loadTransactions();
-    loadFilterData();
   }, [currentDate, filters, dateFilterType, customStartDate, customEndDate, selectedYear]);
 
   // Atualizar preview de recorrências quando dados do formulário mudam
