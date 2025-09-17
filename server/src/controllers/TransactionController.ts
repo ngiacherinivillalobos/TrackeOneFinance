@@ -103,7 +103,7 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     // Other filters
     if (transaction_type) {
       const types = (transaction_type as string).split(',');
-      conditions.push(`t.transaction_type IN (${types.map(() => '?').join(',')})`);
+      conditions.push(`t.type IN (${types.map(() => '?').join(',')})`);
       values.push(...types);
     }
     
