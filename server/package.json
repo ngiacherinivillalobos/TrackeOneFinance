@@ -2,9 +2,9 @@
   "name": "trackone-finance-server",
   "version": "1.0.0",
   "description": "Backend for TrackOne Finance management system",
-  "main": "dist/server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "node dist/index.js",
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "test": "node test-server.js",
