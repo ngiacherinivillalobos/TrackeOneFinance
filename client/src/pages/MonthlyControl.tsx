@@ -966,39 +966,63 @@ export default function MonthlyControl() {
 
   const loadFilterData = async () => {
     try {
+      console.log('🔍 MonthlyControl: Iniciando loadFilterData...');
+      
+      console.log('🔍 MonthlyControl: Carregando dados em paralelo...');
       const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes, bankAccountsRes] = await Promise.all([
-        categoryService.list(),
-        subcategoryService.list(),
-        api.get('/contacts'),
-        costCenterService.list(),
-        api.get('/payment-statuses'),
-        bankAccountBalanceService.getBankAccountsWithBalances()
+        categoryService.list().then(data => { console.log('✅ Categories loaded:', data.length); return data; }),
+        subcategoryService.list().then(data => { console.log('✅ Subcategories loaded:', data.length); return data; }),
+        api.get('/contacts').then(res => { console.log('✅ Contacts loaded:', res.data.length); return res; }),
+        costCenterService.list().then(data => { console.log('✅ Cost Centers loaded:', data.length); return data; }),
+        api.get('/payment-statuses').then(res => { console.log('✅ Payment Statuses loaded:', res.data.length); return res; }),
+        bankAccountBalanceService.getBankAccountsWithBalances().then(data => { console.log('✅ Bank Accounts loaded:', data.length); return data; })
       ]);
       
+      console.log('🔍 MonthlyControl: Processando dados...');
+      
       // Filtrar e mapear dados dos services (similar ao CashFlow)
-      setCategories(categoriesRes.filter(cat => cat.id).map(cat => ({ 
+      const processedCategories = categoriesRes.filter(cat => cat.id).map(cat => ({ 
         id: cat.id!, 
         name: cat.name, 
         source_type: cat.source_type 
-      })));
-      setSubcategories(subcategoriesRes.filter(sub => sub.id).map(sub => ({ 
+      }));
+      console.log('📊 Processed categories:', processedCategories.length);
+      
+      const processedSubcategories = subcategoriesRes.filter(sub => sub.id).map(sub => ({ 
         id: sub.id!, 
         name: sub.name, 
         category_id: sub.category_id 
-      })));
-      setContacts(contactsRes.data);
-      setCostCenters(costCentersRes.filter(cc => cc.id).map(cc => ({ 
+      }));
+      console.log('📊 Processed subcategories:', processedSubcategories.length);
+      
+      const processedCostCenters = costCentersRes.filter(cc => cc.id).map(cc => ({ 
         id: cc.id!, 
         name: cc.name, 
         number: cc.number 
-      })));
+      }));
+      console.log('📊 Processed cost centers:', processedCostCenters.length);
+      
+      setCategories(processedCategories);
+      setSubcategories(processedSubcategories);
+      setContacts(contactsRes.data);
+      setCostCenters(processedCostCenters);
       setPaymentStatuses(paymentStatusesRes.data);
+      
+      console.log('✅ MonthlyControl: Todos os dados carregados com sucesso!');
       
       // Calcular saldo inicial total de todas as contas bancárias
       const totalInitialBalance = bankAccountsRes.reduce((sum, account) => sum + (account.initial_balance || 0), 0);
       setInitialBankAccountsBalance(totalInitialBalance);
     } catch (error) {
-      console.error('Erro ao carregar dados dos filtros:', error);
+      console.error('❌ MonthlyControl: Erro ao carregar dados dos filtros:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('❌ MonthlyControl: Detalhes do erro Axios:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          url: error.config?.url,
+        });
+      }
     }
   };
 
