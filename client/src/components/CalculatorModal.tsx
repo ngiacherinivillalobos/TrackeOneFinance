@@ -18,6 +18,7 @@ import {
 import {
   Close as CloseIcon,
   ContentCopy as CopyIcon,
+  Check as CheckIcon,
   Calculate as CalculateIcon,
   Percent as PercentIcon,
   AccountBalance as BankIcon,
@@ -79,7 +80,17 @@ const CalculatorModal: React.FC = () => {
   const [investmentTime, setInvestmentTime] = useState('');
   const [investmentResult, setInvestmentResult] = useState('');
 
-  const [copyAlert, setCopyAlert] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const copyToClipboard = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+    }
+  };
 
   // Reset all values when modal opens
   useEffect(() => {
@@ -124,15 +135,20 @@ const CalculatorModal: React.FC = () => {
     }
   }, [display, waitingForNewValue]);
 
+  const [operationHistory, setOperationHistory] = useState<string>('');
+
+  // Modify inputOperation to track history
   const inputOperation = useCallback((nextOperation: string) => {
     const inputValue = parseFloat(display);
 
     if (previousValue === null) {
       setPreviousValue(inputValue);
+      setOperationHistory(`${inputValue} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
     } else if (operation) {
       const currentValue = previousValue || 0;
       const newValue = calculate(currentValue, inputValue, operation);
 
+      setOperationHistory(`${currentValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
       setDisplay(String(newValue));
       setPreviousValue(newValue);
     }
@@ -156,11 +172,13 @@ const CalculatorModal: React.FC = () => {
     }
   };
 
+  // Modify performCalculation to track history
   const performCalculation = () => {
     const inputValue = parseFloat(display);
 
     if (previousValue !== null && operation) {
       const newValue = calculate(previousValue, inputValue, operation);
+      setOperationHistory(`${previousValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} =`);
       setDisplay(String(newValue));
       setPreviousValue(null);
       setOperation(null);
@@ -168,11 +186,13 @@ const CalculatorModal: React.FC = () => {
     }
   };
 
+  // Modify clearDisplay to reset history
   const clearDisplay = () => {
     setDisplay('0');
     setPreviousValue(null);
     setOperation(null);
     setWaitingForNewValue(false);
+    setOperationHistory('');
   };
 
   const handleButtonClick = (button: string) => {
@@ -197,7 +217,13 @@ const CalculatorModal: React.FC = () => {
       if (!isOpen || tabValue !== 0) return; // Only work on basic calculator tab
 
       const { key, ctrlKey } = event;
-      event.preventDefault();
+      
+      // Prevent default behavior for calculator keys
+      if (key >= '0' && key <= '9' || 
+          key === '.' || key === ',' || 
+          ['+', '-', '*', '/', '=', 'Enter', 'Escape', 'c', 'C', 'Backspace'].includes(key)) {
+        event.preventDefault();
+      }
 
       if (ctrlKey && key === 'Escape') {
         closeCalculator();
@@ -210,8 +236,14 @@ const CalculatorModal: React.FC = () => {
         if (!display.includes('.')) {
           inputNumber('.');
         }
-      } else if (['+', '-', '*', '/'].includes(key)) {
-        inputOperation(key);
+      } else if (key === '+') {
+        inputOperation('+');
+      } else if (key === '-') {
+        inputOperation('-');
+      } else if (key === '*') {
+        inputOperation('*');
+      } else if (key === '/') {
+        inputOperation('/');
       } else if (key === 'Enter' || key === '=') {
         performCalculation();
       } else if (key === 'Escape' || key === 'c' || key === 'C') {
@@ -222,6 +254,8 @@ const CalculatorModal: React.FC = () => {
         } else {
           setDisplay('0');
         }
+      } else if (key === '%') {
+        setDisplay((parseFloat(display) / 100).toString());
       }
     };
 
@@ -233,16 +267,6 @@ const CalculatorModal: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, tabValue, display, inputNumber, inputOperation, closeCalculator]);
-
-  const copyToClipboard = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyAlert(true);
-      setTimeout(() => setCopyAlert(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-    }
-  };
 
   const calculatePercentage = () => {
     const base = parseFloat(percentageBase);
@@ -311,26 +335,33 @@ const CalculatorModal: React.FC = () => {
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        pb: 1,
+        pb: 1.5,
+        pt: 1.5,
+        px: 2,
         borderBottom: '1px solid',
-        borderColor: 'divider'
+        borderColor: 'divider',
+        backgroundColor: '#ffffff',
       }}>
         <Typography variant="h6" component="div" sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           gap: 1,
-          fontWeight: 500,
-          color: 'text.primary'
+          fontWeight: 600,
+          color: 'text.primary',
+          fontSize: '1.1rem',
         }}>
           <CalculateIcon sx={{ color: 'primary.main', fontSize: '1.2rem' }} />
-          Calculadora
+          Calculadora Financeira
         </Typography>
         <IconButton 
           onClick={closeCalculator} 
           size="small"
           sx={{ 
             color: 'text.secondary',
-            '&:hover': { backgroundColor: 'action.hover' }
+            '&:hover': { 
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              color: 'primary.main'
+            }
           }}
         >
           <CloseIcon />
@@ -339,7 +370,7 @@ const CalculatorModal: React.FC = () => {
 
       <DialogContent>
         <Box sx={{ width: '100%', overflow: 'hidden' }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', backgroundColor: '#ffffff' }}>
             <Tabs 
               value={tabValue} 
               onChange={handleTabChange} 
@@ -349,11 +380,21 @@ const CalculatorModal: React.FC = () => {
               sx={{
                 '& .MuiTab-root': {
                   minHeight: 48,
-                  fontSize: '0.875rem',
+                  fontSize: '0.85rem',
                   fontWeight: 500,
+                  textTransform: 'none',
+                  color: 'grey.600',
+                  '&.Mui-selected': {
+                    color: 'primary.main',
+                  },
                 },
                 '& .MuiTabs-indicator': {
                   height: 2,
+                  backgroundColor: 'primary.main',
+                },
+                '& .MuiSvgIcon-root': {
+                  fontSize: '1rem',
+                  mr: 0.5,
                 }
               }}
             >
@@ -390,54 +431,54 @@ const CalculatorModal: React.FC = () => {
             </Tabs>
           </Box>
 
-          <Fade in={copyAlert}>
-            <Alert severity="success" sx={{ mt: 1, mb: 1 }}>
-              Resultado copiado para a área de transferência!
-            </Alert>
-          </Fade>
-
           <TabPanel value={tabValue} index={0}>
-            <Box sx={{ maxWidth: 320, mx: 'auto', p: 0.5, overflow: 'hidden' }}>
+            <Box sx={{ maxWidth: 320, mx: 'auto', p: 0.5, overflow: 'hidden', mt: 1.5 }}>
               {/* Display */}
               <Box 
                 sx={{ 
-                  mb: 0.5, 
-                  p: 1,
-                  backgroundColor: 'grey.50',
+                  mb: 1.5, 
+                  p: 1.5,
+                  backgroundColor: '#ffffff',
                   borderRadius: 2,
-                  minHeight: 70,
+                  height: 100, // Tamanho fixo
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
                   border: '1px solid',
                   borderColor: 'grey.200',
-                  boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.1)',
+                  boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
                 }}
               >
-                {/* Current operation display */}
+                {/* Operation History Display - Moved to top */}
                 {(previousValue !== null || operation) && (
                   <Typography
-                    variant="caption"
+                    variant="body2"
                     sx={{
-                      color: 'grey.500',
-                      fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif',
-                      fontSize: '0.875rem',
+                      color: 'grey.600',
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                      fontSize: '0.85rem',
                       textAlign: 'right',
                       mb: 0.5,
+                      minHeight: 20,
                     }}
                   >
-                    {previousValue !== null && `${previousValue} `}
-                    {operation && `${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} `}
-                    {waitingForNewValue && operation ? '' : display}
+                    {operationHistory || (
+                      <>
+                        {previousValue !== null && `${previousValue} `}
+                        {operation && `${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} `}
+                        {waitingForNewValue && operation ? '' : display}
+                      </>
+                    )}
                   </Typography>
                 )}
                 
+                {/* Result Display - Only the result */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Typography
                     variant="h3"
                     sx={{
                       color: 'grey.800',
-                      fontFamily: 'SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif',
+                      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
                       fontWeight: 300,
                       fontSize: display.length > 8 ? '1.75rem' : display.length > 6 ? '2.25rem' : '2.75rem',
                       textAlign: 'right',
@@ -447,89 +488,94 @@ const CalculatorModal: React.FC = () => {
                   >
                     {display}
                   </Typography>
-                  <Tooltip title="Copiar resultado">
+                  <Tooltip title={copySuccess ? "Copiado!" : "Copiar resultado"}>
                     <IconButton 
                       onClick={() => copyToClipboard(display)} 
                       size="small"
                       sx={{ 
                         ml: 1, 
-                        color: 'grey.500',
+                        color: copySuccess ? 'success.main' : 'primary.main',
                         '&:hover': { 
-                          color: 'grey.700',
-                          backgroundColor: 'rgba(0, 0, 0, 0.04)' 
+                          color: copySuccess ? 'success.dark' : 'primary.dark',
+                          backgroundColor: copySuccess ? 'success.50' : 'rgba(37, 99, 235, 0.08)' 
                         }
                       }}
                     >
-                      <CopyIcon fontSize="small" />
+                      {copySuccess ? <CheckIcon fontSize="small" /> : <CopyIcon fontSize="small" />}
                     </IconButton>
                   </Tooltip>
                 </Box>
               </Box>
 
-              {/* Calculator Buttons - Ultra Light Style */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0.5 }}>
+              {/* Removed separate Operation History Display */}
+
+              {/* Calculator Buttons - Modern Style */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0.75 }}>
                 {/* Row 1 */}
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('C')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
+                    height: 44,
+                    fontSize: '0.9rem',
                     backgroundColor: '#ffffff',
-                    color: 'grey.600',
+                    color: 'error.main',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
-                      boxShadow: 'none',
+                      backgroundColor: 'error.50',
+                      borderColor: 'error.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   C
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('±')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
+                    height: 44,
+                    fontSize: '0.9rem',
                     backgroundColor: '#ffffff',
-                    color: 'grey.600',
+                    color: 'grey.700',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   ±
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('%')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
+                    height: 44,
+                    fontSize: '0.9rem',
                     backgroundColor: '#ffffff',
-                    color: 'grey.600',
+                    color: 'grey.700',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
@@ -539,19 +585,19 @@ const CalculatorModal: React.FC = () => {
                   variant="contained"
                   onClick={() => handleButtonClick('/')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: 'primary.light',
+                    height: 44,
+                    fontSize: '1rem',
+                    backgroundColor: 'primary.main',
                     color: 'white',
                     borderRadius: 1.5,
                     minWidth: 0,
                     fontWeight: 500,
-                    boxShadow: 'none',
+                    boxShadow: '0 2px 4px 0 rgba(37, 99, 235, 0.2)',
                     border: '1px solid',
-                    borderColor: 'primary.light',
+                    borderColor: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'primary.main',
-                      boxShadow: 'none',
+                      backgroundColor: 'primary.700',
+                      boxShadow: '0 4px 8px 0 rgba(37, 99, 235, 0.3)',
                     },
                   }}
                 >
@@ -560,66 +606,69 @@ const CalculatorModal: React.FC = () => {
 
                 {/* Row 2 */}
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('7')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   7
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('8')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   8
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('9')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
@@ -629,19 +678,19 @@ const CalculatorModal: React.FC = () => {
                   variant="contained"
                   onClick={() => handleButtonClick('*')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: 'primary.light',
+                    height: 44,
+                    fontSize: '1rem',
+                    backgroundColor: 'primary.main',
                     color: 'white',
                     borderRadius: 1.5,
                     minWidth: 0,
                     fontWeight: 500,
-                    boxShadow: 'none',
+                    boxShadow: '0 2px 4px 0 rgba(37, 99, 235, 0.2)',
                     border: '1px solid',
-                    borderColor: 'primary.light',
+                    borderColor: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'primary.main',
-                      boxShadow: 'none',
+                      backgroundColor: 'primary.700',
+                      boxShadow: '0 4px 8px 0 rgba(37, 99, 235, 0.3)',
                     },
                   }}
                 >
@@ -650,66 +699,69 @@ const CalculatorModal: React.FC = () => {
 
                 {/* Row 3 */}
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('4')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   4
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('5')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   5
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('6')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
@@ -719,19 +771,19 @@ const CalculatorModal: React.FC = () => {
                   variant="contained"
                   onClick={() => handleButtonClick('-')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: 'primary.light',
+                    height: 44,
+                    fontSize: '1.2rem',
+                    backgroundColor: 'primary.main',
                     color: 'white',
                     borderRadius: 1.5,
                     minWidth: 0,
                     fontWeight: 500,
-                    boxShadow: 'none',
+                    boxShadow: '0 2px 4px 0 rgba(37, 99, 235, 0.2)',
                     border: '1px solid',
-                    borderColor: 'primary.light',
+                    borderColor: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'primary.main',
-                      boxShadow: 'none',
+                      backgroundColor: 'primary.700',
+                      boxShadow: '0 4px 8px 0 rgba(37, 99, 235, 0.3)',
                     },
                   }}
                 >
@@ -740,66 +792,69 @@ const CalculatorModal: React.FC = () => {
 
                 {/* Row 4 */}
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('1')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   1
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('2')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   2
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('3')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
@@ -809,19 +864,19 @@ const CalculatorModal: React.FC = () => {
                   variant="contained"
                   onClick={() => handleButtonClick('+')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: 'primary.light',
+                    height: 44,
+                    fontSize: '1.2rem',
+                    backgroundColor: 'primary.main',
                     color: 'white',
                     borderRadius: 1.5,
                     minWidth: 0,
                     fontWeight: 500,
-                    boxShadow: 'none',
+                    boxShadow: '0 2px 4px 0 rgba(37, 99, 235, 0.2)',
                     border: '1px solid',
-                    borderColor: 'primary.light',
+                    borderColor: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'primary.main',
-                      boxShadow: 'none',
+                      backgroundColor: 'primary.700',
+                      boxShadow: '0 4px 8px 0 rgba(37, 99, 235, 0.3)',
                     },
                   }}
                 >
@@ -830,67 +885,69 @@ const CalculatorModal: React.FC = () => {
 
                 {/* Row 5 */}
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('0')}
                   sx={{
-                    height: 50,
+                    height: 44,
                     fontSize: '1rem',
-                    backgroundColor: '#f5f5f5',
-                    color: '#000',
+                    backgroundColor: '#ffffff',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 'bold',
-                    gridColumn: 'span 2',
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#d0d0d0',
+                    borderColor: 'grey.200',
+                    gridColumn: 'span 2',
                     '&:hover': { 
-                      backgroundColor: '#e8e8e8',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
                   0
                 </Button>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   onClick={() => handleButtonClick('.')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
+                    height: 44,
+                    fontSize: '1.2rem',
                     backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    color: 'grey.800',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
-                    boxShadow: 'none',
+                    fontWeight: 500,
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: 'grey.200',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
-                      boxShadow: 'none',
+                      backgroundColor: 'grey.50',
+                      borderColor: 'grey.300',
+                      boxShadow: '0 2px 4px 0 rgba(0, 0, 0, 0.08)',
                     },
                   }}
                 >
-                  ,
+                  .
                 </Button>
                 <Button
                   variant="contained"
                   onClick={() => handleButtonClick('=')}
                   sx={{
-                    height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: 'primary.light',
+                    height: 44,
+                    fontSize: '1.2rem',
+                    backgroundColor: 'primary.main',
                     color: 'white',
                     borderRadius: 1.5,
                     minWidth: 0,
                     fontWeight: 500,
-                    boxShadow: 'none',
+                    boxShadow: '0 2px 4px 0 rgba(37, 99, 235, 0.2)',
                     border: '1px solid',
-                    borderColor: 'primary.light',
+                    borderColor: 'primary.main',
                     '&:hover': { 
-                      backgroundColor: 'primary.main',
-                      boxShadow: 'none',
+                      backgroundColor: 'primary.700',
+                      boxShadow: '0 4px 8px 0 rgba(37, 99, 235, 0.3)',
                     },
                   }}
                 >

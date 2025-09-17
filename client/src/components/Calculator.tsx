@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Button,
   TextField,
@@ -13,6 +12,8 @@ import {
   AccordionDetails,
   Alert,
   Stack,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -24,12 +25,26 @@ import {
   LocalOffer as DiscountIcon,
   TrendingUp as InvestmentIcon,
 } from '@mui/icons-material';
+import { ModernCard, ModernSection, ModernHeader } from './modern/ModernComponents';
+import { colors, gradients, shadows } from '../theme/modernTheme';
 
 interface CalculatorProps {
   onClose?: () => void;
 }
 
+// Definindo o tipo para os botões da calculadora
+interface CalculatorButton {
+  label: string;
+  type: 'number' | 'operator' | 'function' | 'clear' | 'equals' | 'decimal';
+  color?: 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
+  value?: string;
+  span?: number;
+}
+
 const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const [display, setDisplay] = useState('0');
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [operation, setOperation] = useState<string | null>(null);
@@ -164,10 +179,11 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
   const calculateInvestment = useCallback(() => {
     const monthly = parseFloat(monthlyInvestment);
     const annualRate = parseFloat(investmentRate) / 100;
-    const months = parseFloat(investmentTime) * 12;
+    const years = parseFloat(investmentTime);
     
-    if (!isNaN(monthly) && !isNaN(annualRate) && !isNaN(months)) {
+    if (!isNaN(monthly) && !isNaN(annualRate) && !isNaN(years)) {
       const monthlyRate = annualRate / 12;
+      const months = years * 12;
       const totalInvested = monthly * months;
       const futureValue = monthly * (((1 + monthlyRate) ** months - 1) / monthlyRate);
       const profit = futureValue - totalInvested;
@@ -183,355 +199,767 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     });
   }, []);
 
-  const handleButtonClick = (btn: string) => {
-    if (btn === 'C') {
+  const handleButtonClick = (btn: CalculatorButton) => {
+    const buttonValue = btn.value || btn.label;
+    
+    if (buttonValue === 'C') {
       clear();
-    } else if (btn === '=') {
+    } else if (buttonValue === '=') {
       calculate();
-    } else if (['+', '-', '*', '/'].includes(btn)) {
-      performOperation(btn);
-    } else if (btn === '.') {
+    } else if (['+', '-', '*', '/'].includes(buttonValue)) {
+      performOperation(buttonValue);
+    } else if (buttonValue === '.') {
       inputDecimal();
-    } else if (btn === '±') {
+    } else if (buttonValue === '±') {
       setDisplay(String(parseFloat(display) * -1));
-    } else if (btn === '%') {
+    } else if (buttonValue === '%') {
       setDisplay(String(parseFloat(display) / 100));
     } else {
-      inputNumber(btn);
+      inputNumber(buttonValue);
     }
   };
 
+  // Calculator button configuration
+  const calculatorButtons: CalculatorButton[][] = [
+    [
+      { label: 'C', type: 'clear', color: 'error' },
+      { label: '±', type: 'function' },
+      { label: '%', type: 'function' },
+      { label: '÷', type: 'operator', value: '/' }
+    ],
+    [
+      { label: '7', type: 'number' },
+      { label: '8', type: 'number' },
+      { label: '9', type: 'number' },
+      { label: '×', type: 'operator', value: '*' }
+    ],
+    [
+      { label: '4', type: 'number' },
+      { label: '5', type: 'number' },
+      { label: '6', type: 'number' },
+      { label: '−', type: 'operator', value: '-' }
+    ],
+    [
+      { label: '1', type: 'number' },
+      { label: '2', type: 'number' },
+      { label: '3', type: 'number' },
+      { label: '+', type: 'operator', value: '+' }
+    ],
+    [
+      { label: '0', type: 'number', span: 2 },
+      { label: '.', type: 'decimal' },
+      { label: '=', type: 'equals', color: 'primary' }
+    ]
+  ];
+
   return (
-    <Box sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <CalculateIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h5" component="h1" sx={{ flexGrow: 1 }}>
-            Calculadora Financeira
-          </Typography>
-          {onClose && (
-            <IconButton onClick={onClose} size="small">
-              <DeleteIcon />
-            </IconButton>
-          )}
-        </Box>
-
-        {copyMessage && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {copyMessage}
-          </Alert>
-        )}
-
-        {/* Basic Calculator */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Calculadora Básica
-          </Typography>
-          
-          <TextField
-            fullWidth
-            value={display}
+    <Box sx={{ 
+      minHeight: '100vh', 
+      bgcolor: colors.gray[50],
+      p: isMobile ? 1 : 2
+    }}>
+      <ModernHeader 
+        title="Calculadora Financeira"
+        subtitle="Ferramentas para cálculos financeiros avançados"
+        breadcrumbs={[
+          { label: 'TrackeOne Finance', href: '/' },
+          { label: 'Calculadora' }
+        ]}
+        actions={onClose ? (
+          <Button
             variant="outlined"
-            sx={{ 
-              mb: 2,
-              '& .MuiInputBase-input': {
-                textAlign: 'right',
-                fontSize: '1.5rem',
-                fontWeight: 'bold'
+            startIcon={<DeleteIcon />}
+            onClick={onClose}
+            sx={{
+              borderColor: colors.error[200],
+              color: colors.error[700],
+              '&:hover': {
+                borderColor: colors.error[300],
+                backgroundColor: colors.error[50]
               }
             }}
-            InputProps={{
-              readOnly: true,
-              endAdornment: (
-                <Tooltip title="Copiar valor">
-                  <IconButton onClick={() => copyToClipboard(display)}>
-                    <CopyIcon />
-                  </IconButton>
-                </Tooltip>
-              )
-            }}
-          />
+          >
+            Fechar
+          </Button>
+        ) : undefined}
+      />
+      
+      <Box sx={{ 
+        maxWidth: 1200, 
+        mx: 'auto',
+        mt: 2
+      }}>
+        <ModernCard sx={{ p: isMobile ? 1.5 : 2 }}>
+          {copyMessage && (
+            <Alert 
+              severity="success" 
+              sx={{ 
+                mb: isMobile ? 1.5 : 2,
+                borderRadius: 1,
+                '& .MuiAlert-icon': {
+                  color: colors.success[600]
+                },
+                py: 0.5,
+                px: 1.5
+              }}
+            >
+              <Typography variant="body2">{copyMessage}</Typography>
+            </Alert>
+          )}
 
-          {/* Calculator Buttons */}
-          <Stack spacing={1}>
-            {/* Row 1 */}
-            <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="outlined" color="error" sx={{ height: 60 }} onClick={() => handleButtonClick('C')}>C</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('±')}>±</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('%')}>%</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('/')}>÷</Button>
-            </Stack>
-            
-            {/* Row 2 */}
-            <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('7')}>7</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('8')}>8</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('9')}>9</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('*')}>×</Button>
-            </Stack>
-            
-            {/* Row 3 */}
-            <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('4')}>4</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('5')}>5</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('6')}>6</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('-')}>−</Button>
-            </Stack>
-            
-            {/* Row 4 */}
-            <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('1')}>1</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('2')}>2</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('3')}>3</Button>
-              <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('+')}>+</Button>
-            </Stack>
-            
-            {/* Row 5 */}
-            <Stack direction="row" spacing={1}>
-              <Box sx={{ flex: 2, mr: 1 }}>
-                <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('0')}>0</Button>
-              </Box>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('.')}>.</Button>
-              <Button fullWidth variant="contained" color="primary" sx={{ height: 60 }} onClick={() => handleButtonClick('=')}>=</Button>
-            </Stack>
-          </Stack>
-        </Box>
+          {/* Basic Calculator */}
+          <ModernSection 
+            title="Calculadora Básica"
+            icon={<CalculateIcon sx={{ fontSize: '1rem' }} />}
+            sx={{ mb: isMobile ? 1.5 : 2, p: isMobile ? 1 : 1.5 }}
+          >
+            <TextField
+              fullWidth
+              value={display}
+              variant="outlined"
+              sx={{ 
+                mb: isMobile ? 1 : 1.5,
+                '& .MuiInputBase-root': {
+                  height: isMobile ? 50 : 60,
+                  fontSize: isMobile ? '1.3rem' : '1.5rem',
+                  fontWeight: 600,
+                  textAlign: 'right',
+                  backgroundColor: colors.gray[50],
+                  borderRadius: 1,
+                  '& fieldset': {
+                    borderColor: colors.gray[300],
+                    borderWidth: 1
+                  },
+                  '&:hover fieldset': {
+                    borderColor: colors.primary[400]
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: colors.primary[600],
+                    borderWidth: 1
+                  }
+                }
+              }}
+              InputProps={{
+                readOnly: true,
+                endAdornment: (
+                  <Tooltip title="Copiar valor">
+                    <IconButton 
+                      onClick={() => copyToClipboard(display)}
+                      size="small"
+                      sx={{
+                        color: colors.gray[500],
+                        '&:hover': {
+                          backgroundColor: colors.primary[50],
+                          color: colors.primary[600]
+                        }
+                      }}
+                    >
+                      <CopyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )
+              }}
+            />
 
-        <Divider sx={{ my: 3 }} />
-
-        {/* Financial Calculators */}
-        <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <PercentIcon sx={{ mr: 1 }} />
-              <Typography variant="h6">Calculadora de Porcentagem</Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  fullWidth
-                  label="Porcentagem (%)"
-                  value={percentage}
-                  onChange={(e) => setPercentage(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Valor Base (R$)"
-                  value={percentageBase}
-                  onChange={(e) => setPercentageBase(e.target.value)}
-                  type="number"
-                />
-                <Button
-                  variant="contained"
-                  onClick={calculatePercentage}
-                  sx={{ minWidth: 120, height: 56 }}
+            {/* Calculator Buttons */}
+            <Stack spacing={isMobile ? 0.75 : 1}>
+              {calculatorButtons.map((row, rowIndex) => (
+                <Stack 
+                  key={rowIndex} 
+                  direction="row" 
+                  spacing={isMobile ? 0.75 : 1}
+                  sx={{ 
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
                 >
-                  Calcular
-                </Button>
-              </Stack>
-              {percentageResult && (
-                <TextField
-                  fullWidth
-                  label="Resultado"
-                  value={`R$ ${percentageResult}`}
-                  InputProps={{
-                    readOnly: true,
-                    endAdornment: (
-                      <Tooltip title="Copiar resultado">
-                        <IconButton onClick={() => copyToClipboard(percentageResult)}>
-                          <CopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )
-                  }}
-                />
-              )}
+                  {row.map((btn, btnIndex) => (
+                    <Button
+                      key={btnIndex}
+                      fullWidth
+                      variant={
+                        btn.type === 'number' || btn.type === 'decimal' ? 'outlined' : 
+                        'contained'
+                      }
+                      color={btn.color as any || (btn.type === 'operator' || btn.type === 'equals' ? 'primary' : undefined)}
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        height: isMobile ? 40 : 48,
+                        borderRadius: 1,
+                        fontWeight: 600,
+                        fontSize: isMobile ? '1rem' : '1.1rem',
+                        backgroundColor: btn.type === 'number' || btn.type === 'decimal' ? '#ffffff' : undefined,
+                        color: btn.type === 'number' || btn.type === 'decimal' ? colors.gray[800] : undefined,
+                        borderColor: btn.type === 'number' || btn.type === 'decimal' ? colors.gray[300] : undefined,
+                        borderWidth: btn.type === 'number' || btn.type === 'decimal' ? 1 : undefined,
+                        borderStyle: btn.type === 'number' || btn.type === 'decimal' ? 'solid' : undefined,
+                        boxShadow: btn.type === 'number' || btn.type === 'decimal' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : undefined,
+                        '&:hover': {
+                          backgroundColor: btn.type === 'number' || btn.type === 'decimal' ? colors.gray[50] : undefined,
+                          borderColor: btn.type === 'number' || btn.type === 'decimal' ? colors.primary[300] : undefined,
+                          boxShadow: btn.type === 'number' || btn.type === 'decimal' ? shadows.sm : undefined
+                        },
+                        flex: btn.span === 2 ? 2 : 1
+                      }}
+                      onClick={() => handleButtonClick(btn)}
+                    >
+                      {btn.label}
+                    </Button>
+                  ))}
+                </Stack>
+              ))}
             </Stack>
-          </AccordionDetails>
-        </Accordion>
+          </ModernSection>
 
-        <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <BankIcon sx={{ mr: 1 }} />
-              <Typography variant="h6">Calculadora de Juros</Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  fullWidth
-                  label="Capital Inicial (R$)"
-                  value={principal}
-                  onChange={(e) => setPrincipal(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Taxa de Juros (%)"
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Tempo (anos)"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  type="number"
-                />
-              </Stack>
-              <Button
-                variant="contained"
-                onClick={calculateInterest}
-                fullWidth
+          <Divider sx={{ my: isMobile ? 1.5 : 2, borderColor: colors.gray[200] }} />
+
+          {/* Financial Calculators */}
+          <Box sx={{ 
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+            gap: isMobile ? 1 : 1.5
+          }}>
+            <Accordion 
+              sx={{ 
+                borderRadius: 1,
+                border: `1px solid ${colors.gray[200]}`,
+                boxShadow: 'none',
+                '&:before': {
+                  display: 'none'
+                },
+                mb: isMobile ? 1 : 1.5
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  borderRadius: 1,
+                  '&.Mui-expanded': {
+                    borderRadius: '4px 4px 0 0'
+                  },
+                  backgroundColor: colors.gray[50],
+                  minHeight: isMobile ? 36 : 48,
+                  '& .MuiAccordionSummary-content': {
+                    margin: isMobile ? '8px 0' : '12px 0'
+                  },
+                  '&:hover': {
+                    backgroundColor: colors.gray[100]
+                  }
+                }}
               >
-                Calcular Juros
-              </Button>
-              {interestResult && (
-                <TextField
-                  fullWidth
-                  label="Resultado"
-                  value={interestResult}
-                  multiline
-                  rows={2}
-                  InputProps={{
-                    readOnly: true,
-                    endAdornment: (
-                      <Tooltip title="Copiar resultado">
-                        <IconButton onClick={() => copyToClipboard(interestResult)}>
-                          <CopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )
-                  }}
-                />
-              )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <PercentIcon sx={{ mr: 0.75, color: colors.primary[600], fontSize: isMobile ? '1rem' : '1.2rem' }} />
+                  <Typography variant={isMobile ? "body2" : "body1"} sx={{ fontWeight: 600, fontSize: isMobile ? '0.85rem' : '1rem' }}>
+                    Porcentagem
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: isMobile ? 1 : 1.5 }}>
+                <Stack spacing={isMobile ? 1 : 1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={isMobile ? 0.75 : 1}>
+                    <TextField
+                      fullWidth
+                      label="%"
+                      value={percentage}
+                      onChange={(e) => setPercentage(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Valor"
+                      value={percentageBase}
+                      onChange={(e) => setPercentageBase(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={calculatePercentage}
+                      size={isMobile ? "small" : "medium"}
+                      sx={{ 
+                        minWidth: isMobile ? 70 : 80, 
+                        borderRadius: 1,
+                        background: gradients.primary,
+                        boxShadow: shadows.colored.primary,
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                          boxShadow: shadows.lg
+                        }
+                      }}
+                    >
+                      =
+                    </Button>
+                  </Stack>
+                  {percentageResult && (
+                    <TextField
+                      fullWidth
+                      label="Resultado"
+                      value={`R$ ${percentageResult}`}
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      InputProps={{
+                        readOnly: true,
+                        endAdornment: (
+                          <Tooltip title="Copiar resultado">
+                            <IconButton 
+                              onClick={() => copyToClipboard(percentageResult)}
+                              size="small"
+                              sx={{
+                                color: colors.gray[500],
+                                '&:hover': {
+                                  backgroundColor: colors.primary[50],
+                                  color: colors.primary[600]
+                                }
+                              }}
+                            >
+                              <CopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ),
+                        sx: {
+                          borderRadius: 1,
+                          backgroundColor: colors.success[50]
+                        }
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  )}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
 
-        <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <DiscountIcon sx={{ mr: 1 }} />
-              <Typography variant="h6">Calculadora de Desconto</Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  fullWidth
-                  label="Preço Original (R$)"
-                  value={originalPrice}
-                  onChange={(e) => setOriginalPrice(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Desconto (%)"
-                  value={discountPercent}
-                  onChange={(e) => setDiscountPercent(e.target.value)}
-                  type="number"
-                />
-                <Button
-                  variant="contained"
-                  onClick={calculateDiscount}
-                  sx={{ minWidth: 120, height: 56 }}
-                >
-                  Calcular
-                </Button>
-              </Stack>
-              {discountResult && (
-                <TextField
-                  fullWidth
-                  label="Resultado"
-                  value={discountResult}
-                  multiline
-                  rows={2}
-                  InputProps={{
-                    readOnly: true,
-                    endAdornment: (
-                      <Tooltip title="Copiar resultado">
-                        <IconButton onClick={() => copyToClipboard(discountResult)}>
-                          <CopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )
-                  }}
-                />
-              )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-
-        <Accordion>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <InvestmentIcon sx={{ mr: 1 }} />
-              <Typography variant="h6">Simulador de Investimento</Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  fullWidth
-                  label="Valor Mensal (R$)"
-                  value={monthlyInvestment}
-                  onChange={(e) => setMonthlyInvestment(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Taxa Anual (%)"
-                  value={investmentRate}
-                  onChange={(e) => setInvestmentRate(e.target.value)}
-                  type="number"
-                />
-                <TextField
-                  fullWidth
-                  label="Período (anos)"
-                  value={investmentTime}
-                  onChange={(e) => setInvestmentTime(e.target.value)}
-                  type="number"
-                />
-              </Stack>
-              <Button
-                variant="contained"
-                onClick={calculateInvestment}
-                fullWidth
+            <Accordion 
+              sx={{ 
+                borderRadius: 1,
+                border: `1px solid ${colors.gray[200]}`,
+                boxShadow: 'none',
+                '&:before': {
+                  display: 'none'
+                },
+                mb: isMobile ? 1 : 1.5
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  borderRadius: 1,
+                  '&.Mui-expanded': {
+                    borderRadius: '4px 4px 0 0'
+                  },
+                  backgroundColor: colors.gray[50],
+                  minHeight: isMobile ? 36 : 48,
+                  '& .MuiAccordionSummary-content': {
+                    margin: isMobile ? '8px 0' : '12px 0'
+                  },
+                  '&:hover': {
+                    backgroundColor: colors.gray[100]
+                  }
+                }}
               >
-                Simular Investimento
-              </Button>
-              {investmentResult && (
-                <TextField
-                  fullWidth
-                  label="Resultado da Simulação"
-                  value={investmentResult}
-                  multiline
-                  rows={2}
-                  InputProps={{
-                    readOnly: true,
-                    endAdornment: (
-                      <Tooltip title="Copiar resultado">
-                        <IconButton onClick={() => copyToClipboard(investmentResult)}>
-                          <CopyIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )
-                  }}
-                />
-              )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      </Paper>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <BankIcon sx={{ mr: 0.75, color: colors.primary[600], fontSize: isMobile ? '1rem' : '1.2rem' }} />
+                  <Typography variant={isMobile ? "body2" : "body1"} sx={{ fontWeight: 600, fontSize: isMobile ? '0.85rem' : '1rem' }}>
+                    Juros
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: isMobile ? 1 : 1.5 }}>
+                <Stack spacing={isMobile ? 1 : 1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={isMobile ? 0.75 : 1}>
+                    <TextField
+                      fullWidth
+                      label="Capital"
+                      value={principal}
+                      onChange={(e) => setPrincipal(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Taxa %"
+                      value={rate}
+                      onChange={(e) => setRate(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Anos"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  </Stack>
+                  <Button
+                    variant="contained"
+                    onClick={calculateInterest}
+                    fullWidth
+                    size={isMobile ? "small" : "medium"}
+                    sx={{ 
+                      height: isMobile ? 36 : 40,
+                      borderRadius: 1,
+                      background: gradients.primary,
+                      boxShadow: shadows.colored.primary,
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                        boxShadow: shadows.lg
+                      }
+                    }}
+                  >
+                    Calcular
+                  </Button>
+                  {interestResult && (
+                    <TextField
+                      fullWidth
+                      label="Resultado"
+                      value={interestResult}
+                      multiline
+                      rows={2}
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      InputProps={{
+                        readOnly: true,
+                        endAdornment: (
+                          <Tooltip title="Copiar resultado">
+                            <IconButton 
+                              onClick={() => copyToClipboard(interestResult)}
+                              size="small"
+                              sx={{
+                                color: colors.gray[500],
+                                '&:hover': {
+                                  backgroundColor: colors.primary[50],
+                                  color: colors.primary[600]
+                                }
+                              }}
+                            >
+                              <CopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ),
+                        sx: {
+                          borderRadius: 1,
+                          backgroundColor: colors.success[50]
+                        }
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  )}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion 
+              sx={{ 
+                borderRadius: 1,
+                border: `1px solid ${colors.gray[200]}`,
+                boxShadow: 'none',
+                '&:before': {
+                  display: 'none'
+                },
+                mb: isMobile ? 1 : 1.5
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  borderRadius: 1,
+                  '&.Mui-expanded': {
+                    borderRadius: '4px 4px 0 0'
+                  },
+                  backgroundColor: colors.gray[50],
+                  minHeight: isMobile ? 36 : 48,
+                  '& .MuiAccordionSummary-content': {
+                    margin: isMobile ? '8px 0' : '12px 0'
+                  },
+                  '&:hover': {
+                    backgroundColor: colors.gray[100]
+                  }
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <DiscountIcon sx={{ mr: 0.75, color: colors.primary[600], fontSize: isMobile ? '1rem' : '1.2rem' }} />
+                  <Typography variant={isMobile ? "body2" : "body1"} sx={{ fontWeight: 600, fontSize: isMobile ? '0.85rem' : '1rem' }}>
+                    Desconto
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: isMobile ? 1 : 1.5 }}>
+                <Stack spacing={isMobile ? 1 : 1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={isMobile ? 0.75 : 1}>
+                    <TextField
+                      fullWidth
+                      label="Preço"
+                      value={originalPrice}
+                      onChange={(e) => setOriginalPrice(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Desconto %"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={calculateDiscount}
+                      size={isMobile ? "small" : "medium"}
+                      sx={{ 
+                        minWidth: isMobile ? 70 : 80, 
+                        borderRadius: 1,
+                        background: gradients.primary,
+                        boxShadow: shadows.colored.primary,
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                          boxShadow: shadows.lg
+                        }
+                      }}
+                    >
+                      =
+                    </Button>
+                  </Stack>
+                  {discountResult && (
+                    <TextField
+                      fullWidth
+                      label="Resultado"
+                      value={discountResult}
+                      multiline
+                      rows={2}
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      InputProps={{
+                        readOnly: true,
+                        endAdornment: (
+                          <Tooltip title="Copiar resultado">
+                            <IconButton 
+                              onClick={() => copyToClipboard(discountResult)}
+                              size="small"
+                              sx={{
+                                color: colors.gray[500],
+                                '&:hover': {
+                                  backgroundColor: colors.primary[50],
+                                  color: colors.primary[600]
+                                }
+                              }}
+                            >
+                              <CopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ),
+                        sx: {
+                          borderRadius: 1,
+                          backgroundColor: colors.success[50]
+                        }
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  )}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion 
+              sx={{ 
+                borderRadius: 1,
+                border: `1px solid ${colors.gray[200]}`,
+                boxShadow: 'none',
+                '&:before': {
+                  display: 'none'
+                }
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  borderRadius: 1,
+                  '&.Mui-expanded': {
+                    borderRadius: '4px 4px 0 0'
+                  },
+                  backgroundColor: colors.gray[50],
+                  minHeight: isMobile ? 36 : 48,
+                  '& .MuiAccordionSummary-content': {
+                    margin: isMobile ? '8px 0' : '12px 0'
+                  },
+                  '&:hover': {
+                    backgroundColor: colors.gray[100]
+                  }
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <InvestmentIcon sx={{ mr: 0.75, color: colors.primary[600], fontSize: isMobile ? '1rem' : '1.2rem' }} />
+                  <Typography variant={isMobile ? "body2" : "body1"} sx={{ fontWeight: 600, fontSize: isMobile ? '0.85rem' : '1rem' }}>
+                    Investimento
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: isMobile ? 1 : 1.5 }}>
+                <Stack spacing={isMobile ? 1 : 1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={isMobile ? 0.75 : 1}>
+                    <TextField
+                      fullWidth
+                      label="Mensal"
+                      value={monthlyInvestment}
+                      onChange={(e) => setMonthlyInvestment(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Taxa %"
+                      value={investmentRate}
+                      onChange={(e) => setInvestmentRate(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Anos"
+                      value={investmentTime}
+                      onChange={(e) => setInvestmentTime(e.target.value)}
+                      type="number"
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  </Stack>
+                  <Button
+                    variant="contained"
+                    onClick={calculateInvestment}
+                    fullWidth
+                    size={isMobile ? "small" : "medium"}
+                    sx={{ 
+                      height: isMobile ? 36 : 40,
+                      borderRadius: 1,
+                      background: gradients.primary,
+                      boxShadow: shadows.colored.primary,
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                        boxShadow: shadows.lg
+                      }
+                    }}
+                  >
+                    Simular
+                  </Button>
+                  {investmentResult && (
+                    <TextField
+                      fullWidth
+                      label="Resultado"
+                      value={investmentResult}
+                      multiline
+                      rows={2}
+                      variant="outlined"
+                      size={isMobile ? "small" : "medium"}
+                      InputProps={{
+                        readOnly: true,
+                        endAdornment: (
+                          <Tooltip title="Copiar resultado">
+                            <IconButton 
+                              onClick={() => copyToClipboard(investmentResult)}
+                              size="small"
+                              sx={{
+                                color: colors.gray[500],
+                                '&:hover': {
+                                  backgroundColor: colors.primary[50],
+                                  color: colors.primary[600]
+                                }
+                              }}
+                            >
+                              <CopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ),
+                        sx: {
+                          borderRadius: 1,
+                          backgroundColor: colors.success[50]
+                        }
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 1
+                        }
+                      }}
+                    />
+                  )}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        </ModernCard>
+      </Box>
     </Box>
   );
 };

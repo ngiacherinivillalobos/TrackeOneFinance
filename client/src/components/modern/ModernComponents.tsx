@@ -10,7 +10,7 @@ interface ModernCardProps extends PaperProps {
   children: React.ReactNode;
 }
 
-export const ModernCard: React.FC<ModernCardProps> = ({
+const ModernCard: React.FC<ModernCardProps> = ({
   title,
   subtitle,
   icon,
@@ -81,7 +81,7 @@ interface ModernSectionProps {
   sx?: any;
 }
 
-export const ModernSection: React.FC<ModernSectionProps> = ({
+const ModernSection: React.FC<ModernSectionProps> = ({
   title,
   subtitle,
   icon,
@@ -168,7 +168,7 @@ interface ModernStatsCardProps {
   iconBgColor?: string;
 }
 
-export const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
+const ModernStatsCard: React.FC<ModernStatsCardProps> = ({
   title,
   value,
   subtitle,
@@ -249,7 +249,7 @@ interface ModernHeaderProps {
   breadcrumbs?: Array<{ label: string; href?: string }>;
 }
 
-export const ModernHeader: React.FC<ModernHeaderProps> = ({
+const ModernHeader: React.FC<ModernHeaderProps> = ({
   title,
   subtitle,
   actions,
@@ -301,9 +301,5 @@ export const ModernHeader: React.FC<ModernHeaderProps> = ({
   );
 };
 
-export default {
-  ModernCard,
-  ModernSection,
-  ModernStatsCard,
-  ModernHeader,
-};
+// Exportações nomeadas
+export { ModernCard, ModernSection, ModernStatsCard, ModernHeader };

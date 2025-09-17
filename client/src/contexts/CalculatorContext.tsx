@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface CalculatorContextType {
   isOpen: boolean;
@@ -27,6 +27,30 @@ export const CalculatorProvider: React.FC<CalculatorProviderProps> = ({ children
   const openCalculator = () => setIsOpen(true);
   const closeCalculator = () => setIsOpen(false);
   const toggleCalculator = () => setIsOpen(!isOpen);
+
+  // Adicionar listener global para atalho F2
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Verificar se F2 foi pressionado
+      if (event.key === 'F2') {
+        event.preventDefault();
+        toggleCalculator();
+      }
+      
+      // Fechar com Escape quando a calculadora estiver aberta
+      if (event.key === 'Escape' && isOpen) {
+        closeCalculator();
+      }
+    };
+
+    // Adicionar listener quando o componente montar
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Remover listener quando o componente desmontar
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, toggleCalculator, closeCalculator]);
 
   return (
     <CalculatorContext.Provider value={{

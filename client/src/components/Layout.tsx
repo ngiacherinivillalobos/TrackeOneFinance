@@ -32,6 +32,7 @@ import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import AppsOutlinedIcon from '@mui/icons-material/AppsOutlined';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import CalculateOutlinedIcon from '@mui/icons-material/CalculateOutlined';
 import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 220;
