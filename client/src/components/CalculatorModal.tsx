@@ -564,17 +564,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('7')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -586,17 +586,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('8')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -608,17 +608,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('9')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -654,17 +654,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('4')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -676,17 +676,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('5')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -698,17 +698,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('6')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -744,17 +744,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('1')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -766,17 +766,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('2')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -788,17 +788,17 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('3')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}
@@ -834,18 +834,18 @@ const CalculatorModal: React.FC = () => {
                   onClick={() => handleButtonClick('0')}
                   sx={{
                     height: 50,
-                    fontSize: '0.95rem',
-                    backgroundColor: '#ffffff',
-                    color: 'grey.700',
+                    fontSize: '1rem',
+                    backgroundColor: '#f5f5f5',
+                    color: '#000',
                     borderRadius: 1.5,
                     minWidth: 0,
-                    fontWeight: 400,
+                    fontWeight: 'bold',
                     gridColumn: 'span 2',
                     boxShadow: 'none',
                     border: '1px solid',
-                    borderColor: '#e8e8e8',
+                    borderColor: '#d0d0d0',
                     '&:hover': { 
-                      backgroundColor: '#f9f9f9',
+                      backgroundColor: '#e8e8e8',
                       boxShadow: 'none',
                     },
                   }}

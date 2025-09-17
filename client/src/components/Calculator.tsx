@@ -264,32 +264,32 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
             
             {/* Row 2 */}
             <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('7')}>7</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('8')}>8</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('9')}>9</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('7')}>7</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('8')}>8</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('9')}>9</Button>
               <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('*')}>×</Button>
             </Stack>
             
             {/* Row 3 */}
             <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('4')}>4</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('5')}>5</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('6')}>6</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('4')}>4</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('5')}>5</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('6')}>6</Button>
               <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('-')}>−</Button>
             </Stack>
             
             {/* Row 4 */}
             <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('1')}>1</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('2')}>2</Button>
-              <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('3')}>3</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('1')}>1</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('2')}>2</Button>
+              <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('3')}>3</Button>
               <Button fullWidth variant="contained" sx={{ height: 60 }} onClick={() => handleButtonClick('+')}>+</Button>
             </Stack>
             
             {/* Row 5 */}
             <Stack direction="row" spacing={1}>
               <Box sx={{ flex: 2, mr: 1 }}>
-                <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('0')}>0</Button>
+                <Button fullWidth variant="contained" sx={{ height: 60, backgroundColor: '#f5f5f5', color: '#000', fontWeight: 'bold', '&:hover': { backgroundColor: '#e0e0e0' } }} onClick={() => handleButtonClick('0')}>0</Button>
               </Box>
               <Button fullWidth variant="outlined" sx={{ height: 60 }} onClick={() => handleButtonClick('.')}>.</Button>
               <Button fullWidth variant="contained" color="primary" sx={{ height: 60 }} onClick={() => handleButtonClick('=')}>=</Button>

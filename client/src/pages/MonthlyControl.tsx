@@ -21,7 +21,6 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Fab,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -72,6 +71,7 @@ import { ptBR } from 'date-fns/locale';
 import { format, addMonths, subMonths } from 'date-fns';
 import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
+import { bankAccountBalanceService } from '../services/bankAccountBalanceService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
@@ -233,6 +233,7 @@ export default function MonthlyControl() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>([]);
+  const [initialBankAccountsBalance, setInitialBankAccountsBalance] = useState<number>(0);
   
   // Estados para seleção e ações
   const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
@@ -301,19 +302,70 @@ export default function MonthlyControl() {
   // Totalizadores devem considerar:
   // 1. TODAS as transações do período selecionado (qualquer status)
   // 2. TODAS as transações vencidas (qualquer status)
+  // 3. Filtro por centro de custo selecionado
   
-  // Usar allTransactions que agora contém período + vencidas SEM filtros de status
-  const totalReceitas = allTransactions
-    .filter(t => t.transaction_type === 'Receita')
-    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  // Aplicar filtro de centro de custo nos totalizadores
+  const filteredAllTransactions = allTransactions.filter(t => {
+    // Se não há filtro de centro de custo, mostrar todos
+    if (filters.cost_center_id.length === 0) return true;
+    // Aplicar filtro de centro de custo
+    return filters.cost_center_id.includes(t.cost_center?.id?.toString() || '');
+  });
+  
+  // Detectar se é um dia específico (customStartDate === customEndDate)
+  const isSingleDay = dateFilterType === 'custom' && 
+                      customStartDate && 
+                      customEndDate && 
+                      format(customStartDate, 'yyyy-MM-dd') === format(customEndDate, 'yyyy-MM-dd');
+  
+  let totalReceitas, totalDespesas, totalInvestimentos;
+  
+  if (isSingleDay && customStartDate) {
+    // Para um dia específico, calcular saldo previsto até aquele dia
+    // Buscar todas as transações até a data selecionada (incluindo vencidas)
+    const selectedDate = format(customStartDate, 'yyyy-MM-dd');
+    const transactionsUpToDate = filteredAllTransactions.filter(t => {
+      if (!t.transaction_date) return false;
+      const transactionDate = format(getSafeDate(t.transaction_date), 'yyyy-MM-dd');
+      return transactionDate <= selectedDate;
+    });
     
-  const totalDespesas = allTransactions
-    .filter(t => t.transaction_type === 'Despesa')
-    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    const receitasUpToDate = transactionsUpToDate
+      .filter(t => t.transaction_type === 'Receita')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+      
+    const despesasUpToDate = transactionsUpToDate
+      .filter(t => t.transaction_type === 'Despesa')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
 
-  const totalInvestimentos = allTransactions
-    .filter(t => t.transaction_type === 'Investimento')
-    .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    const investimentosUpToDate = transactionsUpToDate
+      .filter(t => t.transaction_type === 'Investimento')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    
+    // Para um dia específico: mostrar SALDO ACUMULADO PREVISTO até aquele dia
+    const saldoPrevisto = initialBankAccountsBalance + receitasUpToDate - despesasUpToDate - investimentosUpToDate;
+    
+    // Nos totalizadores, mostrar o saldo previsto dividido proporcionalmente
+    // Receitas: saldo inicial + receitas até o dia
+    totalReceitas = initialBankAccountsBalance + receitasUpToDate;
+    // Despesas: apenas despesas até o dia (valor negativo será exibido)
+    totalDespesas = despesasUpToDate;
+    // Investimentos: apenas investimentos até o dia
+    totalInvestimentos = investimentosUpToDate;
+  } else {
+    // Usar filteredAllTransactions que agora contém período + vencidas SEM filtros de status MAS COM filtro de centro de custo
+    totalReceitas = filteredAllTransactions
+      .filter(t => t.transaction_type === 'Receita')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+      
+    totalDespesas = filteredAllTransactions
+      .filter(t => t.transaction_type === 'Despesa')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+
+    totalInvestimentos = filteredAllTransactions
+      .filter(t => t.transaction_type === 'Investimento')
+      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+  }
 
   // Cálculos dos totalizadores - CORRIGIDO PARA USAR DATAS CONSISTENTES E VERIFICAR AMBOS OS CAMPOS DE STATUS
   const vencidos = transactions.filter(t => {
@@ -902,12 +954,13 @@ export default function MonthlyControl() {
 
   const loadFilterData = async () => {
     try {
-      const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes] = await Promise.all([
+      const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes, bankAccountsRes] = await Promise.all([
         api.get('/categories'),
         api.get('/subcategories'),
         api.get('/contacts'),
         api.get('/cost-centers'),
-        api.get('/payment-statuses')
+        api.get('/payment-statuses'),
+        bankAccountBalanceService.getBankAccountsWithBalances()
       ]);
       
       setCategories(categoriesRes.data);
@@ -915,6 +968,10 @@ export default function MonthlyControl() {
       setContacts(contactsRes.data);
       setCostCenters(costCentersRes.data);
       setPaymentStatuses(paymentStatusesRes.data);
+      
+      // Calcular saldo inicial total de todas as contas bancárias
+      const totalInitialBalance = bankAccountsRes.reduce((sum, account) => sum + (account.initial_balance || 0), 0);
+      setInitialBankAccountsBalance(totalInitialBalance);
     } catch (error) {
       console.error('Erro ao carregar dados dos filtros:', error);
     }
@@ -2421,27 +2478,27 @@ export default function MonthlyControl() {
             }
           }}>
             <ModernStatsCard
-              title="Receitas do Mês"
+              title={isSingleDay && customStartDate ? "Saldo Previsto" : "Receitas do Mês"}
               value={formatCurrency(totalReceitas)}
-              subtitle="Total de entradas"
+              subtitle={isSingleDay && customStartDate ? `Até ${format(customStartDate, 'dd/MM/yyyy')}` : "Total de entradas"}
               icon={<TrendingUp sx={{ fontSize: 16 }} />}
               color="success"
               trend={{ value: 0, isPositive: true }}
             />
             
             <ModernStatsCard
-              title="Despesas do Mês"
+              title={isSingleDay && customStartDate ? "Despesas até o Dia" : "Despesas do Mês"}
               value={formatCurrency(totalDespesas)}
-              subtitle="Total de gastos"
+              subtitle={isSingleDay && customStartDate ? `Até ${format(customStartDate, 'dd/MM/yyyy')}` : "Total de gastos"}
               icon={<TrendingDown sx={{ fontSize: 16 }} />}
               color="error"
               trend={{ value: 0, isPositive: false }}
             />
             
             <ModernStatsCard
-              title="Investimentos"
+              title={isSingleDay && customStartDate ? "Investimentos até o Dia" : "Investimentos"}
               value={formatCurrency(totalInvestimentos)}
-              subtitle="Total investido"
+              subtitle={isSingleDay && customStartDate ? `Até ${format(customStartDate, 'dd/MM/yyyy')}` : "Total investido"}
               icon={<ShowChart sx={{ fontSize: 16, color: '#3761E2' }} />}
               color="warning"
               trend={{ value: 0, isPositive: true }}
@@ -3024,16 +3081,6 @@ export default function MonthlyControl() {
             <Button onClick={() => setDatePickerOpen(false)}>Cancelar</Button>
           </DialogActions>
         </Dialog>
-
-        {/* FAB para nova transação */}
-        <Fab
-          color="primary"
-          aria-label="add"
-          sx={{ position: 'fixed', bottom: 16, right: 16 }}
-          onClick={(e) => setNewTransactionMenuAnchor(e.currentTarget)}
-        >
-          <AddIcon />
-        </Fab>
 
         {/* Menu de nova transação */}
         <Menu

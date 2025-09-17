@@ -289,7 +289,12 @@ export default function WeeklyControl() {
         const periodTransactions = monthlyTransactionsResponse.data;
         
         // 2. Buscar TODAS as transações para filtrar vencidas
-        const allTransactionsForOverdue = await api.get('/transactions/filtered?dateFilterType=all');
+        const allTransactionsForOverdue = await api.get('/transactions/filtered', {
+          params: {
+            dateFilterType: 'all',
+            cost_center_id: selectedCostCenter.id
+          }
+        });
         
         // 3. Filtrar apenas vencidas (antes de hoje E não pagas)
         const todayDate = new Date();
