@@ -72,6 +72,9 @@ import { format, addMonths, subMonths } from 'date-fns';
 import api from '../lib/axios';
 import { transactionService, PaymentData, Transaction as ServiceTransaction } from '../services/transactionService';
 import { bankAccountBalanceService } from '../services/bankAccountBalanceService';
+import { categoryService } from '../services/categoryService';
+import { subcategoryService } from '../services/subcategoryService';
+import { costCenterService } from '../services/costCenterService';
 import PaymentDialog from '../components/PaymentDialog';
 import axios from 'axios';
 import { ModernHeader, ModernSection, ModernCard, ModernStatsCard } from '../components/modern/ModernComponents';
@@ -964,18 +967,31 @@ export default function MonthlyControl() {
   const loadFilterData = async () => {
     try {
       const [categoriesRes, subcategoriesRes, contactsRes, costCentersRes, paymentStatusesRes, bankAccountsRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/subcategories'),
+        categoryService.list(),
+        subcategoryService.list(),
         api.get('/contacts'),
-        api.get('/cost-centers'),
+        costCenterService.list(),
         api.get('/payment-statuses'),
         bankAccountBalanceService.getBankAccountsWithBalances()
       ]);
       
-      setCategories(categoriesRes.data);
-      setSubcategories(subcategoriesRes.data);
+      // Filtrar e mapear dados dos services (similar ao CashFlow)
+      setCategories(categoriesRes.filter(cat => cat.id).map(cat => ({ 
+        id: cat.id!, 
+        name: cat.name, 
+        source_type: cat.source_type 
+      })));
+      setSubcategories(subcategoriesRes.filter(sub => sub.id).map(sub => ({ 
+        id: sub.id!, 
+        name: sub.name, 
+        category_id: sub.category_id 
+      })));
       setContacts(contactsRes.data);
-      setCostCenters(costCentersRes.data);
+      setCostCenters(costCentersRes.filter(cc => cc.id).map(cc => ({ 
+        id: cc.id!, 
+        name: cc.name, 
+        number: cc.number 
+      })));
       setPaymentStatuses(paymentStatusesRes.data);
       
       // Calcular saldo inicial total de todas as contas bancárias
