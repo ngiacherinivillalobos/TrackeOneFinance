@@ -139,41 +139,60 @@ class BankAccountController {
 
   async getBankAccountsWithBalances(req: Request, res: Response) {
     try {
+      console.log('=== getBankAccountsWithBalances - START ===');
       const { db, all } = getDatabase();
       
       // Buscar todas as contas bancárias
+      console.log('Fetching bank accounts...');
       const bankAccounts = await all(db, 'SELECT * FROM bank_accounts ORDER BY name');
-      
+      console.log('Found bank accounts:', bankAccounts?.length || 0);
+
       // Calcular saldo atual para cada conta
       const accountsWithBalances = await Promise.all(
         bankAccounts.map(async (account: any) => {
+          console.log(`Processing account ${account.id} - ${account.name}`);
+          
           const movements = await all(db, `
             SELECT 
-              SUM(CASE WHEN transaction_type = 'Receita' THEN amount ELSE 0 END) as total_income,
-              SUM(CASE WHEN transaction_type = 'Despesa' THEN amount ELSE 0 END) as total_expense
+              SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
+              SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
             FROM transactions 
             WHERE bank_account_id = ?
           `, [account.id]);
 
+          console.log(`Movements for account ${account.id}:`, movements[0]);
+
           const totalIncome = parseFloat(movements[0]?.total_income || '0');
           const totalExpense = parseFloat(movements[0]?.total_expense || '0');
           const totalMovements = totalIncome - totalExpense;
-          const currentBalance = parseFloat(account.balance || '0') + totalMovements;
+          const initialBalance = parseFloat(account.initial_balance || account.balance || '0');
+          const currentBalance = initialBalance + totalMovements;
+
+          console.log(`Account ${account.id} - Balance calculation:`, {
+            initialBalance,
+            totalIncome,
+            totalExpense,
+            totalMovements,
+            currentBalance
+          });
 
           return {
             ...account,
             bank_name: account.type || account.bank_name,
-            initial_balance: parseFloat(account.balance || '0'),
+            initial_balance: initialBalance,
             current_balance: currentBalance,
             total_movements: totalMovements
           };
         })
       );
 
+      console.log('=== getBankAccountsWithBalances - SUCCESS ===');
       res.json(accountsWithBalances);
     } catch (error) {
+      console.error('=== getBankAccountsWithBalances - ERROR ===');
       console.error('Error getting bank accounts with balances:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
+      res.status(500).json({ error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' });
     }
   }
 }
