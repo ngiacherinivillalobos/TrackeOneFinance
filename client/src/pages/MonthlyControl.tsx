@@ -597,12 +597,17 @@ export default function MonthlyControl() {
         dateFilterType,
         ...Object.fromEntries(Object.entries(filters).filter(([key, value]) => {
           // Tratar filtros de array e payment_status_id separadamente
-          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'cost_center_id' || key === 'category_id') {
+          if (key === 'payment_status_id' || key === 'transaction_type' || key === 'contact_id' || key === 'category_id') {
             return false; // Não incluir nos parâmetros da URL (serão aplicados no frontend)
           }
           return value !== '';
         }))
       };
+      
+      // Incluir filtro de centro de custo na API para garantir totalizadores corretos
+      if (filters.cost_center_id.length > 0) {
+        baseParams.cost_center_id = filters.cost_center_id.join(',');
+      }
       
       // Adicionar parâmetros específicos de acordo com o tipo de filtro de data
       if (dateFilterType === 'month') {
@@ -635,7 +640,11 @@ export default function MonthlyControl() {
       const periodTransactions = response.data;
       
       // 2. Buscar TODAS as transações para filtrar vencidas
-      const allTransactionsForOverdue = await api.get('/transactions/filtered?dateFilterType=all');
+      let allTransactionsParams = 'dateFilterType=all';
+      if (filters.cost_center_id.length > 0) {
+        allTransactionsParams += `&cost_center_id=${filters.cost_center_id.join(',')}`;
+      }
+      const allTransactionsForOverdue = await api.get(`/transactions/filtered?${allTransactionsParams}`);
       
       // 3. Filtrar apenas vencidas (antes de hoje E não pagas)
       const todayDate = new Date();
