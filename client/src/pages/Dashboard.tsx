@@ -307,8 +307,10 @@ export default function Dashboard() {
     try {
       const response = await api.get('/bank-accounts/balances');
       setBankAccounts(response.data);
+      return response.data;
     } catch (error) {
       console.error('Erro ao carregar contas bancárias:', error);
+      return [];
     }
   };
 
@@ -317,16 +319,45 @@ export default function Dashboard() {
     try {
       const response = await api.get('/cash-flow');
       setCashFlowRecords(response.data);
+      return response.data;
     } catch (error) {
       console.error('Erro ao carregar fluxo de caixa:', error);
+      return [];
     }
   };
 
   // Adicionar ao useEffect para carregar todos os dados
   useEffect(() => {
-    loadTransactions();
-    loadBankAccounts();
-    loadCashFlow();
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        // Carregar todos os dados em paralelo
+        const [bankAccountsData, cashFlowData] = await Promise.all([
+          loadBankAccounts(),
+          loadCashFlow()
+        ]);
+        
+        // Carregar transações
+        await loadTransactions();
+        
+        // Recalcular o saldo atual após todos os dados estarem carregados
+        // Aguardar um pequeno atraso para garantir que os estados foram atualizados
+        setTimeout(async () => {
+          if (transactions.length > 0) {
+            await calculateDashboardData(transactions, {
+              dateFilterType,
+              month: currentDate.getMonth(),
+              year: currentDate.getFullYear(),
+              cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
+            });
+          }
+        }, 100);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
   }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
 
   // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
@@ -714,18 +745,32 @@ export default function Dashboard() {
           .filter((t: any) => t.transaction_type === 'Investimento')
           .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
         
+        console.log('Totais calculados:', { income, expenses, investments });
+        
+        // Atualizar os estados
         setAllPaidIncome(income);
         setAllPaidExpenses(expenses);
         setAllPaidInvestments(investments);
         
-        console.log('Totais calculados:', { income, expenses, investments });
+        // Recalcular o saldo atual quando os totais forem atualizados
+        // Aguardar um pequeno atraso para garantir que os estados foram atualizados
+        setTimeout(async () => {
+          if (transactions.length > 0) {
+            await calculateDashboardData(transactions, {
+              dateFilterType,
+              month: currentDate.getMonth(),
+              year: currentDate.getFullYear(),
+              cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
+            });
+          }
+        }, 100);
       } catch (error) {
         console.error('Erro ao carregar transações pagas:', error);
       }
     };
     
     loadAllPaidTransactions();
-  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger]); // Recarregar quando o centro de custo mudar ou quando refreshTrigger mudar
+  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger, transactions]); // Recarregar quando o centro de custo mudar ou quando refreshTrigger mudar
 
   const formatCurrency = (value: number) => {
     console.log('Formatando valor:', value);
