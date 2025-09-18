@@ -122,16 +122,16 @@ class BankAccountController {
       let movementsQuery;
       let queryParams;
       if (isProduction) {
-        // PostgreSQL - não precisa de CAST para enums
+        // PostgreSQL - converter explicitamente para texto para evitar erro de tipos
         movementsQuery = `
           SELECT 
-            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
-            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+            SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END) as total_income,
+            SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END) as total_expense
           FROM transactions 
           WHERE bank_account_id = $1
         `;
         queryParams = [id];
-        console.log('Using PostgreSQL query with params:', queryParams);
+        console.log('Using PostgreSQL query with explicit text conversion and params:', queryParams);
       } else {
         // SQLite
         movementsQuery = `
@@ -195,16 +195,16 @@ class BankAccountController {
           let movementsQuery;
           let queryParams;
           if (isProduction) {
-            // PostgreSQL - não precisa de CAST para enums
+            // PostgreSQL - converter explicitamente para texto para evitar erro de tipos
             movementsQuery = `
               SELECT 
-                SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
-                SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+                SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END) as total_income,
+                SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END) as total_expense
               FROM transactions 
               WHERE bank_account_id = $1
             `;
             queryParams = [account.id];
-            console.log(`Using PostgreSQL query for account ${account.id} with params:`, queryParams);
+            console.log(`Using PostgreSQL query for account ${account.id} with explicit text conversion and params:`, queryParams);
           } else {
             // SQLite
             movementsQuery = `
