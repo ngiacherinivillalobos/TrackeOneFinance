@@ -133,10 +133,10 @@ const CalculatorModal: React.FC = () => {
       setWaitingForNewValue(false);
     } else {
       const newDisplay = display === '0' ? num : display + num;
-      // Formatar o número para exibição com até 3 casas decimais
+      // Formatar o número para exibição com até 5 casas decimais
       const numericValue = parseFloat(newDisplay.replace(',', '.'));
       if (!isNaN(numericValue)) {
-        setDisplay(formatCalculatorNumber(numericValue, 3));
+        setDisplay(formatCalculatorNumber(numericValue, 5));
       } else {
         setDisplay(newDisplay);
       }
@@ -204,8 +204,8 @@ const CalculatorModal: React.FC = () => {
     if (previousValue !== null && operation) {
       const newValue = calculate(previousValue, inputValue, operation);
       setOperationHistory(`${previousValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} =`);
-      // Formatar o resultado com até 3 casas decimais
-      setDisplay(formatCalculatorNumber(newValue, 3));
+      // Formatar o resultado com até 5 casas decimais
+      setDisplay(formatCalculatorNumber(newValue, 5));
       setPreviousValue(null);
       setOperation(null);
       setWaitingForNewValue(true);
@@ -224,11 +224,11 @@ const CalculatorModal: React.FC = () => {
     } else if (button === '±') {
       const currentValue = parseFloat(display.replace(',', '.'));
       const newValue = currentValue * -1;
-      setDisplay(formatCalculatorNumber(newValue, 3));
+      setDisplay(formatCalculatorNumber(newValue, 5));
     } else if (button === '%') {
       const currentValue = parseFloat(display.replace(',', '.'));
       const newValue = currentValue / 100;
-      setDisplay(formatCalculatorNumber(newValue, 3));
+      setDisplay(formatCalculatorNumber(newValue, 5));
     }
   };
 

@@ -335,6 +335,7 @@ export default function Dashboard() {
   // Estados para controle de carregamento
   const [dataLoading, setDataLoading] = useState(false);
   const [allDataLoaded, setAllDataLoaded] = useState(false);
+  const [dashboardCalculated, setDashboardCalculated] = useState(false);
   
   // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
   useEffect(() => {
@@ -412,6 +413,7 @@ export default function Dashboard() {
     const loadData = async () => {
       setDataLoading(true);
       setAllDataLoaded(false);
+      setDashboardCalculated(false);
       
       try {
         // Carregar todos os dados em paralelo
@@ -425,6 +427,7 @@ export default function Dashboard() {
         
         // Marcar que todos os dados foram carregados
         setAllDataLoaded(true);
+        setDashboardCalculated(false);
       } finally {
         setDataLoading(false);
       }
@@ -435,7 +438,7 @@ export default function Dashboard() {
 
   // useEffect para calcular o dashboard apenas quando todos os dados estiverem carregados
   useEffect(() => {
-    if (allDataLoaded && transactions.length > 0) {
+    if (allDataLoaded && transactions.length > 0 && !dashboardCalculated) {
       console.log('Calculando dashboard - todos os dados carregados');
       calculateDashboardData(transactions, {
         dateFilterType,
@@ -443,8 +446,9 @@ export default function Dashboard() {
         year: currentDate.getFullYear(),
         cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
       });
+      setDashboardCalculated(true);
     }
-  }, [allDataLoaded, transactions, currentDate, selectedCostCenter, user?.cost_center_id, dateFilterType]);
+  }, [allDataLoaded, transactions, currentDate, selectedCostCenter, user?.cost_center_id, dateFilterType, dashboardCalculated]);
 
   // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
   useEffect(() => {
