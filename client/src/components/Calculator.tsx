@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { ModernCard, ModernSection, ModernHeader } from './modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
+import { formatCalculatorNumber, formatCurrencyValue } from '../utils/numberFormat';
 
 interface CalculatorProps {
   onClose?: () => void;
@@ -78,16 +79,23 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
       setDisplay(num);
       setWaitingForNewValue(false);
     } else {
-      setDisplay(display === '0' ? num : display + num);
+      const newDisplay = display === '0' ? num : display + num;
+      // Formatar o número para exibição com até 3 casas decimais
+      const numericValue = parseFloat(newDisplay);
+      if (!isNaN(numericValue)) {
+        setDisplay(formatCalculatorNumber(numericValue, 3));
+      } else {
+        setDisplay(newDisplay);
+      }
     }
   }, [display, waitingForNewValue]);
 
   const inputDecimal = useCallback(() => {
     if (waitingForNewValue) {
-      setDisplay('0.');
+      setDisplay('0,');
       setWaitingForNewValue(false);
-    } else if (display.indexOf('.') === -1) {
-      setDisplay(display + '.');
+    } else if (display.indexOf(',') === -1) {
+      setDisplay(display + ',');
     }
   }, [display, waitingForNewValue]);
 
@@ -99,7 +107,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
   }, []);
 
   const performOperation = useCallback((nextOperation: string) => {
-    const inputValue = parseFloat(display);
+    const inputValue = parseFloat(display.replace(',', '.'));
 
     if (previousValue === null) {
       setPreviousValue(inputValue);
@@ -127,7 +135,8 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
           return;
       }
 
-      setDisplay(String(result));
+      // Formatar o resultado com até 3 casas decimais
+      setDisplay(formatCalculatorNumber(result, 3));
       setPreviousValue(result);
     }
 
@@ -149,7 +158,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     
     if (!isNaN(percent) && !isNaN(base)) {
       const result = (percent / 100) * base;
-      setPercentageResult(result.toFixed(2));
+      setPercentageResult(formatCurrencyValue(result));
     }
   }, [percentage, percentageBase]);
 
@@ -161,7 +170,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     if (!isNaN(p) && !isNaN(r) && !isNaN(t)) {
       const simpleInterest = p * r * t;
       const compoundInterest = p * Math.pow(1 + r, t) - p;
-      setInterestResult(`Juros Simples: R$ ${simpleInterest.toFixed(2)} | Juros Compostos: R$ ${compoundInterest.toFixed(2)}`);
+      setInterestResult(`Juros Simples: R$ ${formatCurrencyValue(simpleInterest)} | Juros Compostos: R$ ${formatCurrencyValue(compoundInterest)}`);
     }
   }, [principal, rate, time]);
 
@@ -172,7 +181,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     if (!isNaN(price) && !isNaN(discount)) {
       const discountAmount = (discount / 100) * price;
       const finalPrice = price - discountAmount;
-      setDiscountResult(`Desconto: R$ ${discountAmount.toFixed(2)} | Preço Final: R$ ${finalPrice.toFixed(2)}`);
+      setDiscountResult(`Desconto: R$ ${formatCurrencyValue(discountAmount)} | Preço Final: R$ ${formatCurrencyValue(finalPrice)}`);
     }
   }, [originalPrice, discountPercent]);
 
@@ -188,7 +197,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
       const futureValue = monthly * (((1 + monthlyRate) ** months - 1) / monthlyRate);
       const profit = futureValue - totalInvested;
       
-      setInvestmentResult(`Investido: R$ ${totalInvested.toFixed(2)} | Valor Final: R$ ${futureValue.toFixed(2)} | Lucro: R$ ${profit.toFixed(2)}`);
+      setInvestmentResult(`Investido: R$ ${formatCurrencyValue(totalInvested)} | Valor Final: R$ ${formatCurrencyValue(futureValue)} | Lucro: R$ ${formatCurrencyValue(profit)}`);
     }
   }, [monthlyInvestment, investmentRate, investmentTime]);
 
@@ -211,9 +220,13 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     } else if (buttonValue === '.') {
       inputDecimal();
     } else if (buttonValue === '±') {
-      setDisplay(String(parseFloat(display) * -1));
+      const currentValue = parseFloat(display.replace(',', '.'));
+      const newValue = currentValue * -1;
+      setDisplay(formatCalculatorNumber(newValue, 3));
     } else if (buttonValue === '%') {
-      setDisplay(String(parseFloat(display) / 100));
+      const currentValue = parseFloat(display.replace(',', '.'));
+      const newValue = currentValue / 100;
+      setDisplay(formatCalculatorNumber(newValue, 3));
     } else {
       inputNumber(buttonValue);
     }

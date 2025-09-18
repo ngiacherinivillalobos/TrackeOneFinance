@@ -26,6 +26,7 @@ import {
   TrendingUp as InvestmentIcon,
 } from '@mui/icons-material';
 import { useCalculator } from '../contexts/CalculatorContext';
+import { formatCalculatorNumber, formatCurrencyValue } from '../utils/numberFormat';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -131,7 +132,23 @@ const CalculatorModal: React.FC = () => {
       setDisplay(num);
       setWaitingForNewValue(false);
     } else {
-      setDisplay(display === '0' ? num : display + num);
+      const newDisplay = display === '0' ? num : display + num;
+      // Formatar o número para exibição com até 3 casas decimais
+      const numericValue = parseFloat(newDisplay.replace(',', '.'));
+      if (!isNaN(numericValue)) {
+        setDisplay(formatCalculatorNumber(numericValue, 3));
+      } else {
+        setDisplay(newDisplay);
+      }
+    }
+  }, [display, waitingForNewValue]);
+
+  const inputDecimal = useCallback(() => {
+    if (waitingForNewValue) {
+      setDisplay('0,');
+      setWaitingForNewValue(false);
+    } else if (display.indexOf(',') === -1) {
+      setDisplay(display + ',');
     }
   }, [display, waitingForNewValue]);
 
@@ -157,6 +174,14 @@ const CalculatorModal: React.FC = () => {
     setOperation(nextOperation);
   }, [display, previousValue, operation]);
 
+  const clearDisplay = () => {
+    setDisplay('0');
+    setPreviousValue(null);
+    setOperation(null);
+    setWaitingForNewValue(false);
+    setOperationHistory('');
+  };
+
   const calculate = (firstValue: number, secondValue: number, operation: string): number => {
     switch (operation) {
       case '+':
@@ -174,25 +199,17 @@ const CalculatorModal: React.FC = () => {
 
   // Modify performCalculation to track history
   const performCalculation = () => {
-    const inputValue = parseFloat(display);
+    const inputValue = parseFloat(display.replace(',', '.'));
 
     if (previousValue !== null && operation) {
       const newValue = calculate(previousValue, inputValue, operation);
       setOperationHistory(`${previousValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} =`);
-      setDisplay(String(newValue));
+      // Formatar o resultado com até 3 casas decimais
+      setDisplay(formatCalculatorNumber(newValue, 3));
       setPreviousValue(null);
       setOperation(null);
       setWaitingForNewValue(true);
     }
-  };
-
-  // Modify clearDisplay to reset history
-  const clearDisplay = () => {
-    setDisplay('0');
-    setPreviousValue(null);
-    setOperation(null);
-    setWaitingForNewValue(false);
-    setOperationHistory('');
   };
 
   const handleButtonClick = (button: string) => {
@@ -205,9 +222,13 @@ const CalculatorModal: React.FC = () => {
     } else if (button === 'C') {
       clearDisplay();
     } else if (button === '±') {
-      setDisplay((parseFloat(display) * -1).toString());
+      const currentValue = parseFloat(display.replace(',', '.'));
+      const newValue = currentValue * -1;
+      setDisplay(formatCalculatorNumber(newValue, 3));
     } else if (button === '%') {
-      setDisplay((parseFloat(display) / 100).toString());
+      const currentValue = parseFloat(display.replace(',', '.'));
+      const newValue = currentValue / 100;
+      setDisplay(formatCalculatorNumber(newValue, 3));
     }
   };
 
@@ -273,7 +294,7 @@ const CalculatorModal: React.FC = () => {
     const percent = parseFloat(percentage);
     if (!isNaN(base) && !isNaN(percent)) {
       const result = (base * percent) / 100;
-      setPercentageResult(result.toFixed(2));
+      setPercentageResult(formatCurrencyValue(result));
     }
   };
 
@@ -285,7 +306,7 @@ const CalculatorModal: React.FC = () => {
     if (!isNaN(p) && !isNaN(r) && !isNaN(t)) {
       const simpleInterest = (p * r * t) / 100;
       const compound = p * Math.pow((1 + r / 100), t);
-      setInterestResult(`Juros Simples: R$ ${simpleInterest.toFixed(2)} | Juros Compostos: R$ ${compound.toFixed(2)}`);
+      setInterestResult(`Juros Simples: R$ ${formatCurrencyValue(simpleInterest)} | Juros Compostos: R$ ${formatCurrencyValue(compound)}`);
     }
   };
 
@@ -296,7 +317,7 @@ const CalculatorModal: React.FC = () => {
     if (!isNaN(price) && !isNaN(discount)) {
       const discountAmount = (price * discount) / 100;
       const finalPrice = price - discountAmount;
-      setDiscountResult(`Desconto: R$ ${discountAmount.toFixed(2)} | Preço Final: R$ ${finalPrice.toFixed(2)}`);
+      setDiscountResult(`Desconto: R$ ${formatCurrencyValue(discountAmount)} | Preço Final: R$ ${formatCurrencyValue(finalPrice)}`);
     }
   };
 
@@ -308,7 +329,7 @@ const CalculatorModal: React.FC = () => {
     if (!isNaN(amount) && !isNaN(rateInv) && !isNaN(timeInv)) {
       const finalAmount = amount * Math.pow((1 + rateInv / 100), timeInv);
       const profit = finalAmount - amount;
-      setInvestmentResult(`Valor Final: R$ ${finalAmount.toFixed(2)} | Lucro: R$ ${profit.toFixed(2)}`);
+      setInvestmentResult(`Valor Final: R$ ${formatCurrencyValue(finalAmount)} | Lucro: R$ ${formatCurrencyValue(profit)}`);
     }
   };
 
