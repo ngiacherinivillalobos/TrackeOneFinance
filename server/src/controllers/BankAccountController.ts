@@ -122,13 +122,13 @@ class BankAccountController {
       let movementsQuery;
       let queryParams;
       if (isProduction) {
-        // PostgreSQL - converter explicitamente para texto para evitar erro de tipos
+        // PostgreSQL - usar conversão explícita e tratamento de valores nulos
         movementsQuery = `
           SELECT 
-            SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END) as total_income,
-            SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END) as total_expense
+            COALESCE(SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END), 0) as total_expense
           FROM transactions 
-          WHERE bank_account_id = $1
+          WHERE bank_account_id = $1 AND type IS NOT NULL
         `;
         queryParams = [id];
         console.log('Using PostgreSQL query with explicit text conversion and params:', queryParams);
@@ -136,10 +136,10 @@ class BankAccountController {
         // SQLite
         movementsQuery = `
           SELECT 
-            SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
-            SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
+            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END), 0) as total_expense
           FROM transactions 
-          WHERE bank_account_id = ?
+          WHERE bank_account_id = ? AND type IS NOT NULL
         `;
         queryParams = [id];
         console.log('Using SQLite query with params:', queryParams);
@@ -195,13 +195,13 @@ class BankAccountController {
           let movementsQuery;
           let queryParams;
           if (isProduction) {
-            // PostgreSQL - converter explicitamente para texto para evitar erro de tipos
+            // PostgreSQL - usar conversão explícita e tratamento de valores nulos
             movementsQuery = `
               SELECT 
-                SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END) as total_income,
-                SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END) as total_expense
+                COALESCE(SUM(CASE WHEN type::text = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN type::text = 'expense' THEN amount ELSE 0 END), 0) as total_expense
               FROM transactions 
-              WHERE bank_account_id = $1
+              WHERE bank_account_id = $1 AND type IS NOT NULL
             `;
             queryParams = [account.id];
             console.log(`Using PostgreSQL query for account ${account.id} with explicit text conversion and params:`, queryParams);
@@ -209,10 +209,10 @@ class BankAccountController {
             // SQLite
             movementsQuery = `
               SELECT 
-                SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
-                SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
+                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END), 0) as total_expense
               FROM transactions 
-              WHERE bank_account_id = ?
+              WHERE bank_account_id = ? AND type IS NOT NULL
             `;
             queryParams = [account.id];
             console.log(`Using SQLite query for account ${account.id} with params:`, queryParams);
