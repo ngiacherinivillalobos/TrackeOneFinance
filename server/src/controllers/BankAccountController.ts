@@ -120,6 +120,7 @@ class BankAccountController {
       console.log(`Environment: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
       
       let movementsQuery;
+      let queryParams;
       if (isProduction) {
         // PostgreSQL - não precisa de CAST para enums
         movementsQuery = `
@@ -129,7 +130,8 @@ class BankAccountController {
           FROM transactions 
           WHERE bank_account_id = $1
         `;
-        console.log('Using PostgreSQL query');
+        queryParams = [id];
+        console.log('Using PostgreSQL query with params:', queryParams);
       } else {
         // SQLite
         movementsQuery = `
@@ -139,13 +141,14 @@ class BankAccountController {
           FROM transactions 
           WHERE bank_account_id = ?
         `;
-        console.log('Using SQLite query');
+        queryParams = [id];
+        console.log('Using SQLite query with params:', queryParams);
       }
       
-      console.log('Executing movements query:', movementsQuery, 'with param:', id);
+      console.log('Executing movements query:', movementsQuery, 'with params:', queryParams);
       
       // Calcular movimentações (receitas - despesas) para esta conta
-      const movements = await all(db, movementsQuery, [id]);
+      const movements = await all(db, movementsQuery, queryParams);
       
       console.log('Movements result:', movements);
 
@@ -190,6 +193,7 @@ class BankAccountController {
           console.log(`Environment for account ${account.id}: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
           
           let movementsQuery;
+          let queryParams;
           if (isProduction) {
             // PostgreSQL - não precisa de CAST para enums
             movementsQuery = `
@@ -199,7 +203,8 @@ class BankAccountController {
               FROM transactions 
               WHERE bank_account_id = $1
             `;
-            console.log(`Using PostgreSQL query for account ${account.id}`);
+            queryParams = [account.id];
+            console.log(`Using PostgreSQL query for account ${account.id} with params:`, queryParams);
           } else {
             // SQLite
             movementsQuery = `
@@ -209,13 +214,14 @@ class BankAccountController {
               FROM transactions 
               WHERE bank_account_id = ?
             `;
-            console.log(`Using SQLite query for account ${account.id}`);
+            queryParams = [account.id];
+            console.log(`Using SQLite query for account ${account.id} with params:`, queryParams);
           }
           
-          console.log(`Executing movements query for account ${account.id}:`, movementsQuery, 'with param:', account.id);
+          console.log(`Executing movements query for account ${account.id}:`, movementsQuery);
           
           try {
-            const movements = await all(db, movementsQuery, [account.id]);
+            const movements = await all(db, movementsQuery, queryParams);
             console.log(`Movements result for account ${account.id}:`, movements[0]);
 
             const totalIncome = parseFloat(movements[0]?.total_income || '0');
