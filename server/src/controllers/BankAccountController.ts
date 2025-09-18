@@ -152,13 +152,31 @@ class BankAccountController {
         bankAccounts.map(async (account: any) => {
           console.log(`Processing account ${account.id} - ${account.name}`);
           
-          const movements = await all(db, `
-            SELECT 
-              SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
-              SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
-            FROM transactions 
-            WHERE bank_account_id = ?
-          `, [account.id]);
+          // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
+          const isProduction = process.env.NODE_ENV === 'production';
+          
+          let movementsQuery;
+          if (isProduction) {
+            // PostgreSQL - não precisa de CAST para enums
+            movementsQuery = `
+              SELECT 
+                SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
+                SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+              FROM transactions 
+              WHERE bank_account_id = ?
+            `;
+          } else {
+            // SQLite
+            movementsQuery = `
+              SELECT 
+                SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
+                SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
+              FROM transactions 
+              WHERE bank_account_id = ?
+            `;
+          }
+          
+          const movements = await all(db, movementsQuery, [account.id]);
 
           console.log(`Movements for account ${account.id}:`, movements[0]);
 
