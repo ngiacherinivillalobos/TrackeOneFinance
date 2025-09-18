@@ -326,10 +326,93 @@ export default function Dashboard() {
     }
   };
 
+  // Estados para transações pagas de todos os períodos
+  const [allPaidIncome, setAllPaidIncome] = useState(0);
+  const [allPaidExpenses, setAllPaidExpenses] = useState(0);
+  const [allPaidInvestments, setAllPaidInvestments] = useState(0);
+  const [totalInvestmentsPaid, setTotalInvestmentsPaid] = useState(0);
+  
+  // Estados para controle de carregamento
+  const [dataLoading, setDataLoading] = useState(false);
+  const [allDataLoaded, setAllDataLoaded] = useState(false);
+  
+  // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
+  useEffect(() => {
+    console.log('totalInvestmentsPaid atualizado:', totalInvestmentsPaid);
+  }, [totalInvestmentsPaid]);
+
+  // Carregar todas as transações pagas quando os filtros mudarem
+  useEffect(() => {
+    const loadAllPaidTransactions = async () => {
+      try {
+        // Função auxiliar para converter valores para número
+        const getSafeAmount = (amount: any): number => {
+          if (typeof amount === 'number') return amount;
+          if (typeof amount === 'string') {
+            const parsed = parseFloat(amount);
+            return isNaN(parsed) ? 0 : parsed;
+          }
+          return 0;
+        };
+        
+        // Parâmetros para buscar todas as transações pagas
+        const params: any = {
+          payment_status: 'paid', // Usar 'paid' para consistência entre ambientes
+          dateFilterType: 'all' // Todas as datas
+        };
+        
+        // Adicionar filtro de centro de custo se houver
+        if (selectedCostCenter?.id || user?.cost_center_id) {
+          params.cost_center_id = selectedCostCenter?.id || user?.cost_center_id;
+        }
+        
+        console.log('Carregando todas as transações pagas com params:', params);
+        
+        const response = await api.get('/transactions/filtered', { params });
+        console.log('Transações pagas encontradas:', response.data.length);
+        
+        // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+        const paidTransactions = response.data.filter((t: any) => {
+          // Verificar se está pago em ambos os ambientes
+          const isPaid = t.is_paid || t.payment_status_id === 2;
+          return isPaid;
+        });
+        
+        // Separar por tipo e calcular totais
+        const income = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Receita')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+          
+        const expenses = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Despesa')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+          
+        const investments = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Investimento')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+        
+        console.log('Totais calculados:', { income, expenses, investments });
+        
+        // Atualizar os estados
+        setAllPaidIncome(income);
+        setAllPaidExpenses(expenses);
+        setAllPaidInvestments(investments);
+        
+        // Não recalcular o dashboard aqui, deixar para o useEffect dedicado
+      } catch (error) {
+        console.error('Erro ao carregar transações pagas:', error);
+      }
+    };
+    
+    loadAllPaidTransactions();
+  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger]); // Removido transactions das dependências para evitar loops
+
   // Adicionar ao useEffect para carregar todos os dados
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
+      setDataLoading(true);
+      setAllDataLoaded(false);
+      
       try {
         // Carregar todos os dados em paralelo
         const [bankAccountsData, cashFlowData] = await Promise.all([
@@ -340,25 +423,28 @@ export default function Dashboard() {
         // Carregar transações
         await loadTransactions();
         
-        // Recalcular o saldo atual após todos os dados estarem carregados
-        // Aguardar um pequeno atraso para garantir que os estados foram atualizados
-        setTimeout(async () => {
-          if (transactions.length > 0) {
-            await calculateDashboardData(transactions, {
-              dateFilterType,
-              month: currentDate.getMonth(),
-              year: currentDate.getFullYear(),
-              cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
-            });
-          }
-        }, 100);
+        // Marcar que todos os dados foram carregados
+        setAllDataLoaded(true);
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
     
     loadData();
   }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+
+  // useEffect para calcular o dashboard apenas quando todos os dados estiverem carregados
+  useEffect(() => {
+    if (allDataLoaded && transactions.length > 0) {
+      console.log('Calculando dashboard - todos os dados carregados');
+      calculateDashboardData(transactions, {
+        dateFilterType,
+        month: currentDate.getMonth(),
+        year: currentDate.getFullYear(),
+        cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
+      });
+    }
+  }, [allDataLoaded, transactions, currentDate, selectedCostCenter, user?.cost_center_id, dateFilterType]);
 
   // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
   useEffect(() => {
@@ -684,94 +770,6 @@ export default function Dashboard() {
     toReceive: 0,
   });
   
-  // Estados para transações pagas de todos os períodos
-  const [allPaidIncome, setAllPaidIncome] = useState(0);
-  const [allPaidExpenses, setAllPaidExpenses] = useState(0);
-  const [allPaidInvestments, setAllPaidInvestments] = useState(0);
-  const [totalInvestmentsPaid, setTotalInvestmentsPaid] = useState(0);
-  
-  // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
-  useEffect(() => {
-    console.log('totalInvestmentsPaid atualizado:', totalInvestmentsPaid);
-  }, [totalInvestmentsPaid]);
-
-  // Carregar todas as transações pagas quando os filtros mudarem
-  useEffect(() => {
-    const loadAllPaidTransactions = async () => {
-      try {
-        // Função auxiliar para converter valores para número
-        const getSafeAmount = (amount: any): number => {
-          if (typeof amount === 'number') return amount;
-          if (typeof amount === 'string') {
-            const parsed = parseFloat(amount);
-            return isNaN(parsed) ? 0 : parsed;
-          }
-          return 0;
-        };
-        
-        // Parâmetros para buscar todas as transações pagas
-        const params: any = {
-          payment_status: 'paid', // Usar 'paid' para consistência entre ambientes
-          dateFilterType: 'all' // Todas as datas
-        };
-        
-        // Adicionar filtro de centro de custo se houver
-        if (selectedCostCenter?.id || user?.cost_center_id) {
-          params.cost_center_id = selectedCostCenter?.id || user?.cost_center_id;
-        }
-        
-        console.log('Carregando todas as transações pagas com params:', params);
-        
-        const response = await api.get('/transactions/filtered', { params });
-        console.log('Transações pagas encontradas:', response.data.length);
-        
-        // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
-        const paidTransactions = response.data.filter((t: any) => {
-          // Verificar se está pago em ambos os ambientes
-          const isPaid = t.is_paid || t.payment_status_id === 2;
-          return isPaid;
-        });
-        
-        // Separar por tipo e calcular totais
-        const income = paidTransactions
-          .filter((t: any) => t.transaction_type === 'Receita')
-          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
-          
-        const expenses = paidTransactions
-          .filter((t: any) => t.transaction_type === 'Despesa')
-          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
-          
-        const investments = paidTransactions
-          .filter((t: any) => t.transaction_type === 'Investimento')
-          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
-        
-        console.log('Totais calculados:', { income, expenses, investments });
-        
-        // Atualizar os estados
-        setAllPaidIncome(income);
-        setAllPaidExpenses(expenses);
-        setAllPaidInvestments(investments);
-        
-        // Recalcular o saldo atual quando os totais forem atualizados
-        // Aguardar um pequeno atraso para garantir que os estados foram atualizados
-        setTimeout(async () => {
-          if (transactions.length > 0) {
-            await calculateDashboardData(transactions, {
-              dateFilterType,
-              month: currentDate.getMonth(),
-              year: currentDate.getFullYear(),
-              cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
-            });
-          }
-        }, 100);
-      } catch (error) {
-        console.error('Erro ao carregar transações pagas:', error);
-      }
-    };
-    
-    loadAllPaidTransactions();
-  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger, transactions]); // Recarregar quando o centro de custo mudar ou quando refreshTrigger mudar
-
   const formatCurrency = (value: number) => {
     console.log('Formatando valor:', value);
     const formatted = new Intl.NumberFormat('pt-BR', {
