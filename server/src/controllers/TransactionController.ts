@@ -193,13 +193,24 @@ const getFilteredTransactions = async (req: Request, res: Response) => {
     const currentDateFunction = isProduction ? 'CURRENT_DATE' : "date('now')";
     
     if (sortColumn === 'status') {
-      query += ` ORDER BY CASE 
-        WHEN ${isProduction ? 't.payment_status_id = 3' : 't.is_paid = 0'} AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
-        WHEN ${isProduction ? 't.payment_status_id != 2' : 't.is_paid != 1'} AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
-        WHEN ${isProduction ? 't.payment_status_id != 2' : 't.is_paid != 1'} AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
-        WHEN ${isProduction ? 't.payment_status_id = 2' : 't.is_paid = 1'} THEN 4 -- Pago
-        ELSE 5
-      END ${sortOrder}, t.transaction_date DESC`;
+      // Ordenação consistente para o campo status
+      if (isProduction) {
+        query += ` ORDER BY CASE 
+          WHEN t.payment_status_id = 3 AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
+          WHEN t.payment_status_id != 2 AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
+          WHEN t.payment_status_id != 2 AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
+          WHEN t.payment_status_id = 2 THEN 4 -- Pago
+          ELSE 5
+        END ${sortOrder}, t.transaction_date DESC`;
+      } else {
+        query += ` ORDER BY CASE 
+          WHEN t.is_paid = 0 AND t.transaction_date < ${currentDateFunction} THEN 1 -- Vencido
+          WHEN t.is_paid != 1 AND t.transaction_date = ${currentDateFunction} THEN 2 -- Vence Hoje
+          WHEN t.is_paid != 1 AND t.transaction_date > ${currentDateFunction} THEN 3 -- Em Aberto
+          WHEN t.is_paid = 1 THEN 4 -- Pago
+          ELSE 5
+        END ${sortOrder}, t.transaction_date DESC`;
+      }
     } else {
       query += ` ORDER BY ${sortColumn} ${sortOrder}`;
     }
@@ -1468,7 +1479,7 @@ const createInstallments = async (req: Request, res: Response) => {
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { db, run, get } = getDatabase();
+    const { db, run, get, all } = getDatabase();
     const {
       description,
       total_amount,
@@ -1493,6 +1504,25 @@ const createInstallments = async (req: Request, res: Response) => {
       });
     }
 
+    // Obter informações do cartão para verificar a data de fechamento
+    const cardQuery = 'SELECT * FROM cards WHERE id = ?';
+    const card = await get(db, cardQuery, [card_id]);
+    
+    // Determinar a data correta com base na data de fechamento do cartão
+    let adjustedTransactionDate = createSafeDate(transaction_date);
+    
+    if (card && card.closing_day) {
+      const transactionDay = adjustedTransactionDate.getDate();
+      
+      // Se a data da transação for maior ou igual à data de fechamento,
+      // calcular para o próximo mês (próxima fatura)
+      if (transactionDay >= card.closing_day) {
+        adjustedTransactionDate.setMonth(adjustedTransactionDate.getMonth() + 1);
+      }
+    }
+    
+    const adjustedTransactionDateString = adjustedTransactionDate.toISOString().split('T')[0];
+
     // Calcular valor de cada parcela
     const installmentAmount = parseFloat((total_amount / total_installments).toFixed(2));
     
@@ -1505,7 +1535,7 @@ const createInstallments = async (req: Request, res: Response) => {
     // Criar todas as parcelas
     for (let i = 1; i <= total_installments; i++) {
       // Calcular data da parcela (adicionar meses)
-      const installmentDate = createSafeDate(transaction_date);
+      const installmentDate = createSafeDate(adjustedTransactionDateString);
       installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
       
       const installmentDateString = installmentDate.toISOString().split('T')[0];

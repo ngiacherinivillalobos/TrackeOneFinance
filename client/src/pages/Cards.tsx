@@ -63,7 +63,9 @@ export default function Cards() {
     name: '',
     card_number: '',
     expiry_date: '',
-    brand: ''
+    brand: '',
+    closing_day: 15, // Valor padrão
+    due_day: 10 // Valor padrão
   });
 
   const loadData = async () => {
@@ -91,7 +93,14 @@ export default function Cards() {
   const handleClose = () => {
     setOpen(false);
     setEditingCard(null);
-    setFormData({ name: '', card_number: '', expiry_date: '', brand: '' });
+    setFormData({ 
+      name: '', 
+      card_number: '', 
+      expiry_date: '', 
+      brand: '',
+      closing_day: 15, // Valor padrão
+      due_day: 10 // Valor padrão
+    });
   };
 
   const handleEdit = (card: Card) => {
@@ -100,7 +109,9 @@ export default function Cards() {
       name: card.name,
       card_number: card.card_number || '',
       expiry_date: card.expiry_date || '',
-      brand: card.brand || ''
+      brand: card.brand || '',
+      closing_day: card.closing_day || 15, // Usar o valor do cartão ou padrão
+      due_day: card.due_day || 10 // Usar o valor do cartão ou padrão
     });
     setOpen(true);
   };
@@ -186,6 +197,8 @@ export default function Cards() {
                 <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Bandeira</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Vence</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>Ações</TableCell>
               </TableRow>
             </TableHead>
@@ -207,6 +220,8 @@ export default function Cards() {
                   <TableCell>{card.card_number ? `**** **** **** ${card.card_number.slice(-4)}` : '-'}</TableCell>
                   <TableCell>{card.expiry_date || '-'}</TableCell>
                   <TableCell>{card.brand || '-'}</TableCell>
+                  <TableCell>{card.closing_day || '-'}</TableCell>
+                  <TableCell>{card.due_day || '-'}</TableCell>
                   <TableCell align="right">
                     <IconButton 
                       onClick={(e) => {
@@ -231,7 +246,7 @@ export default function Cards() {
               ))}
               {cards.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     <Typography color="textSecondary">
                       Nenhum cartão cadastrado
                     </Typography>
@@ -291,6 +306,46 @@ export default function Cards() {
               inputProps={{
                 maxLength: 7, // MM/AAAA = 7 caracteres
               }}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Dia de Fechamento"
+              type="number"
+              fullWidth
+              value={formData.closing_day}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Permitir campo vazio ou valores numéricos válidos
+                if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
+                  setFormData({ ...formData, closing_day: value === '' ? 15 : parseInt(value) });
+                }
+              }}
+              inputProps={{
+                min: 1,
+                max: 31
+              }}
+              helperText="Dia do mês em que a fatura é fechada (1-31)"
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Dia de Vencimento"
+              type="number"
+              fullWidth
+              value={formData.due_day}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Permitir campo vazio ou valores numéricos válidos
+                if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
+                  setFormData({ ...formData, due_day: value === '' ? 10 : parseInt(value) });
+                }
+              }}
+              inputProps={{
+                min: 1,
+                max: 31
+              }}
+              helperText="Dia do mês em que a fatura vence (1-31)"
               sx={{ mb: 2 }}
             />
             <TextField

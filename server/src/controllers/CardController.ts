@@ -33,21 +33,19 @@ class CardController {
 
   async create(req: Request, res: Response) {
     try {
-      const { name, card_number, expiry_date, brand } = req.body;
-      const { db, run } = getDatabase();
+      const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
+      const { db, run, get } = getDatabase();
       
       // Mapeando campos do frontend para campos da tabela
       // card_number pode ser salvo como uma referência no campo de observação
       // vamos usar limit_amount = 0 por padrão e type como brand
       
-      const result: any = await run(db, 'INSERT INTO cards (name, type) VALUES (?, ?)', [name, brand || 'Crédito']);
-      res.status(201).json({ 
-        id: result.lastID, 
-        name, 
-        card_number,
-        expiry_date,
-        brand: brand || 'Crédito'
-      });
+      const result: any = await run(db, 'INSERT INTO cards (name, type, closing_day, due_day) VALUES (?, ?, ?, ?)', [name, brand || 'Crédito', closing_day || 15, due_day || 10]);
+      
+      // Buscar o cartão recém-criado para retornar os dados corretos
+      const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID]);
+      
+      res.status(201).json(createdCard);
     } catch (error) {
       console.error('Error creating card:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -57,17 +55,15 @@ class CardController {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { name, card_number, expiry_date, brand } = req.body;
-      const { db, run } = getDatabase();
+      const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
+      const { db, run, get } = getDatabase();
       
-      await run(db, 'UPDATE cards SET name = ?, type = ? WHERE id = ?', [name, brand || 'Crédito', id]);
-      res.json({ 
-        id, 
-        name, 
-        card_number,
-        expiry_date,
-        brand: brand || 'Crédito'
-      });
+      await run(db, 'UPDATE cards SET name = ?, type = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', closing_day || 15, due_day || 10, id]);
+      
+      // Buscar o cartão atualizado para retornar os dados corretos
+      const updatedCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
+      
+      res.json(updatedCard);
     } catch (error) {
       console.error('Error updating card:', error);
       res.status(500).json({ error: 'Internal server error' });

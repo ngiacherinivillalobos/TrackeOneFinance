@@ -6,6 +6,8 @@ export interface Card {
   card_number?: string;
   expiry_date?: string;
   brand?: string;
+  closing_day?: number; // Dia de fechamento da fatura
+  due_day?: number; // Dia de vencimento da fatura
   created_at?: string;
 }
 

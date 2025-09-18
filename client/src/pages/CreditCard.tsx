@@ -10,13 +10,12 @@ import {
   TableRow,
   TableCell,
   Box,
-  Card,
-  CardContent,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { ModernHeader } from '../components/modern/ModernComponents';
+import { ModernHeader, ModernCard } from '../components/modern/ModernComponents';
 import { colors, gradients, shadows } from '../theme/modernTheme';
 import { cardService, Card as CardType } from '../services/cardService';
+import { CreditCardTransactionForm } from '../components/CreditCardTransactionForm';
 
 interface CreditCard extends CardType {
   type?: string;
@@ -25,19 +24,52 @@ interface CreditCard extends CardType {
   due_day?: number;
 }
 
+// Atualizar interface para refletir a estrutura real
 interface CreditCardTransaction {
   id: number;
-  date: string;
   description: string;
-  amount: number | string;
-  installments: number;
-  category: string;
-  cardId: number;
+  amount: number;
+  transaction_date: string;
+  installments?: number;
+  category?: string;
+  card_id: number;
 }
 
 export default function CreditCard() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<CreditCardTransaction[]>([]);
+  const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Atualizar função para carregar transações
+  const loadTransactions = async () => {
+    try {
+      setLoading(true);
+      // Implementar lógica real para carregar transações
+      // Por enquanto, vamos deixar vazio pois precisamos entender melhor a estrutura
+      console.log('Carregando transações...');
+      // Exemplo de como carregar transações (descomentar quando tiver a API pronta)
+      /*
+      const transactionsData = await transactionService.list();
+      setTransactions(transactionsData);
+      */
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Carregar transações quando o componente montar
+    loadTransactions();
+  }, []);
+
+  // Atualizar função para lidar com o envio do formulário
+  const handleTransactionSubmit = () => {
+    // Recarregar dados após salvar transação
+    loadTransactions();
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,9 +79,10 @@ export default function CreditCard() {
         const mappedCards = cardsData.map(card => ({
           ...card,
           type: card.brand || 'Crédito',
-          limit_amount: '0',
-          closing_day: 15,
-          due_day: 10
+          limit_amount: '0'
+          // Remover os valores fixos e usar os valores reais do backend
+          // closing_day: 15,
+          // due_day: 10
         }));
         setCards(mappedCards);
       } catch (error) {
@@ -75,6 +108,7 @@ export default function CreditCard() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
+              onClick={() => setShowTransactionForm(true)}
               sx={{
                 background: gradients.primary,
                 borderRadius: 1.5,
@@ -90,44 +124,46 @@ export default function CreditCard() {
           )}
         />
 
-        {/* Credit Cards Summary */}
+        {/* Credit Cards Summary - Totalizadores */}
         {cards.length > 0 && (
           <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: colors.gray[900] }}>
+              Total de Cartões: {cards.length}
+            </Typography>
             <Box sx={{ 
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
                 sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)'
+                md: 'repeat(4, 1fr)'
               },
               gap: 2
             }}>
               {cards.map((card) => (
-                <Card key={card.id} sx={{ 
-                  borderRadius: 2,
-                  border: `1px solid ${colors.gray[200]}`,
-                  boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
-                  '&:hover': {
-                    boxShadow: shadows.md,
-                    transform: 'translateY(-2px)'
-                  },
-                  transition: 'all 0.3s ease'
-                }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: colors.gray[900] }}>
-                      {card.name}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Bandeira: {card.brand}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: colors.gray[600], mb: 1 }}>
-                      Número: {card.card_number}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: colors.gray[600] }}>
-                      Validade: {card.expiry_date}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <ModernCard key={card.id}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600, color: colors.gray[900] }}>
+                        {card.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: colors.gray[600] }}>
+                        {card.brand || 'Crédito'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      {card.closing_day && (
+                        <Typography variant="body2" sx={{ color: colors.gray[600] }}>
+                          Fecha: {card.closing_day}
+                        </Typography>
+                      )}
+                      {card.due_day && (
+                        <Typography variant="body2" sx={{ color: colors.gray[600] }}>
+                          Vence: {card.due_day}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </ModernCard>
               ))}
             </Box>
           </Box>
@@ -161,7 +197,7 @@ export default function CreditCard() {
               <TableBody>
                 {transactions.map((transaction) => (
                   <TableRow key={transaction.id} sx={{ '&:hover': { bgcolor: colors.gray[50] } }}>
-                    <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(transaction.transaction_date).toLocaleDateString()}</TableCell>
                     <TableCell>{transaction.description}</TableCell>
                     <TableCell align="right">R$ {(typeof transaction.amount === 'number' ? transaction.amount : 
                            (typeof transaction.amount === 'string' ? parseFloat(transaction.amount) || 0 : 0))
@@ -169,7 +205,7 @@ export default function CreditCard() {
                     <TableCell>{transaction.installments}x</TableCell>
                     <TableCell>{transaction.category}</TableCell>
                     <TableCell>
-                      {cards.find((card) => card.id === transaction.cardId)?.name}
+                      {cards.find((card) => card.id === transaction.card_id)?.name}
                     </TableCell>
                     <TableCell>
                       <Button 
@@ -189,6 +225,13 @@ export default function CreditCard() {
           </TableContainer>
         </Paper>
       </Box>
+      
+      {/* Formulário de Transação */}
+      <CreditCardTransactionForm
+        open={showTransactionForm}
+        onClose={() => setShowTransactionForm(false)}
+        onSubmit={handleTransactionSubmit}
+      />
     </Box>
   );
 }

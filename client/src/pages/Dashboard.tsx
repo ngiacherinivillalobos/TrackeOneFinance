@@ -129,7 +129,7 @@ export default function Dashboard() {
   // Carregar transações com base nos filtros
   useEffect(() => {
     loadTransactions();
-  }, [currentDate, selectedCostCenter, dateFilterType]);
+  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
   
   const loadTransactions = async () => {
     try {
@@ -456,29 +456,23 @@ export default function Dashboard() {
     
     // Calcular saldo atual real considerando:
     // 1. Saldo Inicial das contas bancárias
-    // 2. + Receitas com status "Pago"
-    // 3. - Despesas com status "Pago"
-    // 4. - Investimentos com status "Pago"
-    // 5. +/- Transações do fluxo de caixa (TODAS)
+    // 2. + TODAS as Receitas com situação PAGA (independentemente do período)
+    // 3. - TODAS as Despesas com situação PAGA (independentemente do período)
+    // 4. - TODOS os Investimentos com situação PAGA (independentemente do período)
+    // 5. + TODAS as transações do fluxo de caixa (independentemente do período)
 
     // 1. Saldo inicial das contas bancárias
     const saldoInicialBancos = bankAccounts.reduce((sum, account) => 
       sum + getSafeAmount(account.initial_balance), 0);
 
-    // 2. Receitas pagas do controle mensal
-    const receitasPagasControle = transactionsData
-      .filter(t => t.type === 'income' && (t.is_paid || t.payment_status_id === 2))
-      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    // 2. Receitas pagas (TODAS, independentemente do período)
+    const receitasPagas = allPaidIncome;
 
-    // 3. Despesas pagas do controle mensal
-    const despesasPagasControle = transactionsData
-      .filter(t => t.type === 'expense' && (t.is_paid || t.payment_status_id === 2))
-      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    // 3. Despesas pagas (TODAS, independentemente do período)
+    const despesasPagas = allPaidExpenses;
 
-    // 4. Investimentos pagos do controle mensal
-    const investimentosPagosControle = transactionsData
-      .filter(t => t.type === 'investment' && (t.is_paid || t.payment_status_id === 2))
-      .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
+    // 4. Investimentos pagos (TODOS, independentemente do período)
+    const investimentosPagos = allPaidInvestments;
 
     // 5. Total do fluxo de caixa - TODAS as transações (subtrair despesas, somar receitas)
     const totalFluxoCaixa = cashFlowRecords.reduce((sum, record) => {
@@ -491,38 +485,38 @@ export default function Dashboard() {
       return sum;
     }, 0);
 
-    // Saldo atual real = Saldo Inicial + Receitas Pagas - Despesas Pagas - Investimentos Pagos + Fluxo de Caixa
-    const saldoAtualReal = saldoInicialBancos + receitasPagasControle - despesasPagasControle - investimentosPagosControle + totalFluxoCaixa;
+    // Saldo atual real = Saldo Inicial + TODAS Receitas Pagas - TODAS Despesas Pagas - TODOS Investimentos Pagos + Fluxo de Caixa
+    const saldoAtualReal = saldoInicialBancos + receitasPagas - despesasPagas - investimentosPagos + totalFluxoCaixa;
     
     // Calcular "A Receber" e "Recebido" com base em transações de receita
-    const receitasPagas = transactionsData
+    const receitasPagasPeriodo = transactionsData
       .filter(t => t.type === 'income' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
-    const receitasNaoPagas = transactionsData
+    const receitasNaoPagasPeriodo = transactionsData
       .filter(t => t.type === 'income' && !(t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
     // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (não incluir investimentos)
-    const despesasPagas = transactionsData
+    const despesasPagasPeriodo = transactionsData
       .filter(t => t.type === 'expense' && (t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
-    const despesasNaoPagas = transactionsData
+    const despesasNaoPagasPeriodo = transactionsData
       .filter(t => t.type === 'expense' && !(t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    const totalPago = despesasPagas; // Apenas despesas pagas
-    const totalAPagar = despesasNaoPagas; // Despesas não pagas (em aberto + vencidas)
+    const totalPago = despesasPagasPeriodo; // Apenas despesas pagas
+    const totalAPagar = despesasNaoPagasPeriodo; // Despesas não pagas (em aberto + vencidas)
     
     console.log('=== Cálculo dos totalizadores ===');
     console.log('Total de receitas:', totalReceitas);
     console.log('Total de despesas:', totalDespesas);
     console.log('Total de investimentos:', totalInvestimentos);
-    console.log('Receitas pagas:', receitasPagas);
-    console.log('Receitas não pagas:', receitasNaoPagas);
-    console.log('Despesas pagas:', despesasPagas);
-    console.log('Despesas não pagas:', despesasNaoPagas);
+    console.log('Receitas pagas:', receitasPagasPeriodo);
+    console.log('Receitas não pagas:', receitasNaoPagasPeriodo);
+    console.log('Despesas pagas:', despesasPagasPeriodo);
+    console.log('Despesas não pagas:', despesasNaoPagasPeriodo);
     console.log('Total pago:', totalPago);
     console.log('=== DEBUG SALDO ATUAL ===');
     console.log('Todas as transações:', transactionsData.length);
@@ -533,9 +527,9 @@ export default function Dashboard() {
     console.log('Saldo previsto próximo mês:', saldoPrevistoProximoMes);
     console.log('=== Cálculo Saldo Atual Real ===');
     console.log('Saldo inicial bancos:', saldoInicialBancos);
-    console.log('Receitas pagas (controle):', receitasPagasControle);
-    console.log('Despesas pagas (controle):', despesasPagasControle);
-    console.log('Investimentos pagos (controle):', investimentosPagosControle);
+    console.log('Receitas pagas (TODAS):', receitasPagas);
+    console.log('Despesas pagas (TODAS):', despesasPagas);
+    console.log('Investimentos pagos (TODOS):', investimentosPagos);
     console.log('Total fluxo de caixa:', totalFluxoCaixa);
     console.log('Saldo atual real (final):', saldoAtualReal);
     console.log('==============================');
@@ -551,10 +545,10 @@ export default function Dashboard() {
       expectedBalance: saldoPrevisto,
       expectedBalanceNextMonth: saldoPrevistoProximoMes, // Novo campo para saldo previsto do próximo mês
       currentBalance: saldoAtualReal, // Novo campo para saldo atual real
-      received: receitasPagas,
+      received: receitasPagasPeriodo,
       paid: totalPago,
       toPay: totalAPagar,
-      toReceive: receitasNaoPagas
+      toReceive: receitasNaoPagasPeriodo
     };
     
     console.log('Novo monthSummary:', newMonthSummary);
@@ -659,12 +653,79 @@ export default function Dashboard() {
     toReceive: 0,
   });
   
+  // Estados para transações pagas de todos os períodos
+  const [allPaidIncome, setAllPaidIncome] = useState(0);
+  const [allPaidExpenses, setAllPaidExpenses] = useState(0);
+  const [allPaidInvestments, setAllPaidInvestments] = useState(0);
   const [totalInvestmentsPaid, setTotalInvestmentsPaid] = useState(0);
   
   // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
   useEffect(() => {
     console.log('totalInvestmentsPaid atualizado:', totalInvestmentsPaid);
   }, [totalInvestmentsPaid]);
+
+  // Carregar todas as transações pagas quando os filtros mudarem
+  useEffect(() => {
+    const loadAllPaidTransactions = async () => {
+      try {
+        // Função auxiliar para converter valores para número
+        const getSafeAmount = (amount: any): number => {
+          if (typeof amount === 'number') return amount;
+          if (typeof amount === 'string') {
+            const parsed = parseFloat(amount);
+            return isNaN(parsed) ? 0 : parsed;
+          }
+          return 0;
+        };
+        
+        // Parâmetros para buscar todas as transações pagas
+        const params: any = {
+          payment_status: 'paid', // Usar 'paid' para consistência entre ambientes
+          dateFilterType: 'all' // Todas as datas
+        };
+        
+        // Adicionar filtro de centro de custo se houver
+        if (selectedCostCenter?.id || user?.cost_center_id) {
+          params.cost_center_id = selectedCostCenter?.id || user?.cost_center_id;
+        }
+        
+        console.log('Carregando todas as transações pagas com params:', params);
+        
+        const response = await api.get('/transactions/filtered', { params });
+        console.log('Transações pagas encontradas:', response.data.length);
+        
+        // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+        const paidTransactions = response.data.filter((t: any) => {
+          // Verificar se está pago em ambos os ambientes
+          const isPaid = t.is_paid || t.payment_status_id === 2;
+          return isPaid;
+        });
+        
+        // Separar por tipo e calcular totais
+        const income = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Receita')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+          
+        const expenses = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Despesa')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+          
+        const investments = paidTransactions
+          .filter((t: any) => t.transaction_type === 'Investimento')
+          .reduce((sum: number, t: any) => sum + getSafeAmount(t.amount), 0);
+        
+        setAllPaidIncome(income);
+        setAllPaidExpenses(expenses);
+        setAllPaidInvestments(investments);
+        
+        console.log('Totais calculados:', { income, expenses, investments });
+      } catch (error) {
+        console.error('Erro ao carregar transações pagas:', error);
+      }
+    };
+    
+    loadAllPaidTransactions();
+  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger]); // Recarregar quando o centro de custo mudar ou quando refreshTrigger mudar
 
   const formatCurrency = (value: number) => {
     console.log('Formatando valor:', value);

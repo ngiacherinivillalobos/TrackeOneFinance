@@ -130,6 +130,27 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
     try {
       setLoading(true);
       
+      // Encontrar o cartão selecionado
+      const selectedCard = cards.find(card => card.id === formData.card_id);
+      
+      // Determinar a data correta com base na data de fechamento do cartão
+      let transactionDate = new Date(formData.transaction_date);
+      
+      if (selectedCard && selectedCard.closing_day) {
+        const transactionDay = transactionDate.getDate();
+        
+        // Se a data da transação for maior ou igual à data de fechamento,
+        // calcular para o próximo mês (próxima fatura)
+        if (transactionDay >= selectedCard.closing_day) {
+          transactionDate.setMonth(transactionDate.getMonth() + 1);
+        }
+      }
+      
+      const adjustedFormData = {
+        ...formData,
+        transaction_date: transactionDate.toISOString().split('T')[0]
+      };
+
       if (editingTransaction) {
         // Editar transação individual
         await cardTransactionService.update(editingTransaction.id!, {
@@ -137,12 +158,12 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
           amount: formData.total_amount,
           category_id: formData.category_id,
           cost_center_id: formData.cost_center_id,
-          transaction_date: formData.transaction_date
+          transaction_date: adjustedFormData.transaction_date
         });
         setMessage('Transação atualizada com sucesso!');
       } else {
         // Criar parcelamentos
-        const result = await cardTransactionService.createInstallments(formData);
+        const result = await cardTransactionService.createInstallments(adjustedFormData);
         setMessage(`${result.transactions.length} parcelas criadas com sucesso!`);
       }
       

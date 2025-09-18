@@ -1505,6 +1505,11 @@ export default function MonthlyControl() {
         await api.post(`/transactions/${id}/reverse-payment`);
         showSnackbar('Pagamento estornado com sucesso!', 'success');
         loadTransactions();
+        
+        // Atualizar o dashboard após estornar o pagamento
+        if (typeof (window as any).refreshDashboard === 'function') {
+          (window as any).refreshDashboard();
+        }
       } catch (error) {
         console.error('Erro ao estornar pagamento:', error);
         showSnackbar('Erro ao estornar pagamento', 'error');
@@ -1539,6 +1544,11 @@ export default function MonthlyControl() {
         setSelectedTransactions([]);
         loadTransactions();
         showSnackbar(`${paidTransactions.length} pagamento(s) estornado(s) com sucesso!`, 'success');
+        
+        // Atualizar o dashboard após estornar os pagamentos
+        if (typeof (window as any).refreshDashboard === 'function') {
+          (window as any).refreshDashboard();
+        }
       } catch (error) {
         console.error('Erro ao estornar pagamentos em lote:', error);
         showSnackbar('Erro ao estornar pagamentos em lote', 'error');
@@ -1707,14 +1717,18 @@ export default function MonthlyControl() {
     }
   };
 
-  // Função para lidar com ordenação
-  const handleSort = (property: string) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
+  // Verificar se transação está vencida
+  const isTransactionOverdue = (transaction: Transaction) => {
+    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
+    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
+    if (isPaid) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const transactionDate = getSafeDate(transaction.transaction_date);
+    transactionDate.setHours(0, 0, 0, 0);
+    return transactionDate < today;
   };
 
-  // Função para comparar valores na ordenação
   const descendingComparator = (a: any, b: any, orderBy: string) => {
     let aValue: any;
     let bValue: any;
@@ -1762,6 +1776,13 @@ export default function MonthlyControl() {
     return order === 'desc'
       ? (a: any, b: any) => descendingComparator(a, b, orderBy)
       : (a: any, b: any) => -descendingComparator(a, b, orderBy);
+  };
+
+  // Função para lidar com ordenação
+  const handleSort = (property: string) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
   };
 
   // Aplicar ordenação às transações
@@ -1845,18 +1866,6 @@ export default function MonthlyControl() {
       case 'Investimento': return '#2196f3';
       default: return '#757575';
     }
-  };
-
-  // Verificar se transação está vencida
-  const isTransactionOverdue = (transaction: Transaction) => {
-    // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
-    const isPaid = transaction.is_paid || transaction.payment_status_id === 2;
-    if (isPaid) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const transactionDate = getSafeDate(transaction.transaction_date);
-    transactionDate.setHours(0, 0, 0, 0);
-    return transactionDate < today;
   };
 
   // Verificar se transação vence hoje
