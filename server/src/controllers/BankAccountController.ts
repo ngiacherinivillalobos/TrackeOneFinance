@@ -122,14 +122,14 @@ class BankAccountController {
       let movementsQuery;
       let queryParams;
       if (isProduction) {
-        // PostgreSQL - abordagem mais segura usando subconsultas
+        // PostgreSQL - abordagem mais segura usando subconsultas e conversão explícita
         movementsQuery = `
           SELECT 
-            COALESCE((SELECT SUM(amount) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
-            COALESCE((SELECT SUM(amount) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
+            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
+            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
         `;
         queryParams = [id];
-        console.log('Using PostgreSQL query with subqueries and params:', queryParams);
+        console.log('Using PostgreSQL query with subqueries and explicit conversion and params:', queryParams);
       } else {
         // SQLite
         movementsQuery = `
@@ -193,14 +193,14 @@ class BankAccountController {
           let movementsQuery;
           let queryParams;
           if (isProduction) {
-            // PostgreSQL - abordagem mais segura usando subconsultas
+            // PostgreSQL - abordagem mais segura usando subconsultas e conversão explícita
             movementsQuery = `
               SELECT 
-                COALESCE((SELECT SUM(amount) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
-                COALESCE((SELECT SUM(amount) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
+                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
+                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
             `;
             queryParams = [account.id];
-            console.log(`Using PostgreSQL query for account ${account.id} with subqueries and params:`, queryParams);
+            console.log(`Using PostgreSQL query for account ${account.id} with subqueries and explicit conversion and params:`, queryParams);
           } else {
             // SQLite
             movementsQuery = `
