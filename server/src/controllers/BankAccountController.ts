@@ -104,26 +104,57 @@ class BankAccountController {
       const { id } = req.params;
       const { db, get, all } = getDatabase();
       
+      console.log(`=== getBankAccountBalance - START for account ${id} ===`);
+      
       // Buscar conta bancária
       const bankAccount = await get(db, 'SELECT * FROM bank_accounts WHERE id = ?', [id]);
       if (!bankAccount) {
+        console.log(`Account ${id} not found`);
         return res.status(404).json({ error: 'Bank account not found' });
       }
+      
+      console.log(`Account found:`, bankAccount);
 
+      // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
+      const isProduction = process.env.NODE_ENV === 'production';
+      console.log(`Environment: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
+      
+      let movementsQuery;
+      if (isProduction) {
+        // PostgreSQL - não precisa de CAST para enums
+        movementsQuery = `
+          SELECT 
+            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
+            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+          FROM transactions 
+          WHERE bank_account_id = $1
+        `;
+        console.log('Using PostgreSQL query');
+      } else {
+        // SQLite
+        movementsQuery = `
+          SELECT 
+            SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
+            SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
+          FROM transactions 
+          WHERE bank_account_id = ?
+        `;
+        console.log('Using SQLite query');
+      }
+      
+      console.log('Executing movements query:', movementsQuery, 'with param:', id);
+      
       // Calcular movimentações (receitas - despesas) para esta conta
-      const movements = await all(db, `
-        SELECT 
-          SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END) as total_income,
-          SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END) as total_expense
-        FROM transactions 
-        WHERE bank_account_id = ?
-      `, [id]);
+      const movements = await all(db, movementsQuery, [id]);
+      
+      console.log('Movements result:', movements);
 
       const totalIncome = parseFloat(movements[0]?.total_income || '0');
       const totalExpense = parseFloat(movements[0]?.total_expense || '0');
       const totalMovements = totalIncome - totalExpense;
       const currentBalance = parseFloat(bankAccount.balance || '0') + totalMovements;
 
+      console.log('=== getBankAccountBalance - SUCCESS ===');
       res.json({
         ...bankAccount,
         bank_name: bankAccount.type || bankAccount.bank_name,
@@ -132,7 +163,9 @@ class BankAccountController {
         total_movements: totalMovements
       });
     } catch (error) {
+      console.error('=== getBankAccountBalance - ERROR ===');
       console.error('Error getting bank account balance:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -154,6 +187,7 @@ class BankAccountController {
           
           // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
           const isProduction = process.env.NODE_ENV === 'production';
+          console.log(`Environment for account ${account.id}: ${isProduction ? 'Production (PostgreSQL)' : 'Development (SQLite)'}`);
           
           let movementsQuery;
           if (isProduction) {
@@ -163,8 +197,9 @@ class BankAccountController {
                 SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
                 SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
               FROM transactions 
-              WHERE bank_account_id = ?
+              WHERE bank_account_id = $1
             `;
+            console.log(`Using PostgreSQL query for account ${account.id}`);
           } else {
             // SQLite
             movementsQuery = `
@@ -174,33 +209,40 @@ class BankAccountController {
               FROM transactions 
               WHERE bank_account_id = ?
             `;
+            console.log(`Using SQLite query for account ${account.id}`);
           }
           
-          const movements = await all(db, movementsQuery, [account.id]);
+          console.log(`Executing movements query for account ${account.id}:`, movementsQuery, 'with param:', account.id);
+          
+          try {
+            const movements = await all(db, movementsQuery, [account.id]);
+            console.log(`Movements result for account ${account.id}:`, movements[0]);
 
-          console.log(`Movements for account ${account.id}:`, movements[0]);
+            const totalIncome = parseFloat(movements[0]?.total_income || '0');
+            const totalExpense = parseFloat(movements[0]?.total_expense || '0');
+            const totalMovements = totalIncome - totalExpense;
+            const initialBalance = parseFloat(account.initial_balance || account.balance || '0');
+            const currentBalance = initialBalance + totalMovements;
 
-          const totalIncome = parseFloat(movements[0]?.total_income || '0');
-          const totalExpense = parseFloat(movements[0]?.total_expense || '0');
-          const totalMovements = totalIncome - totalExpense;
-          const initialBalance = parseFloat(account.initial_balance || account.balance || '0');
-          const currentBalance = initialBalance + totalMovements;
+            console.log(`Account ${account.id} - Balance calculation:`, {
+              initialBalance,
+              totalIncome,
+              totalExpense,
+              totalMovements,
+              currentBalance
+            });
 
-          console.log(`Account ${account.id} - Balance calculation:`, {
-            initialBalance,
-            totalIncome,
-            totalExpense,
-            totalMovements,
-            currentBalance
-          });
-
-          return {
-            ...account,
-            bank_name: account.type || account.bank_name,
-            initial_balance: initialBalance,
-            current_balance: currentBalance,
-            total_movements: totalMovements
-          };
+            return {
+              ...account,
+              bank_name: account.type || account.bank_name,
+              initial_balance: initialBalance,
+              current_balance: currentBalance,
+              total_movements: totalMovements
+            };
+          } catch (queryError) {
+            console.error(`Error executing query for account ${account.id}:`, queryError);
+            throw queryError;
+          }
         })
       );
 
