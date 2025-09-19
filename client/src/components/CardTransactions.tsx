@@ -45,7 +45,6 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
   const [transactions, setTransactions] = useState<CardTransaction[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [costCenters, setCostCenters] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +58,6 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
     card_id: selectedCard?.id || 0,
     category_id: undefined,
     subcategory_id: undefined,
-    cost_center_id: undefined,
     transaction_date: new Date().toISOString().split('T')[0]
   });
 
@@ -105,7 +103,6 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       card_id: selectedCard?.id || 0,
       category_id: undefined,
       subcategory_id: undefined,
-      cost_center_id: undefined,
       transaction_date: new Date().toISOString().split('T')[0]
     });
     setEditingTransaction(null);
@@ -156,8 +153,10 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
         await cardTransactionService.update(editingTransaction.id!, {
           description: formData.description,
           amount: formData.total_amount,
+          type: 'expense',
           category_id: formData.category_id,
-          cost_center_id: formData.cost_center_id,
+          subcategory_id: formData.subcategory_id,
+          card_id: formData.card_id,
           transaction_date: adjustedFormData.transaction_date
         });
         setMessage('Transação atualizada com sucesso!');
@@ -189,7 +188,6 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       card_id: transaction.card_id,
       category_id: transaction.category_id,
       subcategory_id: transaction.subcategory_id,
-      cost_center_id: transaction.cost_center_id,
       transaction_date: transaction.transaction_date
     });
     setOpen(true);

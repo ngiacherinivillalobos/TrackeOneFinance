@@ -11,9 +11,9 @@ export const formatCalculatorNumber = (value: number, maxDecimals: number = 5): 
   // Arredondar para o número máximo de casas decimais especificado
   const rounded = Math.round(value * Math.pow(10, maxDecimals)) / Math.pow(10, maxDecimals);
   
-  // Converter para string e substituir o ponto por vírgula
-  let formatted = rounded.toLocaleString('pt-BR', {
-    minimumFractionDigits: maxDecimals,
+  // Remover zeros à direita após a vírgula, mantendo pelo menos um dígito
+  const formatted = rounded.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
     maximumFractionDigits: maxDecimals
   });
   

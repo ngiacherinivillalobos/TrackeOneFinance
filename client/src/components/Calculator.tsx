@@ -135,7 +135,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
           return;
       }
 
-      // Formatar o resultado com até 5 casas decimais
+      // Formatar o resultado com até 5 casas decimais, mas remover zeros desnecessários
       setDisplay(formatCalculatorNumber(result, 5));
       setPreviousValue(result);
     }

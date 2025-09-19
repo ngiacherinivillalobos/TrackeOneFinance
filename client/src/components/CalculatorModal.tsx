@@ -204,7 +204,7 @@ const CalculatorModal: React.FC = () => {
     if (previousValue !== null && operation) {
       const newValue = calculate(previousValue, inputValue, operation);
       setOperationHistory(`${previousValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} =`);
-      // Formatar o resultado com até 5 casas decimais
+      // Formatar o resultado com até 5 casas decimais, mas remover zeros desnecessários
       setDisplay(formatCalculatorNumber(newValue, 5));
       setPreviousValue(null);
       setOperation(null);

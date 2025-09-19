@@ -612,14 +612,47 @@ const create = async (req: Request, res: Response) => {
     }
 
     // Validate mandatory fields: category, contact, and cost center
+    console.log('🔥 VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS 🔥');
+    console.log('Valores recebidos:', {
+      description,
+      amount,
+      finalType,
+      transaction_date,
+      category_id,
+      contact_id,
+      cost_center_id,
+      card_id,
+      contact_id_type: typeof contact_id,
+      contact_id_is_null: contact_id === null,
+      contact_id_is_undefined: contact_id === undefined,
+      card_id_type: typeof card_id,
+      card_id_is_null: card_id === null,
+      card_id_is_undefined: card_id === undefined
+    });
+    
     if (!category_id && category_id !== 0) {
+      console.log('❌ Categoria é obrigatória');
       return res.status(400).json({ error: 'Categoria é obrigatória' });
     }
-    if (!contact_id && contact_id !== 0) {
-      return res.status(400).json({ error: 'Contato é obrigatório' });
-    }
-    if (!cost_center_id && cost_center_id !== 0) {
-      return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
+    
+    // Para transações de cartão de crédito, contato e centro de custo não são obrigatórios
+    // Verificar se card_id é válido (não é null, undefined ou string vazia)
+    const hasValidCardId = card_id !== undefined && card_id !== null && card_id !== '';
+    console.log('💳 Verificando card_id:', card_id, 'hasValidCardId:', hasValidCardId);
+    
+    if (!hasValidCardId) {
+      console.log('💳 Não é transação de cartão, validando contato e centro de custo');
+      if (!contact_id && contact_id !== 0) {
+        console.log('❌ Contato é obrigatório');
+        return res.status(400).json({ error: 'Contato é obrigatório' });
+      }
+      if (!cost_center_id && cost_center_id !== 0) {
+        console.log('❌ Centro de Custo é obrigatório');
+        return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
+      }
+    } else {
+      console.log('💳 É transação de cartão, não validando contato e centro de custo');
+      console.log('💳 card_id:', card_id, 'type:', typeof card_id);
     }
 
     // Lógica para determinar o payment_status_id
@@ -1029,13 +1062,20 @@ const update = async (req: Request, res: Response) => {
       console.log('UPDATE - Missing category_id');
       return res.status(400).json({ error: 'Categoria é obrigatória' });
     }
-    if (!contact_id && contact_id !== 0) {
-      console.log('UPDATE - Missing contact_id');
-      return res.status(400).json({ error: 'Contato é obrigatório' });
-    }
-    if (!cost_center_id && cost_center_id !== 0) {
-      console.log('UPDATE - Missing cost_center_id');
-      return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
+    
+    // Para transações de cartão de crédito, contato e centro de custo não são obrigatórios
+    if (!card_id) {
+      console.log('💳 Não é transação de cartão, validando contato e centro de custo');
+      if (!contact_id && contact_id !== 0) {
+        console.log('❌ Contato é obrigatório');
+        return res.status(400).json({ error: 'Contato é obrigatório' });
+      }
+      if (!cost_center_id && cost_center_id !== 0) {
+        console.log('❌ Centro de Custo é obrigatório');
+        return res.status(400).json({ error: 'Centro de Custo é obrigatório' });
+      }
+    } else {
+      console.log('💳 É transação de cartão, não validando contato e centro de custo');
     }
 
     // Lógica para determinar o payment_status_id

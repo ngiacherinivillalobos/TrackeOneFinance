@@ -8,7 +8,8 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "test": "node test-server.js",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "migrate:postgres": "node ../database/migrations/apply_credit_card_transactions_postgres.js"
   },
   "keywords": [],
   "author": "",

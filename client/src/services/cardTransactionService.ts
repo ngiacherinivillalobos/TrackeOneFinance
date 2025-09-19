@@ -14,6 +14,15 @@ export interface CardTransaction {
   installment_number?: number;
   total_installments?: number;
   created_at?: string;
+  is_paid?: boolean;
+  payment_date?: string;
+  paid_amount?: number;
+  payment_type?: string;
+  payment_observations?: string;
+  discount?: number;
+  interest?: number;
+  category_name?: string;
+  subcategory_name?: string;
 }
 
 export interface CreateInstallmentsRequest {
@@ -38,13 +47,13 @@ export interface CreateInstallmentsResponse {
 export const cardTransactionService = {
   // Criar transações parceladas
   async createInstallments(data: CreateInstallmentsRequest): Promise<CreateInstallmentsResponse> {
-    const response = await api.post('/transactions/installments', data);
+    const response = await api.post('/credit-card-transactions/installments', data);
     return response.data;
   },
 
   // Listar transações de um cartão específico
   async getByCard(cardId: number): Promise<CardTransaction[]> {
-    const response = await api.get(`/transactions?card_id=${cardId}`);
+    const response = await api.get(`/credit-card-transactions?card_id=${cardId}`);
     return response.data;
   },
 
@@ -58,35 +67,42 @@ export const cardTransactionService = {
       }
     });
 
-    const response = await api.get(`/transactions/filtered?${params.toString()}`);
+    const response = await api.get(`/credit-card-transactions?${params.toString()}`);
+    console.log('Resposta da API de transações:', response.data);
     return response.data;
   },
 
   // Atualizar transação individual
   async update(id: number, data: Partial<CardTransaction>): Promise<CardTransaction> {
-    const response = await api.put(`/transactions/${id}`, data);
+    // Remover campos undefined para não sobrescrever os valores existentes
+    const cleanData: Partial<CardTransaction> = {};
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        const value = data[key as keyof CardTransaction];
+        if (value !== undefined) {
+          (cleanData as any)[key] = value;
+        }
+      }
+    }
+
+    const response = await api.put(`/credit-card-transactions/${id}`, cleanData);
     return response.data;
   },
 
   // Excluir transação
   async delete(id: number): Promise<void> {
-    await api.delete(`/transactions/${id}`);
+    await api.delete(`/credit-card-transactions/${id}`);
   },
 
   // Obter detalhes de uma transação
   async getById(id: number): Promise<CardTransaction> {
-    const response = await api.get(`/transactions/${id}`);
+    const response = await api.get(`/credit-card-transactions/${id}`);
     return response.data;
   },
 
-  // Marcar transação como paga
-  async markAsPaid(id: number, paymentData: {
-    payment_date: string;
-    paid_amount: number;
-    payment_type: string;
-    observations?: string;
-  }): Promise<any> {
-    const response = await api.post(`/transactions/${id}/mark-as-paid`, paymentData);
+  // Criar transação individual
+  async create(data: Omit<CardTransaction, 'id'>): Promise<CardTransaction> {
+    const response = await api.post('/credit-card-transactions', data);
     return response.data;
   }
 };

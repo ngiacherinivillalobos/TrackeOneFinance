@@ -19,6 +19,7 @@ export interface Transaction {
   recurrence_days?: number; // Para recorrência personalizada
   created_at?: string;
   updated_at?: string;
+  card_id?: number; // Adicionado para transações de cartão de crédito
   
   // Campos para exibição (vindos do JOIN)
   category_name?: string;

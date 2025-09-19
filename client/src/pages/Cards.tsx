@@ -16,49 +16,18 @@ import {
   IconButton,
   Box,
   Typography,
-  Tabs,
-  Tab,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
-import ReceiptIcon from '@mui/icons-material/Receipt';
 import { colors } from '../theme/modernTheme';
 import { Card, cardService } from '../services/cardService';
-import CardTransactions from '../components/CardTransactions';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`cards-tabpanel-${index}`}
-      aria-labelledby={`cards-tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ py: 3 }}>
-          {children}
-        </Box>
-      )}
-    </div>
-  );
-}
 
 export default function Cards() {
   const [cards, setCards] = useState<Card[]>([]);
   const [selectedCard, setSelectedCard] = useState<Card | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
-  const [tabValue, setTabValue] = useState(0);
   const [formData, setFormData] = useState<Omit<Card, 'id'>>({
     name: '',
     card_number: '',
@@ -148,120 +117,83 @@ export default function Cards() {
     }
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  const handleCardSelect = (card: Card) => {
-    setSelectedCard(card);
-    setTabValue(1); // Muda para a aba de transações
-  };
-
   return (
     <Box>
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab 
-            icon={<CreditCardIcon />} 
-            label="Cartões" 
-            iconPosition="start"
-            sx={{ textTransform: 'none' }}
-          />
-          <Tab 
-            icon={<ReceiptIcon />} 
-            label="Transações" 
-            iconPosition="start"
-            sx={{ textTransform: 'none' }}
-            disabled={!selectedCard}
-          />
-        </Tabs>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          Gerenciar Cartões
+        </Typography>
+        <Button variant="contained" color="primary" onClick={handleOpen}>
+          Novo Cartão
+        </Button>
       </Box>
 
-      {/* Tab Panel - Cartões */}
-      <TabPanel value={tabValue} index={0}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Gerenciar Cartões
-          </Typography>
-          <Button variant="contained" color="primary" onClick={handleOpen}>
-            Novo Cartão
-          </Button>
-        </Box>
-
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: colors.gray[50] }}>
-                <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Bandeira</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Vence</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>Ações</TableCell>
+      <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+        <Table>
+          <TableHead>
+            <TableRow sx={{ bgcolor: colors.gray[50] }}>
+              <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Vencimento</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Bandeira</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Vence</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>Ações</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {cards.map((card) => (
+              <TableRow 
+                key={card.id} 
+                hover
+                sx={{ 
+                  cursor: 'pointer',
+                  bgcolor: selectedCard?.id === card.id ? colors.primary[50] : 'inherit',
+                  '&:hover': {
+                    bgcolor: selectedCard?.id === card.id ? colors.primary[100] : colors.gray[50]
+                  }
+                }}
+              >
+                <TableCell>{card.name}</TableCell>
+                <TableCell>{card.card_number ? `**** **** **** ${card.card_number.slice(-4)}` : '-'}</TableCell>
+                <TableCell>{card.expiry_date || '-'}</TableCell>
+                <TableCell>{card.brand || '-'}</TableCell>
+                <TableCell>{card.closing_day || '-'}</TableCell>
+                <TableCell>{card.due_day || '-'}</TableCell>
+                <TableCell align="right">
+                  <IconButton 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(card);
+                    }}
+                    sx={{ color: colors.primary[600] }}
+                  >
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(card.id!);
+                    }}
+                    sx={{ color: colors.error[600] }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {cards.map((card) => (
-                <TableRow 
-                  key={card.id} 
-                  hover
-                  sx={{ 
-                    cursor: 'pointer',
-                    bgcolor: selectedCard?.id === card.id ? colors.primary[50] : 'inherit',
-                    '&:hover': {
-                      bgcolor: selectedCard?.id === card.id ? colors.primary[100] : colors.gray[50]
-                    }
-                  }}
-                  onClick={() => handleCardSelect(card)}
-                >
-                  <TableCell>{card.name}</TableCell>
-                  <TableCell>{card.card_number ? `**** **** **** ${card.card_number.slice(-4)}` : '-'}</TableCell>
-                  <TableCell>{card.expiry_date || '-'}</TableCell>
-                  <TableCell>{card.brand || '-'}</TableCell>
-                  <TableCell>{card.closing_day || '-'}</TableCell>
-                  <TableCell>{card.due_day || '-'}</TableCell>
-                  <TableCell align="right">
-                    <IconButton 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(card);
-                      }}
-                      sx={{ color: colors.primary[600] }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(card.id!);
-                      }}
-                      sx={{ color: colors.error[600] }}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {cards.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                    <Typography color="textSecondary">
-                      Nenhum cartão cadastrado
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </TabPanel>
-
-      {/* Tab Panel - Transações */}
-      <TabPanel value={tabValue} index={1}>
-        <CardTransactions selectedCard={selectedCard} />
-      </TabPanel>
+            ))}
+            {cards.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <Typography color="textSecondary">
+                    Nenhum cartão cadastrado
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {/* Form Dialog */}
       <Dialog open={open} onClose={handleClose}>
@@ -313,12 +245,12 @@ export default function Cards() {
               label="Dia de Fechamento"
               type="number"
               fullWidth
-              value={formData.closing_day}
+              value={formData.closing_day || ''}
               onChange={(e) => {
                 const value = e.target.value;
                 // Permitir campo vazio ou valores numéricos válidos
                 if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
-                  setFormData({ ...formData, closing_day: value === '' ? 15 : parseInt(value) });
+                  setFormData({ ...formData, closing_day: value === '' ? undefined : parseInt(value) });
                 }
               }}
               inputProps={{
@@ -333,12 +265,12 @@ export default function Cards() {
               label="Dia de Vencimento"
               type="number"
               fullWidth
-              value={formData.due_day}
+              value={formData.due_day || ''}
               onChange={(e) => {
                 const value = e.target.value;
                 // Permitir campo vazio ou valores numéricos válidos
                 if (value === '' || (parseInt(value) >= 1 && parseInt(value) <= 31)) {
-                  setFormData({ ...formData, due_day: value === '' ? 10 : parseInt(value) });
+                  setFormData({ ...formData, due_day: value === '' ? undefined : parseInt(value) });
                 }
               }}
               inputProps={{
