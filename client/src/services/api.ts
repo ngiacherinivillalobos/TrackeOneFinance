@@ -2,13 +2,17 @@ import axios from 'axios';
 
 // Detectar a URL base automaticamente com base no ambiente
 const getBaseURL = () => {
-  // Em produção, usar a URL do backend no Render
+  // Em produção, tentar detectar a URL do backend
   if (import.meta.env.MODE === 'production') {
-    // Usar a variável de ambiente VITE_API_URL se definida, senão usar padrão
-    return import.meta.env.VITE_API_URL || 'https://trackeone-finance-api.onrender.com/api';
+    // Usar a variável de ambiente VITE_API_URL se definida
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+    // Fallback para uma URL padrão - deve ser substituída pela URL real do Render
+    return 'https://trackeone-finance-api.onrender.com';
   }
   // Em desenvolvimento, usar URL absoluta para o backend
-  return 'http://localhost:3000/api';
+  return 'http://localhost:3001';
 };
 
 export const api = axios.create({
@@ -59,6 +63,7 @@ api.interceptors.response.use(
     } else if (error.request) {
       // A requisição foi feita mas não houve resposta
       console.error('Sem resposta do servidor - verificar CORS e status do backend');
+      console.error('URL tentada:', error.config?.baseURL + error.config?.url);
     } else {
       // Algo aconteceu na configuração da requisição que causou o erro
       console.error('Erro na configuração da requisição:', error.message);

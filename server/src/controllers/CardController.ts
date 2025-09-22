@@ -36,11 +36,8 @@ class CardController {
       const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
       const { db, run, get } = getDatabase();
       
-      // Mapeando campos do frontend para campos da tabela
-      // card_number pode ser salvo como uma referência no campo de observação
-      // vamos usar limit_amount = 0 por padrão e type como brand
-      
-      const result: any = await run(db, 'INSERT INTO cards (name, type, closing_day, due_day) VALUES (?, ?, ?, ?)', [name, brand || 'Crédito', closing_day || 15, due_day || 10]);
+      // Agora salvando todos os campos do cartão
+      const result: any = await run(db, 'INSERT INTO cards (name, type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
       
       // Buscar o cartão recém-criado para retornar os dados corretos
       const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID]);
@@ -58,7 +55,8 @@ class CardController {
       const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
       const { db, run, get } = getDatabase();
       
-      await run(db, 'UPDATE cards SET name = ?, type = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', closing_day || 15, due_day || 10, id]);
+      // Agora atualizando todos os campos do cartão
+      await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
       
       // Buscar o cartão atualizado para retornar os dados corretos
       const updatedCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
