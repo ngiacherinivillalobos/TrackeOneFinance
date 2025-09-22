@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS credit_card_transactions (
     id SERIAL PRIMARY KEY,
     description TEXT NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'expense' CHECK (type IN ('expense', 'income', 'investment')),
     category_id INTEGER,
     subcategory_id INTEGER,
@@ -22,19 +22,19 @@ CREATE TABLE IF NOT EXISTS credit_card_transactions (
     -- Campos de pagamento
     is_paid BOOLEAN DEFAULT FALSE,
     payment_date DATE,
-    paid_amount DECIMAL(10,2),
+    paid_amount NUMERIC(10,2),
     payment_type VARCHAR(50),
     payment_observations TEXT,
-    discount DECIMAL(10,2) DEFAULT 0,
-    interest DECIMAL(10,2) DEFAULT 0,
+    discount NUMERIC(10,2) DEFAULT 0,
+    interest NUMERIC(10,2) DEFAULT 0,
     
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
     FOREIGN KEY (card_id) REFERENCES cards(id)
 );
 
--- Índices para performance (apenas se as colunas existirem)
--- CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_date ON credit_card_transactions(transaction_date);
--- CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_card ON credit_card_transactions(card_id);
--- CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_paid ON credit_card_transactions(is_paid);
--- CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_installment ON credit_card_transactions(is_installment);
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_date ON credit_card_transactions(transaction_date);
+CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_card ON credit_card_transactions(card_id);
+CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_paid ON credit_card_transactions(is_paid);
+CREATE INDEX IF NOT EXISTS idx_credit_card_transactions_installment ON credit_card_transactions(is_installment);

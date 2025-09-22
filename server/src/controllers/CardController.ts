@@ -8,9 +8,13 @@ class CardController {
       console.log('CardController.index called - querying cards table');
       const cards = await all(db, 'SELECT * FROM cards ORDER BY name');
       res.json(cards);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error listing cards:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      // Tratar erros específicos
+      if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor ao carregar cartões.' });
     }
   }
 
@@ -21,13 +25,17 @@ class CardController {
       
       const card = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
       if (!card) {
-        res.status(404).json({ error: 'Card not found' });
+        return res.status(404).json({ error: 'Cartão não encontrado' });
       } else {
         res.json(card);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error showing card:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      // Tratar erros específicos
+      if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor ao buscar cartão.' });
     }
   }
 
@@ -36,16 +44,33 @@ class CardController {
       const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
       const { db, run, get } = getDatabase();
       
-      // Agora salvando todos os campos do cartão
-      const result: any = await run(db, 'INSERT INTO cards (name, type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
+      // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
+      const isProduction = process.env.NODE_ENV === 'production';
       
-      // Buscar o cartão recém-criado para retornar os dados corretos
-      const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID]);
-      
-      res.status(201).json(createdCard);
-    } catch (error) {
+      if (isProduction) {
+        // Para PostgreSQL, usar os nomes corretos das colunas
+        const result: any = await run(db, 'INSERT INTO cards (name, card_type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
+        
+        // Buscar o cartão recém-criado para retornar os dados corretos
+        const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID || result.rows[0].id]);
+        
+        res.status(201).json(createdCard);
+      } else {
+        // Para SQLite, usar os nomes originais
+        const result: any = await run(db, 'INSERT INTO cards (name, type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
+        
+        // Buscar o cartão recém-criado para retornar os dados corretos
+        const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID]);
+        
+        res.status(201).json(createdCard);
+      }
+    } catch (error: any) {
       console.error('Error creating card:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      // Tratar erros específicos
+      if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor ao criar cartão.' });
     }
   }
 
@@ -55,16 +80,40 @@ class CardController {
       const { name, card_number, expiry_date, brand, closing_day, due_day } = req.body;
       const { db, run, get } = getDatabase();
       
-      // Agora atualizando todos os campos do cartão
-      await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
+      console.log('Atualizando cartão com dados:', { id, name, card_number, expiry_date, brand, closing_day, due_day });
+      
+      // Verificar se o cartão existe antes de atualizar
+      const existingCard: any = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
+      if (!existingCard) {
+        return res.status(404).json({ error: 'Cartão não encontrado' });
+      }
+      
+      // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isProduction) {
+        // Para PostgreSQL, usar os nomes corretos das colunas
+        await run(db, 'UPDATE cards SET name = ?, card_type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
+      } else {
+        // Para SQLite, usar os nomes originais
+        await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
+      }
       
       // Buscar o cartão atualizado para retornar os dados corretos
       const updatedCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
       
       res.json(updatedCard);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating card:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      // Tratar erros específicos
+      if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
+      }
+      // Adicionar mais detalhes do erro para debugging
+      return res.status(500).json({ 
+        error: 'Erro interno do servidor ao atualizar cartão.',
+        details: error.message
+      });
     }
   }
 
@@ -73,11 +122,22 @@ class CardController {
       const { id } = req.params;
       const { db, run } = getDatabase();
       
+      // Verificar se o cartão existe antes de deletar
+      const { get } = getDatabase();
+      const existingCard: any = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
+      if (!existingCard) {
+        return res.status(404).json({ error: 'Cartão não encontrado' });
+      }
+      
       await run(db, 'DELETE FROM cards WHERE id = ?', [id]);
-      res.json({ message: 'Card deleted successfully' });
-    } catch (error) {
+      res.json({ message: 'Cartão excluído com sucesso' });
+    } catch (error: any) {
       console.error('Error deleting card:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      // Tratar erros específicos
+      if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
+      }
+      return res.status(500).json({ error: 'Erro interno do servidor ao excluir cartão.' });
     }
   }
 }

@@ -166,7 +166,11 @@ const initializeDatabase = (): Promise<void> => {
           connectionString: process.env.DATABASE_URL,
           ssl: {
             rejectUnauthorized: false
-          }
+          },
+          // Adicionar timeouts para evitar travamentos
+          connectionTimeoutMillis: 5000, // 5 segundos
+          idleTimeoutMillis: 30000, // 30 segundos
+          max: 10 // Limitar número de conexões
         });
         
         // Testar a conexão com o banco
@@ -184,7 +188,23 @@ const initializeDatabase = (): Promise<void> => {
           })
           .catch((error: Error) => {
             console.error('Erro ao testar conexão com PostgreSQL:', error);
-            reject(error);
+            // Tentar reconectar uma vez
+            setTimeout(() => {
+              (db as Pool).query('SELECT NOW()', [])
+                .then((result: QueryResult) => {
+                  console.log('Conexão com PostgreSQL restabelecida:', result.rows[0]);
+                  initializePostgreSQLTables(db as Pool)
+                    .then(() => resolve())
+                    .catch((initError: Error) => {
+                      console.error('Erro ao inicializar tabelas PostgreSQL após retry:', initError);
+                      reject(initError);
+                    });
+                })
+                .catch((retryError: Error) => {
+                  console.error('Erro ao reconectar com PostgreSQL:', retryError);
+                  reject(new Error('Não foi possível conectar ao banco de dados PostgreSQL. Por favor, tente novamente mais tarde.'));
+                });
+            }, 5000); // Tentar novamente após 5 segundos
           });
       } catch (error) {
         console.error('Erro ao criar pool de conexão PostgreSQL:', error);
@@ -213,6 +233,53 @@ const initializeDatabase = (): Promise<void> => {
 // Função para inicializar tabelas no PostgreSQL
 const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
   console.log('Verificando e criando tabelas no PostgreSQL se necessário...');
+  
+  try {
+    // Verificar se a tabela cards tem todas as colunas necessárias
+    const cardColumnsResult = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'cards'
+    `);
+    
+    const cardColumns = cardColumnsResult.rows.map((row: any) => row.column_name);
+    console.log('Colunas existentes na tabela cards:', cardColumns);
+    
+    // Verificar e adicionar colunas faltantes
+    if (!cardColumns.includes('card_number')) {
+      console.log('Adicionando coluna card_number à tabela cards');
+      await pool.query('ALTER TABLE cards ADD COLUMN card_number VARCHAR(4)');
+    }
+    
+    if (!cardColumns.includes('expiry_date')) {
+      console.log('Adicionando coluna expiry_date à tabela cards');
+      await pool.query('ALTER TABLE cards ADD COLUMN expiry_date VARCHAR(7)');
+    }
+    
+    if (!cardColumns.includes('brand')) {
+      console.log('Adicionando coluna brand à tabela cards');
+      await pool.query('ALTER TABLE cards ADD COLUMN brand VARCHAR(50)');
+    }
+    
+    if (!cardColumns.includes('type')) {
+      console.log('Adicionando coluna type à tabela cards');
+      await pool.query("ALTER TABLE cards ADD COLUMN type VARCHAR(50) DEFAULT 'Crédito'");
+    }
+    
+    if (!cardColumns.includes('bank_account_id')) {
+      console.log('Adicionando coluna bank_account_id à tabela cards');
+      await pool.query('ALTER TABLE cards ADD COLUMN bank_account_id INTEGER REFERENCES bank_accounts(id)');
+    }
+    
+    if (!cardColumns.includes('limit_amount')) {
+      console.log('Adicionando coluna limit_amount à tabela cards');
+      await pool.query('ALTER TABLE cards ADD COLUMN limit_amount DECIMAL(10,2) DEFAULT 0');
+    }
+    
+    console.log('Tabela cards atualizada com sucesso');
+  } catch (error) {
+    console.error('Erro ao inicializar tabela cards:', error);
+  }
   
   // Verificar se a tabela payment_details existe
   try {

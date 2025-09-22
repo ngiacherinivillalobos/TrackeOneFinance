@@ -54,13 +54,30 @@ app.get('/api/test', (req: Request, res: Response) => {
 });
 
 // Health check endpoint para Docker
-app.get('/api/health', (req: Request, res: Response) => {
-  res.status(200).json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    database: 'connected'
-  });
+app.get('/api/health', async (req: Request, res: Response) => {
+  try {
+    // Verificar conexão com o banco de dados
+    const { db, get } = require('./database/connection').getDatabase();
+    
+    // Testar conexão com uma query simples
+    await get(db, 'SELECT 1 as test');
+    
+    res.status(200).json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'connected'
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'disconnected',
+      error: 'Database connection failed'
+    });
+  }
 });
 
 // Monta o roteador principal

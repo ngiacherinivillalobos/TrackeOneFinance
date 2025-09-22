@@ -23,26 +23,52 @@ export const categoryService = {
   list: async () => {
     console.log('Fetching categories...');
     try {
-      const response = await api.get<Category[]>('/categories');
+      const response = await api.get<Category[]>('/categories', {
+        timeout: 30000 // Aumentar timeout para 30 segundos
+      });
       console.log('Categories response:', response.data);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in categoryService.list:', error);
-      throw error;
+      // Tratar erros específicos
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Tempo limite excedido ao carregar categorias. Por favor, tente novamente.');
+      } else if (error.response?.status === 401) {
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      } else if (error.response?.status === 500) {
+        throw new Error('Erro no servidor ao carregar categorias. Tente novamente mais tarde.');
+      } else {
+        throw new Error('Erro ao carregar categorias: ' + (error.response?.data?.error || error.message));
+      }
     }
   },
 
   create: async (category: Omit<Category, 'id'>) => {
-    const response = await api.post<Category>('/categories', category);
-    return response.data;
+    try {
+      const response = await api.post<Category>('/categories', category);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in categoryService.create:', error);
+      throw new Error('Erro ao criar categoria: ' + (error.response?.data?.error || error.message));
+    }
   },
 
   update: async (id: number, category: Omit<Category, 'id'>) => {
-    const response = await api.put<Category>(`/categories/${id}`, category);
-    return response.data;
+    try {
+      const response = await api.put<Category>(`/categories/${id}`, category);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in categoryService.update:', error);
+      throw new Error('Erro ao atualizar categoria: ' + (error.response?.data?.error || error.message));
+    }
   },
 
   delete: async (id: number) => {
-    await api.delete(`/categories/${id}`);
+    try {
+      await api.delete(`/categories/${id}`);
+    } catch (error: any) {
+      console.error('Error in categoryService.delete:', error);
+      throw new Error('Erro ao excluir categoria: ' + (error.response?.data?.error || error.message));
+    }
   }
 };

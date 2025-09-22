@@ -1,7 +1,7 @@
 -- Adiciona campos de detalhes do cartão à tabela cards
 -- Esta migração adiciona os campos card_number, expiry_date e brand que estavam faltando
 
-ALTER TABLE cards ADD COLUMN IF NOT EXISTS card_number VARCHAR(20);
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS card_number VARCHAR(4);
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS expiry_date VARCHAR(7);
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS brand VARCHAR(50);
 

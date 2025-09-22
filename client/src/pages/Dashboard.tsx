@@ -698,7 +698,7 @@ export default function Dashboard() {
       console.log('Carregando total de investimentos pagos com params:', params);
       
       // Usar o endpoint correto com parâmetros na query string
-      const response = await api.get('/transactions/filtered', { params });
+      const response = await api.get('/transactions/filtered', { params, timeout: 30000 });
       console.log('Response investimentos pagos:', response.data);
       
       // Para manter consistência entre ambientes, verificar ambos os campos is_paid e payment_status_id
@@ -725,9 +725,45 @@ export default function Dashboard() {
       
       console.log('Total investimentos pagos calculado:', totalInvestimentosPagos);
       setTotalInvestmentsPaid(totalInvestimentosPagos);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar total de investimentos pagos:', error);
-      setTotalInvestmentsPaid(0);
+      // Tratar erros específicos
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        console.error('Timeout ao carregar investimentos pagos. Tentando novamente...');
+        // Tentar novamente uma vez
+        try {
+          const retryParams: any = {
+            transaction_type: 'investment',
+            payment_status: 'paid',
+            dateFilterType: 'all'
+          };
+          
+          if (costCenterId) {
+            retryParams.cost_center_id = costCenterId;
+          }
+          
+          const response = await api.get('/transactions/filtered', { params: retryParams, timeout: 30000 });
+          const totalInvestimentosPagos = response.data
+            .filter((t: any) => t.is_paid || t.payment_status_id === 2)
+            .reduce((sum: number, t: any) => {
+              let amount: number;
+              if (typeof t.amount === 'string') {
+                amount = parseFloat(t.amount.replace(',', '.'));
+              } else if (typeof t.amount === 'number') {
+                amount = t.amount;
+              } else {
+                amount = 0;
+              }
+              return sum + amount;
+            }, 0);
+          setTotalInvestmentsPaid(totalInvestimentosPagos);
+        } catch (retryError) {
+          console.error('Erro na tentativa de retry:', retryError);
+          setTotalInvestmentsPaid(0);
+        }
+      } else {
+        setTotalInvestmentsPaid(0);
+      }
     }
   };
   

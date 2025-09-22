@@ -24,27 +24,53 @@ export const subcategoryService = {
   async list(): Promise<Subcategory[]> {
     console.log('Fetching subcategories...');
     try {
-      const response = await api.get('/subcategories');
+      const response = await api.get('/subcategories', {
+        timeout: 30000 // Aumentar timeout para 30 segundos
+      });
       console.log('Subcategories response:', response.data);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in subcategoryService.list:', error);
-      throw error;
+      // Tratar erros específicos
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Tempo limite excedido ao carregar subcategorias. Por favor, tente novamente.');
+      } else if (error.response?.status === 401) {
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      } else if (error.response?.status === 500) {
+        throw new Error('Erro no servidor ao carregar subcategorias. Tente novamente mais tarde.');
+      } else {
+        throw new Error('Erro ao carregar subcategorias: ' + (error.response?.data?.error || error.message));
+      }
     }
   },
 
   async create(data: Omit<Subcategory, 'id'>): Promise<Subcategory> {
-    const response = await api.post('/subcategories', data);
-    return response.data;
+    try {
+      const response = await api.post('/subcategories', data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in subcategoryService.create:', error);
+      throw new Error('Erro ao criar subcategoria: ' + (error.response?.data?.error || error.message));
+    }
   },
 
   async update(id: number, data: Omit<Subcategory, 'id'>): Promise<Subcategory> {
-    const response = await api.put(`/subcategories/${id}`, data);
-    return response.data;
+    try {
+      const response = await api.put(`/subcategories/${id}`, data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in subcategoryService.update:', error);
+      throw new Error('Erro ao atualizar subcategoria: ' + (error.response?.data?.error || error.message));
+    }
   },
 
   async delete(id: number): Promise<void> {
-    await api.delete(`/subcategories/${id}`);
+    try {
+      await api.delete(`/subcategories/${id}`);
+    } catch (error: any) {
+      console.error('Error in subcategoryService.delete:', error);
+      throw new Error('Erro ao excluir subcategoria: ' + (error.response?.data?.error || error.message));
+    }
   }
 };
 
