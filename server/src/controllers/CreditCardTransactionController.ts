@@ -175,6 +175,9 @@ const create = async (req: Request, res: Response) => {
     const isProduction = process.env.NODE_ENV === 'production';
     const isPaidValue = toDatabaseBoolean(is_paid, isProduction);
     
+    console.log('Inserindo transação no banco de dados...');
+    console.log('Ambiente de produção:', isProduction);
+    
     const result: any = await run(db, `
       INSERT INTO credit_card_transactions (
         description, amount, type, category_id, subcategory_id,
@@ -190,6 +193,8 @@ const create = async (req: Request, res: Response) => {
       discount, interest
     ]);
 
+    console.log('Transação inserida com sucesso, ID:', result.lastID);
+    
     return res.status(201).json({ 
       id: result.lastID, 
       message: 'Credit card transaction created successfully'

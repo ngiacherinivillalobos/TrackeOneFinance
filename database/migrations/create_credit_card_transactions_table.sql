@@ -1,36 +1,26 @@
 -- Migração para criar tabela específica para transações de cartão de crédito
 -- Esta tabela separa as transações de cartão de crédito das transações do controle mensal
 
--- Tabela de transações de cartão de crédito
+-- Criação da tabela de transações de cartão de crédito
+-- Esta tabela armazena as transações específicas de cartões de crédito
+
 CREATE TABLE IF NOT EXISTS credit_card_transactions (
     id SERIAL PRIMARY KEY,
-    description TEXT NOT NULL,
-    amount NUMERIC(10,2) NOT NULL,
-    type TEXT NOT NULL DEFAULT 'expense' CHECK (type IN ('expense', 'income', 'investment')),
+    description VARCHAR(255) NOT NULL,
+    total_amount DECIMAL(10, 2) NOT NULL,
+    total_installments INTEGER NOT NULL,
+    installment_number INTEGER DEFAULT 1,
+    card_id INTEGER NOT NULL,
     category_id INTEGER,
     subcategory_id INTEGER,
-    card_id INTEGER NOT NULL,
     transaction_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Campos de parcelamento
-    is_installment BOOLEAN DEFAULT false,
-    installment_number INTEGER DEFAULT NULL,
-    total_installments INTEGER DEFAULT NULL,
-    
-    -- Campos de pagamento
-    is_paid BOOLEAN DEFAULT FALSE,
-    payment_date DATE,
-    paid_amount NUMERIC(10,2),
-    payment_type TEXT,
-    payment_observations TEXT,
-    discount NUMERIC(10,2) DEFAULT 0,
-    interest NUMERIC(10,2) DEFAULT 0,
-    
-    FOREIGN KEY (category_id) REFERENCES categories(id),
-    FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
-    FOREIGN KEY (card_id) REFERENCES cards(id)
+    -- Chaves estrangeiras
+    FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (subcategory_id) REFERENCES subcategories(id) ON DELETE SET NULL
 );
 
 -- Índices para performance
