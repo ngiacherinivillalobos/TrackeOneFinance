@@ -97,6 +97,9 @@ Create a `.env` file in the `server` directory:
 # Para desenvolvimento (SQLite)
 DATABASE_PATH=database/track_one_finance.db
 
+# Para produção (PostgreSQL)
+# DATABASE_URL=postgresql://user:password@host:port/database
+
 # Segredo JWT para autenticação
 JWT_SECRET=trackeone_finance_secret_key_2025
 
@@ -189,8 +192,20 @@ The application includes database migrations to ensure consistency between devel
 - **Parcelamento fields**: Added support for installment transactions
 - **Recurrence fields**: Added support for recurring transactions
 - **Boolean value normalization**: Ensures boolean values are treated as 0/1 in SQLite and true/false in PostgreSQL
+- **Card number field fix**: Increased card_number field size from VARCHAR(4) to VARCHAR(20) to accommodate full credit card numbers
 
 For details about database migrations, see [BOOLEAN_VALUES_MIGRATION.md](BOOLEAN_VALUES_MIGRATION.md)
+
+### Database Migration Scripts
+
+To apply database fixes and updates:
+
+**Apply card number field correction:**
+```bash
+npm run fix-card-number
+```
+
+This script automatically detects the database type (SQLite or PostgreSQL) and applies the appropriate correction.
 
 ## 📊 API Endpoints
 
@@ -198,82 +213,3 @@ The backend provides REST API endpoints at `http://localhost:3001/api/`
 
 ### Authentication endpoints:
 - `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
-- `GET /api/auth/validate` - Token validation
-- `POST /api/auth/refresh` - Token refresh
-
-### Main endpoints:
-- `GET /api/transactions` - List transactions
-- `POST /api/transactions` - Create transaction
-- `GET /api/bank-accounts` - List bank accounts
-- `GET /api/categories` - List categories
-- `GET /api/dashboard/overview` - Dashboard data
-
-For complete API documentation, see the controllers in `server/src/controllers/`
-
-## 🧪 Development Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start both client and server in development mode |
-| `npm run client` | Start only the frontend development server |
-| `npm run server` | Start only the backend development server |
-| `npm run build` | Build both client and server for production |
-
-## 🔧 Configuration
-
-### Environment Variables
-
-#### Server (.env in server directory):
-```env
-DATABASE_PATH=database/track_one_finance.db
-JWT_SECRET=trackeone_finance_secret_key_2025
-PORT=3001
-NODE_ENV=development
-```
-
-#### Client (.env in client directory):
-```env
-VITE_API_URL=http://localhost:3001
-```
-
-### Production Deployment
-
-For production deployment instructions, see:
-- [DEPLOY_INSTRUCTIONS.md](DEPLOY_INSTRUCTIONS.md)
-- [DEPLOY_RENDER_GUIA.md](DEPLOY_RENDER_GUIA.md)
-- [DEPLOY_VERCEL_GUIA.md](DEPLOY_VERCEL_GUIA.md)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the ISC License.
-
-## 🐛 Known Issues
-
-- Recurring transactions are under development
-- Testing framework needs to be configured
-
-## 🗺 Roadmap
-
-- [x] Add user authentication
-- [ ] Implement recurring transactions
-- [ ] Add data export/import functionality
-- [ ] Create mobile responsive design
-- [ ] Add unit and integration tests
-- [ ] Implement backup and restore functionality
-
-## 📞 Support
-
-For support and questions, please open an issue in the repository.
-
----
-
-**Made with ❤️ for better financial management**

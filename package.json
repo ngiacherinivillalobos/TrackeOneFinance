@@ -1,7 +1,8 @@
 {
   "name": "trackone-finance",
   "version": "1.0.0",
-  "description": "Sistema de gerenciamento financeiro",
+  "description": "TrackOne Finance Management System",
+  "main": "index.js",
   "scripts": {
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev",
@@ -18,22 +19,13 @@
     "deploy": "bash scripts/deploy_production.sh",
     "deploy-auto": "bash scripts/deploy_auto.sh",
     "check-deploy": "node scripts/check_deploy_status.js",
-    "project-report": "node scripts/generate_project_report.js"
+    "project-report": "node scripts/generate_project_report.js",
+    "fix-card-number": "node scripts/fix_card_number.js"
   },
-  "dependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/jsonwebtoken": "^9.0.10",
-    "bcrypt": "^6.0.0",
-    "concurrently": "^8.2.2",
-    "dotenv": "^17.2.2",
-    "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.16.3",
-    "sqlite3": "^5.1.7",
-    "typescript": "^5.9.2"
-  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "axios": "^1.11.0"
+    "concurrently": "^8.2.2"
   }
 }

@@ -2,14 +2,16 @@
   "name": "trackone-finance-server",
   "version": "1.0.0",
   "description": "Backend for TrackOne Finance management system",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "test": "node test-server.js",
     "postinstall": "npm run build",
-    "migrate:postgres": "node ../database/migrations/apply_credit_card_transactions_postgres.js"
+    "migrate:postgres": "node ../database/migrations/apply_credit_card_transactions_postgres.js",
+    "fix-card-number:postgres": "node ../database/migrations/fix_card_number_postgres.js",
+    "fix-card-number:sqlite": "node ../database/migrations/fix_card_number_sqlite.js"
   },
   "keywords": [],
   "author": "",

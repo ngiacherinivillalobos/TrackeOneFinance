@@ -1,0 +1,2 @@
+-- Corrige o tamanho da coluna card_number na tabela cards
+-- Esta migração garante que a coluna card_number tenha tamanho suficiente para armazenar números de cartão
