@@ -55,7 +55,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
     description: '',
     total_amount: 0,
     total_installments: 1,
-    card_id: selectedCard?.id || 0,
+    card_id: 0, // Não pré-selecionar cartão por padrão
     category_id: undefined,
     subcategory_id: undefined,
     transaction_date: new Date().toISOString().split('T')[0]
@@ -75,9 +75,9 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       
       // Carregar transações se há cartão selecionado
       if (selectedCard?.id) {
+        // Removido o filtro is_installment: true para mostrar todas as transações
         const transactionsData = await cardTransactionService.getFiltered({
-          card_id: selectedCard.id,
-          is_installment: true
+          card_id: selectedCard.id
         });
         setTransactions(transactionsData);
       }
@@ -100,7 +100,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       description: '',
       total_amount: 0,
       total_installments: 1,
-      card_id: selectedCard?.id || 0,
+      card_id: 0, // Não pré-selecionar cartão por padrão
       category_id: undefined,
       subcategory_id: undefined,
       transaction_date: new Date().toISOString().split('T')[0]
@@ -216,7 +216,10 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+    // Criar data de forma segura para evitar problemas de timezone
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('pt-BR');
   };
 
   if (!selectedCard) {
@@ -244,7 +247,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
             Transações - {selectedCard.name}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Gerencie as transações parceladas do cartão
+            Gerencie as transações do cartão
           </Typography>
         </Box>
         <Button
@@ -290,7 +293,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
                 <TableCell>{transaction.description}</TableCell>
                 <TableCell>{formatCurrency(transaction.amount)}</TableCell>
                 <TableCell>
-                  {transaction.is_installment && (
+                  {transaction.is_installment && transaction.total_installments && transaction.total_installments > 1 && (
                     <Chip
                       label={`${transaction.installment_number}/${transaction.total_installments}`}
                       size="small"
@@ -338,7 +341,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <form onSubmit={handleSubmit}>
           <DialogTitle>
-            {editingTransaction ? 'Editar Transação' : 'Nova Transação Parcelada'}
+            {editingTransaction ? 'Editar Transação' : 'Nova Transação'}
           </DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ mt: 1 }}>
@@ -380,13 +383,20 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
                 <FormControl fullWidth>
                   <InputLabel>Cartão</InputLabel>
                   <Select
-                    value={formData.card_id}
+                    value={formData.card_id || ''}
                     onChange={(e) => setFormData({ ...formData, card_id: Number(e.target.value) })}
                     required
                   >
+                    <MenuItem value="">
+                      <em>Selecione um cartão</em>
+                    </MenuItem>
                     {cards.map((card) => (
                       <MenuItem key={card.id} value={card.id}>
                         {card.name}
+                        {card.card_number && card.card_number.length >= 4 && (
+                          ` (${card.card_number.slice(-4)})`
+                        )}
+                        {card.closing_day && ` - Fecha dia ${card.closing_day}`}
                       </MenuItem>
                     ))}
                   </Select>

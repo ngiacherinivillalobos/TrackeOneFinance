@@ -300,6 +300,9 @@ export default function CreditCard() {
         }));
         console.log('Cartões mapeados:', mappedCards);
         setCards(mappedCards);
+        
+        // Não selecionar automaticamente o primeiro cartão
+        // Manter o filtro como "Todos os cartões" por padrão
       } catch (error) {
         console.error('Error loading cards:', error);
       }
@@ -884,9 +887,9 @@ export default function CreditCard() {
                       label="Data final"
                       value={advancedFilters.customEndDate}
                       onChange={(newValue) => handleAdvancedFilterChange('customEndDate', newValue)}
-                      slotProps={{
+                      slotProps={{ 
                         textField: { 
-                          size: 'small',
+                          size: "small",
                           fullWidth: true,
                           sx: { 
                             '& .MuiOutlinedInput-root': {
@@ -1250,7 +1253,7 @@ export default function CreditCard() {
                         <CircularProgress />
                       </TableCell>
                     </TableRow>
-                  ) : paginatedTransactions && paginatedTransactions.length > 0 ? (
+                  ) : sortedTransactions && sortedTransactions.length > 0 ? (
                     sortedTransactions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((transaction) => {
                       console.log('Renderizando transação:', transaction);
                       const cardName = cards.find((card) => card.id === transaction.card_id)?.name || 'Cartão não encontrado';
@@ -1279,7 +1282,14 @@ export default function CreditCard() {
                             sx={{ color: colors.primary[600] }}
                           />
                         </TableCell>
-                        <TableCell>{new Date(transaction.transaction_date).toLocaleDateString('pt-BR')}</TableCell>
+                        <TableCell>{
+  // Criar data de forma segura para evitar problemas de timezone
+  (() => {
+    const [year, month, day] = transaction.transaction_date.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('pt-BR');
+  })()
+}</TableCell>
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell align="right">
                           R$ {Number(transaction.amount)?.toFixed(2).replace('.', ',')}

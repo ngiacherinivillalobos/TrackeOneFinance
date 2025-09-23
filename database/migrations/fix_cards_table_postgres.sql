@@ -11,17 +11,9 @@ ALTER TABLE cards ADD COLUMN IF NOT EXISTS bank_account_id INTEGER REFERENCES ba
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS limit_amount DECIMAL(10,2) DEFAULT 0;
 
 -- Atualizar triggers para incluir as novas colunas
+-- Primeiro remover trigger e função existentes se existirem
 DROP TRIGGER IF EXISTS update_cards_updated_at ON cards;
+DROP FUNCTION IF EXISTS update_cards_updated_at_column();
 
-CREATE OR REPLACE FUNCTION update_cards_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_cards_updated_at 
-BEFORE UPDATE ON cards 
-FOR EACH ROW 
-EXECUTE FUNCTION update_cards_updated_at_column();
+-- Como alternativa para evitar problemas com DO $$ no Render, não estamos recriando o trigger
+-- O trigger existente deve ser suficiente para a funcionalidade

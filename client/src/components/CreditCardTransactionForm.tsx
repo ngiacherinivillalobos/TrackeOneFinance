@@ -330,20 +330,21 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: isMobile ? 1.5 : 2
+            gap: isMobile ? 1.5 : 2.5 // Aumenta o espaçamento entre as linhas
           }}>
             <Box sx={{
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)'
+                sm: 'repeat(3, 1fr)' // Todos os campos com o mesmo tamanho
               },
+              gridTemplateRows: 'auto', // Garante que todas as linhas tenham altura automática
               gap: 2,
-              mt: 0.5
+              mt: 0.5,
+              alignItems: 'stretch' // Garante que todos os itens se estendam para preencher o espaço
             }}>
               {/* Primeira linha - Cartão, Data e Valor */}
-              <Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                 <FormControl fullWidth margin="dense" required size={isMobile ? "small" : "medium"}>
                   <InputLabel>Cartão</InputLabel>
                   <Select
@@ -351,17 +352,22 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                     label="Cartão"
                     onChange={(e) => handleChange('cardId', e.target.value)}
                     size={isMobile ? "small" : "medium"}
+                    sx={{ flex: 1 }}
                   >
                     {cards.map((card) => (
                       <MenuItem key={card.id} value={card.id}>
-                        {card.name} ({card.brand}) - Fecha dia {card.closing_day || '-'}
+                        {card.name}
+                        {card.card_number && card.card_number.length >= 4 && (
+                          ` (${card.card_number.slice(-4)})`
+                        )}
+                        {card.closing_day && ` - Fecha dia ${card.closing_day}`}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Box>
               
-              <Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
                   <DatePicker
                     label="Data"
@@ -372,14 +378,15 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                         fullWidth: true, 
                         margin: "dense", 
                         required: true,
-                        size: isMobile ? "small" : "medium"
+                        size: isMobile ? "small" : "medium",
+                        sx: { flex: 1 }
                       } 
                     }}
                   />
                 </LocalizationProvider>
               </Box>
               
-              <Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                 <TextField
                   label="Valor"
                   type="text"
@@ -462,16 +469,25 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                   }}
                   required
                   InputProps={{
-                    startAdornment: <Box sx={{ mr: 1 }}>R$</Box>
+                    startAdornment: <Box sx={{ mr: 1 }}>R$</Box>,
+                    sx: { textAlign: 'left' }
                   }}
                   placeholder="0,00"
                   helperText="Use vírgula para decimais (ex: 1.666,00)"
                   size={isMobile ? "small" : "medium"}
+                  sx={{ flex: 1 }}
                 />
               </Box>
               
               {/* Segunda linha - Descrição (ocupa toda a largura) */}
-              <Box sx={{ gridColumn: '1 / -1' }}>
+              <Box sx={{ 
+                gridColumn: '1 / -1',
+                mt: 1, // Adiciona margem superior para separar melhor
+                minWidth: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignSelf: 'stretch'
+              }}>
                 <TextField
                   label="Descrição"
                   fullWidth
@@ -481,12 +497,18 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                   required
                   size={isMobile ? "small" : "medium"}
                   multiline
-                  rows={2}
+                  rows={3} // Aumenta o número de linhas para melhor visualização
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      alignItems: 'flex-start' // Alinha o texto ao topo
+                    },
+                    flex: 1 // Garante que o campo ocupe todo o espaço disponível
+                  }}
                 />
               </Box>
               
               {/* Terceira linha - Categoria e Subcategoria */}
-              <Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                 <Autocomplete
                   fullWidth
                   options={categories}
@@ -504,13 +526,14 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                       margin="dense" 
                       required 
                       size={isMobile ? "small" : "medium"}
+                      sx={{ flex: 1 }}
                     />
                   )}
                   size={isMobile ? "small" : "medium"}
                 />
               </Box>
               
-              <Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                 <Autocomplete
                   fullWidth
                   options={filteredSubcategories}
@@ -525,6 +548,7 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                       label="Subcategoria" 
                       margin="dense" 
                       size={isMobile ? "small" : "medium"}
+                      sx={{ flex: 1 }}
                     />
                   )}
                   size={isMobile ? "small" : "medium"}
@@ -532,23 +556,35 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                 />
               </Box>
               
-              {/* Quarta linha - Compra parcelada e Nº de parcelas */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {/* Espaço vazio para manter o layout */}
+              <Box sx={{ minWidth: 0, alignSelf: 'stretch' }}></Box>
+              
+              {/* Quarta linha - Compra Parcelada, Nº de Parcelas e Valor por Parcela / Valor Total */}
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                mt: 1, // Adiciona margem superior
+                minWidth: 0,
+                height: '100%',
+                alignSelf: 'stretch' // Garante que o campo se estenda para preencher o espaço
+              }}>
                 <FormControlLabel
                   control={
                     <Switch
                       checked={formData.isInstallment}
                       onChange={(e) => handleChange('isInstallment', e.target.checked)}
                       color="primary"
+                      disabled={!!transaction} // Desabilita durante edição
                     />
                   }
                   label="Compra parcelada"
+                  sx={{ mr: 0 }}
                 />
               </Box>
               
               {formData.isInstallment && (
                 <>
-                  <Box>
+                  <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignSelf: 'stretch' }}>
                     <TextField
                       label="Nº de parcelas"
                       type="number"
@@ -566,31 +602,92 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
                         inputProps: { min: 1, max: 99 }
                       }}
                       size={isMobile ? "small" : "medium"}
+                      sx={{ flex: 1 }} // Garante que o campo ocupe todo o espaço disponível
+                      disabled={!!transaction} // Desabilita durante edição
                     />
                   </Box>
                   
-                  {/* Opção de valor total ou por parcela */}
-                  <Box sx={{ gridColumn: '1 / -1' }}>
-                    <FormControl component="fieldset">
+                  {/* Opção de valor total ou por parcela - Moderno */}
+                  <Box sx={{ 
+                    mt: 1, // Adiciona margem superior
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    alignSelf: 'stretch'
+                  }}>
+                    <FormControl component="fieldset" fullWidth>
                       <RadioGroup
                         row
                         value={formData.amountType}
                         onChange={(e) => handleChange('amountType', e.target.value)}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-around',
+                          p: 1.5, // Aumenta o padding
+                          borderRadius: 2,
+                          bgcolor: 'rgba(0, 0, 0, 0.02)',
+                          border: '1px solid rgba(0, 0, 0, 0.1)',
+                          height: '100%', // Garante altura completa
+                          alignItems: 'center',
+                          flex: 1 // Garante que o campo ocupe todo o espaço disponível
+                        }}
                       >
                         <MuiFormControlLabel 
                           value="parcela" 
-                          control={<Radio />} 
+                          control={
+                            <Radio 
+                              sx={{
+                                '&.Mui-checked': {
+                                  color: '#1976d2',
+                                },
+                              }}
+                              disabled={!!transaction} // Desabilita durante edição
+                            />
+                          } 
                           label="Valor por parcela" 
-                          sx={{ mr: 3 }}
+                          sx={{ 
+                            mr: 2,
+                            '& .MuiFormControlLabel-label': {
+                              fontWeight: 500,
+                              fontSize: '0.875rem'
+                            },
+                            flex: 1 // Distribui igualmente o espaço
+                          }}
+                          disabled={!!transaction} // Desabilita durante edição
                         />
                         <MuiFormControlLabel 
                           value="total" 
-                          control={<Radio />} 
+                          control={
+                            <Radio 
+                              sx={{
+                                '&.Mui-checked': {
+                                  color: '#1976d2',
+                                },
+                              }}
+                              disabled={!!transaction} // Desabilita durante edição
+                            />
+                          } 
                           label="Valor total" 
+                          sx={{
+                            '& .MuiFormControlLabel-label': {
+                              fontWeight: 500,
+                              fontSize: '0.875rem'
+                            },
+                            flex: 1 // Distribui igualmente o espaço
+                          }}
+                          disabled={!!transaction} // Desabilita durante edição
                         />
                       </RadioGroup>
                     </FormControl>
                   </Box>
+                </>
+              )}
+              
+              {/* Espaço vazio quando não é parcelado */}
+              {!formData.isInstallment && (
+                <>
+                  <Box sx={{ minWidth: 0, height: '100%', alignSelf: 'stretch' }}></Box>
+                  <Box sx={{ minWidth: 0, height: '100%', alignSelf: 'stretch' }}></Box>
                 </>
               )}
             </Box>
