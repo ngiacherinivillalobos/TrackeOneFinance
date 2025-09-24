@@ -13,4 +13,12 @@ UPDATE transactions SET payment_status_id = CASE
 END WHERE payment_status_id IS NULL;
 
 -- Criar índice para melhorar performance nas consultas por status
-CREATE INDEX IF NOT EXISTS idx_transactions_payment_status ON transactions(payment_status_id);
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes 
+    WHERE indexname = 'idx_transactions_payment_status'
+  ) THEN
+    CREATE INDEX idx_transactions_payment_status ON transactions(payment_status_id);
+  END IF;
+END $$;
