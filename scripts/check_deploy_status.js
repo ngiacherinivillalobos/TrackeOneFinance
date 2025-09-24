@@ -18,7 +18,7 @@ const SERVICES = {
   backend: {
     name: 'Backend API',
     url: process.env.BACKEND_URL || 'https://trackeone-finance-api.onrender.com',
-    endpoints: ['/api/test']
+    endpoints: ['/api/health']  // Alterado para usar o endpoint de health check
   },
   frontend: {
     name: 'Frontend',
