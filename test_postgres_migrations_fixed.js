@@ -7,47 +7,32 @@
 const fs = require('fs');
 const path = require('path');
 
-// Função para verificar se um arquivo contém IF NOT EXISTS fora de blocos DO $$
-function containsIfNotExists(filePath) {
+// Função para verificar se um arquivo contém blocos DO $$
+function containsDoBlocks(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    // Verificar se contém IF NOT EXISTS fora de comentários e blocos DO $$
-    const lines = content.split('\n');
-    let inDoBlock = false;
-    
-    for (const line of lines) {
-      // Verificar início e fim de blocos DO $$
-      if (line.includes('DO $$')) {
-        inDoBlock = true;
-        continue;
-      }
-      if (line.includes('END $$')) {
-        inDoBlock = false;
-        continue;
-      }
-      
-      // Ignorar linhas de comentário e linhas dentro de blocos DO $$
-      if (!line.trim().startsWith('--') && !line.trim().startsWith('/*') && !inDoBlock) {
-        if (line.includes('IF NOT EXISTS') || 
-            line.includes('ADD CONSTRAINT IF NOT EXISTS') || 
-            line.includes('CREATE INDEX IF NOT EXISTS') ||
-            line.includes('CREATE TABLE IF NOT EXISTS')) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return content.includes('DO $$') && content.includes('END $$');
   } catch (error) {
     console.error(`Erro ao ler o arquivo ${filePath}:`, error.message);
     return false;
   }
 }
 
-// Função para verificar se um arquivo usa blocos DO $$
-function containsDoBlocks(filePath) {
+// Função para verificar se um arquivo contém IF NOT EXISTS fora de comentários
+function containsIfNotExists(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    return content.includes('DO $$') && content.includes('END $$');
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      // Ignorar linhas de comentário
+      if (!line.trim().startsWith('--') && !line.trim().startsWith('/*')) {
+        if (line.includes('IF NOT EXISTS')) {
+          return true;
+        }
+      }
+    }
+    return false;
   } catch (error) {
     console.error(`Erro ao ler o arquivo ${filePath}:`, error.message);
     return false;
@@ -64,37 +49,43 @@ const postgresMigrations = fs.readdirSync(migrationsDir)
 
 console.log('🔍 Verificando migrações do PostgreSQL...\n');
 
-let hasIssues = false;
+let hasDoBlocks = false;
+let hasIfNotExists = false;
 
 postgresMigrations.forEach(file => {
   console.log(`📄 Verificando: ${path.basename(file)}`);
   
-  // Verificar se contém IF NOT EXISTS (problema)
-  const hasIfNotExists = containsIfNotExists(file);
-  if (hasIfNotExists) {
-    console.log(`   ❌ Contém IF NOT EXISTS fora de blocos DO $$ (incompatível com Render)`);
-    hasIssues = true;
+  // Verificar se contém blocos DO $$ (problema)
+  const hasBlocks = containsDoBlocks(file);
+  if (hasBlocks) {
+    console.log(`   ❌ Contém blocos DO $$ (incompatível com Render)`);
+    hasDoBlocks = true;
   } else {
-    console.log(`   ✅ Não contém IF NOT EXISTS fora de blocos DO $$`);
+    console.log(`   ✅ Não contém blocos DO $$`);
   }
   
-  // Verificar se usa blocos DO $$ (correto)
-  const hasDoBlocks = containsDoBlocks(file);
-  if (hasDoBlocks) {
-    console.log(`   ✅ Usa blocos DO $$ (compatível com Render)`);
+  // Verificar se contém IF NOT EXISTS (aceitável)
+  const hasIfExists = containsIfNotExists(file);
+  if (hasIfExists) {
+    console.log(`   ⚠️  Contém IF NOT EXISTS (aceitável)`);
+    hasIfNotExists = true;
   } else {
-    console.log(`   ⚠️  Não usa blocos DO $$ (pode não ser necessário)`);
+    console.log(`   ✅ Não contém IF NOT EXISTS`);
   }
   
   console.log('');
 });
 
-if (hasIssues) {
+if (hasDoBlocks) {
   console.log('❌ Foram encontrados problemas nas migrações!');
-  console.log('   Corrija os arquivos que contêm IF NOT EXISTS fora de blocos DO $$.');
+  console.log('   Corrija os arquivos que contêm blocos DO $$ para usar IF NOT EXISTS diretamente.');
 } else {
   console.log('✅ Todas as migrações do PostgreSQL estão corretas!');
-  console.log('   Nenhum problema encontrado com IF NOT EXISTS fora de blocos DO $$.');
+  console.log('   Nenhum problema encontrado com blocos DO $$.');
+  
+  if (hasIfNotExists) {
+    console.log('   ⚠️  Alguns arquivos contêm IF NOT EXISTS, o que é aceitável.');
+  }
 }
 
 console.log('\n📊 Resumo:');

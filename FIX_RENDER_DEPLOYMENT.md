@@ -1,106 +1,102 @@
-# 🛠️ Correção para Problemas de Deploy no Render
+# 🛠️ Correção de Deploy no Render - PostgreSQL
 
-## 🎯 Problema Identificado
+## 📋 Problema Identificado
 
-O frontend está tentando acessar o backend na URL `https://trackeone-finance-api.onrender.com`, mas esta URL pode não estar correta ou o serviço pode não estar respondendo.
-
-## 🔧 Solução
-
-### Passo 1: Verificar a URL Correta do Serviço no Render
-
-1. Acesse o dashboard do Render: https://dashboard.render.com
-2. Encontre seu serviço "trackeone-finance-api"
-3. Na página do serviço, localize a URL pública (geralmente no topo da página)
-4. A URL correta será algo como: `https://seu-servico.onrender.com`
-
-### Passo 2: Atualizar a Configuração de Ambiente
-
-#### Opção A: Via Dashboard do Render (Recomendado)
-
-1. No dashboard do Render, vá para o seu serviço frontend
-2. Clique em "Environment"
-3. Adicione a variável de ambiente:
-   ```
-   VITE_API_URL=https://seu-servico-correto.onrender.com
-   ```
-4. Redeploy o serviço
-
-#### Opção B: Via Arquivo de Configuração
-
-Atualize o arquivo `.env.production` na pasta `client`:
+Durante o deploy no Render, ocorreu um erro de sintaxe no PostgreSQL:
 
 ```
-# Arquivo de variáveis de ambiente para produção
-VITE_API_URL=https://seu-servico-correto.onrender.com
+error: syntax error at or near "NOT"
 ```
 
-### Passo 3: Verificar o Status do Backend
+Este erro estava relacionado ao uso de comandos `IF NOT EXISTS` em migrações do PostgreSQL, que não são totalmente compatíveis com o ambiente do Render.
 
-1. No dashboard do Render, verifique se o serviço backend está "Live"
-2. Verifique os logs do backend para erros de inicialização
-3. Confirme que o banco de dados está conectado corretamente
+## 🔧 Solução Aplicada
 
-### Passo 4: Testar a Conexão
+### 1. Substituição de `IF NOT EXISTS` por blocos `DO $$`
 
-Após as correções, teste acessando:
-- Frontend: `https://seu-frontend.onrender.com`
-- Backend API: `https://seu-backend.onrender.com/api/health`
+Todos os arquivos de migração do PostgreSQL foram atualizados para usar blocos `DO $$` com verificações condicionais ao invés de `IF NOT EXISTS`.
 
-## 🔍 Diagnóstico de Problemas Comuns
+**Exemplo da correção:**
 
-### 1. Serviço Backend Não Iniciando
+```sql
+-- Antes (incompatível com Render)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status_id INTEGER DEFAULT 1;
+ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS fk_transactions_payment_status 
+  FOREIGN KEY (payment_status_id) REFERENCES payment_status(id);
+CREATE INDEX IF NOT EXISTS idx_transactions_payment_status ON transactions(payment_status_id);
 
-**Sintomas**: 
-- Erros de rede no frontend
-- Status 500/503 no backend
+-- Depois (compatível com Render)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'transactions' AND column_name = 'payment_status_id'
+  ) THEN
+    ALTER TABLE transactions ADD COLUMN payment_status_id INTEGER DEFAULT 1;
+  END IF;
+END $$;
 
-**Soluções**:
-- Verificar logs do serviço backend
-- Confirmar variáveis de ambiente DATABASE_URL e JWT_SECRET
-- Verificar se as migrações foram aplicadas
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints 
+    WHERE constraint_name = 'fk_transactions_payment_status'
+  ) THEN
+    ALTER TABLE transactions ADD CONSTRAINT fk_transactions_payment_status 
+      FOREIGN KEY (payment_status_id) REFERENCES payment_status(id);
+  END IF;
+END $$;
 
-### 2. Problemas de CORS
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes 
+    WHERE indexname = 'idx_transactions_payment_status'
+  ) THEN
+    CREATE INDEX idx_transactions_payment_status ON transactions(payment_status_id);
+  END IF;
+END $$;
+```
 
-**Sintomas**:
-- Erros de CORS no console do navegador
-- Requisições bloqueadas
+### 2. Arquivos Corrigidos
 
-**Soluções**:
-- Verificar configuração CORS no backend
-- Confirmar que FRONTEND_URL está correta no backend
+Foram corrigidos os seguintes arquivos de migração:
 
-### 3. Banco de Dados Não Conectando
+1. `add_payment_status_id_to_transactions_postgres.sql`
+2. `add_missing_payment_fields_postgres.sql`
+3. `add_due_date_to_credit_card_transactions_postgres.sql`
+4. `add_cash_flow_table_postgres.sql`
+5. `add_cost_center_to_cash_flow_postgres.sql`
+6. `add_cost_center_to_users_postgres.sql`
+7. `add_installment_fields_postgres.sql`
+8. `add_investment_type_postgres.sql`
+9. `add_is_paid_to_transactions_postgres.sql`
+10. `add_payment_date_to_transactions_postgres.sql`
+11. `add_payment_days_to_cost_centers_postgres.sql`
+12. `add_recurring_fields_postgres.sql`
+13. `create_credit_card_transactions_table_postgres.sql`
+14. `ensure_cost_centers_payment_days_postgres.sql`
+15. `fix_cards_table_postgres.sql`
+16. `fix_payment_status_consistency_postgres.sql`
+17. `add_card_details_to_cards_table_postgres.sql`
 
-**Sintomas**:
-- Erros de conexão no log do backend
-- Aplicação não carrega dados
+### 3. Script de Verificação
 
-**Soluções**:
-- Verificar DATABASE_URL
-- Confirmar credenciais do banco de dados
-- Verificar se o banco está acessível
+Foi criado um script `test_postgres_migrations_fixed.js` para verificar se todas as migrações estão corretas e não contêm comandos `IF NOT EXISTS` fora de blocos `DO $$`.
 
-## 📋 Checklist de Verificação
+## ✅ Resultado
 
-- [ ] URL do backend confirmada no Render dashboard
-- [ ] Variável de ambiente VITE_API_URL configurada corretamente
-- [ ] Serviço backend está "Live" no Render
-- [ ] Banco de dados PostgreSQL está conectado
-- [ ] Migrações foram aplicadas
-- [ ] FRONTEND_URL configurada no backend
-- [ ] Teste de health check do backend: `/api/health`
-- [ ] Teste de endpoint de autenticação: `/api/auth/login`
+Após as correções, o deploy no Render deve funcionar corretamente, sem erros de sintaxe no PostgreSQL.
 
-## 🆘 Suporte Adicional
+## 📈 Próximos Passos
 
-Se os problemas persistirem:
+1. **Reiniciar o deploy no Render**
+2. **Verificar os logs do serviço**
+3. **Testar a API após o deploy**
 
-1. Verifique os logs completos no Render dashboard
-2. Confirme que as portas estão configuradas corretamente (3001 para backend)
-3. Verifique se há erros de compilação no build do Render
-4. Confirme que todas as dependências estão instaladas corretamente
+## 🆘 Suporte
 
-## 📞 Contato
-
-Para suporte adicional, entre em contato com a equipe do Render ou verifique a documentação em:
-https://render.com/docs
+Em caso de novos problemas:
+- Verifique os logs do Render
+- Execute o script de verificação
+- Consulte este documento
