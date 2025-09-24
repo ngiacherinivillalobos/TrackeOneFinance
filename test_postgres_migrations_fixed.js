@@ -7,11 +7,36 @@
 const fs = require('fs');
 const path = require('path');
 
-// Função para verificar se um arquivo contém IF NOT EXISTS
+// Função para verificar se um arquivo contém IF NOT EXISTS fora de blocos DO $$
 function containsIfNotExists(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    return content.includes('IF NOT EXISTS') || content.includes('ADD CONSTRAINT IF NOT EXISTS') || content.includes('CREATE INDEX IF NOT EXISTS');
+    // Verificar se contém IF NOT EXISTS fora de comentários e blocos DO $$
+    const lines = content.split('\n');
+    let inDoBlock = false;
+    
+    for (const line of lines) {
+      // Verificar início e fim de blocos DO $$
+      if (line.includes('DO $$')) {
+        inDoBlock = true;
+        continue;
+      }
+      if (line.includes('END $$')) {
+        inDoBlock = false;
+        continue;
+      }
+      
+      // Ignorar linhas de comentário e linhas dentro de blocos DO $$
+      if (!line.trim().startsWith('--') && !line.trim().startsWith('/*') && !inDoBlock) {
+        if (line.includes('IF NOT EXISTS') || 
+            line.includes('ADD CONSTRAINT IF NOT EXISTS') || 
+            line.includes('CREATE INDEX IF NOT EXISTS') ||
+            line.includes('CREATE TABLE IF NOT EXISTS')) {
+          return true;
+        }
+      }
+    }
+    return false;
   } catch (error) {
     console.error(`Erro ao ler o arquivo ${filePath}:`, error.message);
     return false;
@@ -47,10 +72,10 @@ postgresMigrations.forEach(file => {
   // Verificar se contém IF NOT EXISTS (problema)
   const hasIfNotExists = containsIfNotExists(file);
   if (hasIfNotExists) {
-    console.log(`   ❌ Contém IF NOT EXISTS (incompatível com Render)`);
+    console.log(`   ❌ Contém IF NOT EXISTS fora de blocos DO $$ (incompatível com Render)`);
     hasIssues = true;
   } else {
-    console.log(`   ✅ Não contém IF NOT EXISTS`);
+    console.log(`   ✅ Não contém IF NOT EXISTS fora de blocos DO $$`);
   }
   
   // Verificar se usa blocos DO $$ (correto)
@@ -66,10 +91,10 @@ postgresMigrations.forEach(file => {
 
 if (hasIssues) {
   console.log('❌ Foram encontrados problemas nas migrações!');
-  console.log('   Corrija os arquivos que contêm IF NOT EXISTS para usar blocos DO $$.');
+  console.log('   Corrija os arquivos que contêm IF NOT EXISTS fora de blocos DO $$.');
 } else {
   console.log('✅ Todas as migrações do PostgreSQL estão corretas!');
-  console.log('   Nenhum problema encontrado com IF NOT EXISTS.');
+  console.log('   Nenhum problema encontrado com IF NOT EXISTS fora de blocos DO $$.');
 }
 
 console.log('\n📊 Resumo:');
