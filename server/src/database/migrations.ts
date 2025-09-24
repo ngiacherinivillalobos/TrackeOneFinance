@@ -21,11 +21,13 @@ const migrations = [
   'ensure_cost_centers_payment_days_postgres.sql', // Apenas para produção
   'create_credit_card_transactions_table_postgres.sql', // Apenas para produção
   'fix_cards_table_postgres.sql', // Apenas para produção
+  'add_due_date_to_credit_card_transactions_postgres.sql', // Nova migração para PostgreSQL
   
   // Migrações para SQLite (desenvolvimento)
   'add_savings_goals_table.sql',
   'add_card_details_to_cards_table_sqlite.sql',
-  'create_credit_card_transactions_table_sqlite.sql'
+  'create_credit_card_transactions_table_sqlite.sql',
+  'add_due_date_to_credit_card_transactions_sqlite.sql' // Nova migração para SQLite
 ];
 
 // Função para aplicar uma migração

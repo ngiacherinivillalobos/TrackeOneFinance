@@ -55,7 +55,7 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
     description: '',
     total_amount: 0,
     total_installments: 1,
-    card_id: 0, // Não pré-selecionar cartão por padrão
+    card_id: selectedCard?.id || 0, // Pré-selecionar cartão se disponível
     category_id: undefined,
     subcategory_id: undefined,
     transaction_date: new Date().toISOString().split('T')[0]
@@ -82,9 +82,9 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
         setTransactions(transactionsData);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
-      setMessage('Erro ao carregar dados');
+      setMessage('Erro ao carregar dados: ' + (error.message || error));
       setMessageType('error');
     } finally {
       setLoading(false);
@@ -95,12 +95,20 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
     loadData();
   }, [selectedCard]);
 
+  useEffect(() => {
+    // Atualizar o card_id no formulário quando o selectedCard mudar
+    setFormData(prev => ({
+      ...prev,
+      card_id: selectedCard?.id || 0
+    }));
+  }, [selectedCard]);
+
   const handleOpen = () => {
     setFormData({
       description: '',
       total_amount: 0,
       total_installments: 1,
-      card_id: 0, // Não pré-selecionar cartão por padrão
+      card_id: selectedCard?.id || 0, // Pré-selecionar cartão se disponível
       category_id: undefined,
       subcategory_id: undefined,
       transaction_date: new Date().toISOString().split('T')[0]
@@ -133,7 +141,9 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       // Determinar a data correta com base na data de fechamento do cartão
       let transactionDate = new Date(formData.transaction_date);
       
-      if (selectedCard && selectedCard.closing_day) {
+      // Apenas ajustar a data para transações individuais, não para parceladas
+      // O backend já faz o ajuste correto para transações parceladas
+      if (formData.total_installments <= 1 && selectedCard && selectedCard.closing_day) {
         const transactionDay = transactionDate.getDate();
         
         // Se a data da transação for maior ou igual à data de fechamento,
@@ -162,7 +172,14 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
         setMessage('Transação atualizada com sucesso!');
       } else {
         // Criar parcelamentos
-        const result = await cardTransactionService.createInstallments(adjustedFormData);
+        // Manter a data original da transação - não ajustar com base na data de fechamento
+        // O backend já faz o ajuste correto para determinar em qual fatura a transação aparece
+        const createData = {
+          ...formData,
+          transaction_date: formData.transaction_date // Manter a data original
+        };
+        
+        const result = await cardTransactionService.createInstallments(createData);
         setMessage(`${result.transactions.length} parcelas criadas com sucesso!`);
       }
       
@@ -170,9 +187,9 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
       await loadData();
       handleClose();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving transaction:', error);
-      setMessage('Erro ao salvar transação');
+      setMessage('Erro ao salvar transação: ' + (error.message || error));
       setMessageType('error');
     } finally {
       setLoading(false);
@@ -200,9 +217,9 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
         setMessage('Transação excluída com sucesso!');
         setMessageType('success');
         await loadData();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting transaction:', error);
-        setMessage('Erro ao excluir transação');
+        setMessage('Erro ao excluir transação: ' + (error.message || error));
         setMessageType('error');
       }
     }

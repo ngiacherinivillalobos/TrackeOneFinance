@@ -195,20 +195,22 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
         // Se for valor por parcela, manter o valor como está
       }
       
-      // Determinar a data correta com base na data de fechamento do cartão
+      // Manter a data da transação original - não ajustar a data da transação
+      // O backend já faz o ajuste correto para determinar em qual fatura a transação aparece
       let transactionDate = new Date(formData.date);
-      
-      if (selectedCard && selectedCard.closing_day) {
+
+      // Apenas ajustar a data para transações individuais, não para parceladas
+      // O backend já faz o ajuste correto para transações parceladas
+      if (!formData.isInstallment && selectedCard && selectedCard.closing_day) {
         const transactionDay = transactionDate.getDate();
         
         // Se a data da transação for maior ou igual à data de fechamento,
         // calcular para o próximo mês (próxima fatura)
-        // CORREÇÃO: Se o dia for menor que a data de fechamento, é referente à fatura do mês atual
         if (transactionDay >= selectedCard.closing_day) {
           transactionDate.setMonth(transactionDate.getMonth() + 1);
         }
       }
-
+      
       if (transaction) {
         // Atualizar transação existente
         console.log('Atualizando transação existente:', transaction);
@@ -239,7 +241,7 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
             category_id: parseInt(formData.categoryId),
             subcategory_id: formData.subcategoryId ? parseInt(formData.subcategoryId) : undefined,
             card_id: parseInt(formData.cardId),
-            transaction_date: transactionDate.toISOString().split('T')[0],
+            transaction_date: formData.date.toISOString().split('T')[0], // Manter a data original
             is_installment: false
           };
 
@@ -258,12 +260,14 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
             card_id: parseInt(formData.cardId),
             category_id: parseInt(formData.categoryId),
             subcategory_id: formData.subcategoryId ? parseInt(formData.subcategoryId) : undefined,
-            transaction_date: transactionDate.toISOString().split('T')[0]
+            transaction_date: formData.date.toISOString().split('T')[0] // Manter a data original
           };
 
           await api.post('/credit-card-transactions/installments', installmentData);
         } else {
           // Criar transação única usando o novo endpoint
+          // Manter a data original da transação - não ajustar com base na data de fechamento
+          // O backend já faz o ajuste correto para determinar em qual fatura a transação aparece
           const transactionData = {
             description: formData.description,
             amount: amount,
@@ -271,7 +275,7 @@ export function CreditCardTransactionForm({ open, onClose, onSubmit, transaction
             category_id: parseInt(formData.categoryId),
             subcategory_id: formData.subcategoryId ? parseInt(formData.subcategoryId) : undefined,
             card_id: parseInt(formData.cardId),
-            transaction_date: transactionDate.toISOString().split('T')[0]
+            transaction_date: formData.date.toISOString().split('T')[0] // Manter a data original
           };
 
           await api.post('/credit-card-transactions', transactionData);

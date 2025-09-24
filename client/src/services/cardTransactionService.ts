@@ -10,6 +10,7 @@ export interface CardTransaction {
   card_id: number;
   cost_center_id?: number;
   transaction_date: string;
+  due_date?: string; // Nova propriedade para data de vencimento
   is_installment?: boolean;
   installment_number?: number;
   total_installments?: number;

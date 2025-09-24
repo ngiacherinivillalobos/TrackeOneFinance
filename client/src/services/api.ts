@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Detectar a URL base automaticamente com base no ambiente
+// Usar a mesma lógica do lib/axios.ts para consistência
 const getBaseURL = () => {
   // Em produção, tentar detectar a URL do backend
   if (import.meta.env.MODE === 'production') {
@@ -11,8 +11,8 @@ const getBaseURL = () => {
     // Fallback para uma URL padrão - deve ser substituída pela URL real do Render
     return 'https://trackeone-finance-api.onrender.com';
   }
-  // Em desenvolvimento, usar URL absoluta para o backend
-  return 'http://localhost:3001';
+  // Em desenvolvimento, usar caminho relativo para o proxy do Vite
+  return '/api';
 };
 
 export const api = axios.create({
@@ -34,7 +34,9 @@ api.interceptors.request.use(
     }
     
     // Garantir que todas as URLs comecem com /api, mas evitar duplicação
-    if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http')) {
+    // Verificar se a baseURL já contém /api para evitar duplicação
+    const baseURLContainsAPI = config.baseURL?.includes('/api');
+    if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http') && !baseURLContainsAPI) {
       config.url = `/api${config.url}`;
     }
     

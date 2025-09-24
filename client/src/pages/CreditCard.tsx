@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Paper,
   Typography,
@@ -83,7 +83,7 @@ export default function CreditCard() {
   const [transactions, setTransactions] = useState<CardTransaction[]>([]);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
   const [batchActionsAnchor, setBatchActionsAnchor] = useState<HTMLElement | null>(null);
   
@@ -158,9 +158,39 @@ export default function CreditCard() {
     loadFilterData();
   }, []);
 
+  // Adicionar novo estado para evitar criação em cascata
+  const [isCreatingAutomaticTransaction, setIsCreatingAutomaticTransaction] = useState(false);
+
+  // Adicionar novo estado para controlar transações automáticas criadas
+  const [createdAutomaticTransactions, setCreatedAutomaticTransactions] = useState<Set<string>>(new Set());
+  const [automaticTransactionCreationAttempted, setAutomaticTransactionCreationAttempted] = useState(false);
+
   // Função para criar transação automática no controle mensal
   const createAutomaticTransaction = async (cardId: number, month: Date, totalAmount: number) => {
+    // Evitar criação em cascata
+    if (isCreatingAutomaticTransaction) {
+      console.log('Transação automática já está sendo criada, pulando...');
+      return;
+    }
+    
+    // Verificar se já tentamos criar transações automáticas para este carregamento
+    if (automaticTransactionCreationAttempted) {
+      console.log('Transações automáticas já foram tentadas para este carregamento, pulando...');
+      return;
+    }
+    
+    // Criar chave única para esta transação automática
+    const transactionKey = `${cardId}-${format(month, 'yyyy-MM')}`;
+    
+    // Verificar se já criamos uma transação automática para este cartão neste mês
+    if (createdAutomaticTransactions.has(transactionKey)) {
+      console.log('Transação automática já criada para este cartão neste mês, pulando...', transactionKey);
+      return;
+    }
+    
     try {
+      setIsCreatingAutomaticTransaction(true);
+      
       // Obter informações do cartão para a data de vencimento
       const card = cards.find(c => c.id === cardId);
       if (!card) {
@@ -168,8 +198,28 @@ export default function CreditCard() {
         return;
       }
 
-      // Calcular a data de vencimento baseada no dia de vencimento do cartão
-      const dueDate = new Date(month.getFullYear(), month.getMonth(), card.due_day || 10);
+      // Verificar se totalAmount é um número válido antes de prosseguir
+      if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
+        console.log('Valor total inválido, pulando criação de transação automática:', totalAmount);
+        return;
+      }
+
+      // Manter a data da transação original (não ajustar com base na data de fechamento)
+      const transactionDate = new Date(month);
+
+      // Ajustar a data da transação se for maior que a data de fechamento
+      // Isso determina em qual fatura a transação deve aparecer
+      let adjustedTransactionDate = new Date(transactionDate);
+      
+      if (card.closing_day) {
+        const transactionDay = transactionDate.getDate();
+        
+        // Se a data da transação for maior ou igual à data de fechamento,
+        // ajustar a transação para o próximo mês (aparecer na próxima fatura)
+        if (transactionDay >= card.closing_day) {
+          adjustedTransactionDate.setMonth(adjustedTransactionDate.getMonth() + 1);
+        }
+      }
       
       // Dados para a transação automática
       const automaticTransactionData = {
@@ -177,7 +227,7 @@ export default function CreditCard() {
         amount: totalAmount,
         transaction_type: 'Despesa' as 'Despesa' | 'Receita' | 'Investimento',
         category_id: 1, // Categoria "Cartão de Crédito" (você pode ajustar conforme necessário)
-        transaction_date: dueDate.toISOString().split('T')[0],
+        transaction_date: transactionDate.toISOString().split('T')[0], // Manter a data original da transação
         is_recurring: false,
         is_paid: false,
         payment_status_id: 1 // Em aberto
@@ -185,10 +235,56 @@ export default function CreditCard() {
 
       // Criar a transação automática
       await transactionService.create(automaticTransactionData);
-      console.log('Transação automática criada com sucesso');
+      console.log('Transação automática criada com sucesso para', adjustedTransactionDate.toISOString().split('T')[0]);
+      
+      // Marcar esta transação como criada
+      setCreatedAutomaticTransactions(prev => new Set(prev).add(transactionKey));
     } catch (error) {
       console.error('Erro ao criar transação automática:', error);
+    } finally {
+      setIsCreatingAutomaticTransaction(false);
     }
+  };
+
+  // Função para calcular a data de vencimento com base na data da transação e dados do cartão
+  // Agora também verifica se a data de vencimento já está salva no banco de dados
+  const calculateDueDate = (transactionDate: string, card: CreditCard, transaction?: CardTransaction): Date => {
+    // Se a transação já tem uma data de vencimento salva, usar essa
+    if (transaction && transaction.due_date) {
+      const [year, month, day] = transaction.due_date.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    
+    const [year, month, day] = transactionDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    
+    // Se o cartão tem dia de fechamento e vencimento definidos
+    if (card.closing_day && card.due_day) {
+      // Se a data da transação é maior ou igual ao dia de fechamento,
+      // a fatura fecha neste mês e vence no próximo
+      if (date.getDate() >= card.closing_day) {
+        date.setMonth(date.getMonth() + 1);
+      }
+      
+      // Ajustar para o dia de vencimento
+      date.setDate(card.due_day);
+    }
+    
+    return date;
+  };
+
+  // Função para verificar se uma transação pertence ao período com base na data de vencimento
+  const isTransactionInPeriod = (transaction: CardTransaction, card: CreditCard, startDate: Date, endDate: Date): boolean => {
+    // Usar a data de vencimento salva no banco de dados, se disponível
+    if (transaction.due_date) {
+      const [year, month, day] = transaction.due_date.split('-').map(Number);
+      const dueDate = new Date(year, month - 1, day);
+      return dueDate >= startDate && dueDate <= endDate;
+    }
+    
+    // Caso contrário, calcular a data de vencimento com base na data da transação e dados do cartão
+    const dueDate = calculateDueDate(transaction.transaction_date, card, transaction);
+    return dueDate >= startDate && dueDate <= endDate;
   };
 
   // Função para carregar transações com filtros
@@ -216,12 +312,43 @@ export default function CreditCard() {
           endDate = format(advancedFilters.customEndDate, 'yyyy-MM-dd');
         }
         
+        // Sempre filtrar localmente com base na data de vencimento
         if (startDate && endDate) {
-          filterParams.start_date = startDate;
-          filterParams.end_date = endDate;
+          // Carregar todas as transações sem filtro de data do backend
+          const allTransactions = await cardTransactionService.getFiltered({
+            card_id: filters.cardId || undefined,
+            category_id: filters.categoryId.length > 0 ? filters.categoryId.join(',') : undefined,
+            subcategory_id: filters.subcategoryId || undefined
+          });
+          
+          // Filtrar localmente com base na data de vencimento
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          
+          const filteredTransactions = allTransactions.filter(transaction => {
+            // Encontrar o cartão da transação
+            const card = cards.find(c => c.id === transaction.card_id);
+            if (card) {
+              return isTransactionInPeriod(transaction, card, start, end);
+            }
+            // Se não encontrar o cartão, filtrar pela data de vencimento salva
+            if (transaction.due_date) {
+              const [year, month, day] = transaction.due_date.split('-').map(Number);
+              const dueDate = new Date(year, month - 1, day);
+              return dueDate >= start && dueDate <= end;
+            }
+            // Se não tiver data de vencimento, manter a transação (para não perder dados)
+            return true;
+          });
+          
+          console.log('Transações filtradas por data de vencimento:', filteredTransactions);
+          setTransactions(filteredTransactions);
+          setSelectedTransactions([]); // Limpar seleção ao recarregar
+          return;
         }
       }
       
+      // Aplicar outros filtros
       if (filters.cardId) {
         filterParams.card_id = filters.cardId;
       }
@@ -242,7 +369,10 @@ export default function CreditCard() {
       setSelectedTransactions([]); // Limpar seleção ao recarregar
       
       // Criar transações automáticas se houver transações de cartão
-      if (transactionsData.length > 0 && advancedFilters.dateFilterType === 'month') {
+      if (transactionsData.length > 0 && advancedFilters.dateFilterType === 'month' && !isCreatingAutomaticTransaction) {
+        // Marcar que tentamos criar transações automáticas para este carregamento
+        setAutomaticTransactionCreationAttempted(true);
+        
         // Agrupar transações por cartão
         const transactionsByCard: { [key: number]: CardTransaction[] } = {};
         
@@ -273,12 +403,18 @@ export default function CreditCard() {
 
   // Carregar transações quando os filtros mudarem
   useEffect(() => {
+    // Limpar o conjunto de transações automáticas criadas quando os filtros mudam
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
     loadTransactions();
   }, [filters, advancedFilters]);
 
   // Função para lidar com o envio do formulário
   const handleTransactionSubmit = () => {
     // Recarregar dados após salvar transação
+    // Limpar o conjunto de transações automáticas criadas ao recarregar
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
     loadTransactions();
     // Limpar transação em edição
     setEditingTransaction(null);
@@ -309,6 +445,9 @@ export default function CreditCard() {
     };
     
     loadData();
+    // Limpar o conjunto de transações automáticas criadas ao carregar dados
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
   }, []);
 
   // Funções para manipulação de filtros
@@ -317,6 +456,9 @@ export default function CreditCard() {
       ...prev,
       [name]: value
     }));
+    // Limpar o conjunto de transações automáticas criadas ao mudar filtros
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
   };
 
   const handleAdvancedFilterChange = (name: string, value: any) => {
@@ -324,6 +466,9 @@ export default function CreditCard() {
       ...prev,
       [name]: value
     }));
+    // Limpar o conjunto de transações automáticas criadas ao mudar filtros avançados
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
   };
 
   const handleClearFilters = () => {
@@ -339,6 +484,9 @@ export default function CreditCard() {
       customEndDate: null,
       selectedYear: new Date().getFullYear(),
     });
+    // Limpar o conjunto de transações automáticas criadas ao limpar filtros
+    setCreatedAutomaticTransactions(new Set());
+    setAutomaticTransactionCreationAttempted(false);
   };
 
   // Funções para seleção de transações
@@ -381,6 +529,9 @@ export default function CreditCard() {
     if (window.confirm('Tem certeza que deseja excluir esta transação?')) {
       try {
         await cardTransactionService.delete(id);
+        // Limpar o conjunto de transações automáticas criadas ao excluir uma transação
+        setCreatedAutomaticTransactions(new Set());
+        setAutomaticTransactionCreationAttempted(false);
         loadTransactions();
       } catch (error) {
         console.error('Error deleting transaction:', error);
@@ -399,6 +550,9 @@ export default function CreditCard() {
           selectedTransactions.map(id => cardTransactionService.delete(id))
         );
         setSelectedTransactions([]);
+        // Limpar o conjunto de transações automáticas criadas ao excluir transações
+        setCreatedAutomaticTransactions(new Set());
+        setAutomaticTransactionCreationAttempted(false);
         loadTransactions();
       } catch (error) {
         console.error('Error deleting transactions:', error);
@@ -480,6 +634,9 @@ export default function CreditCard() {
       // Fechar diálogo e recarregar transações
       setBatchEditDialogOpen(false);
       setSelectedTransactions([]);
+      // Limpar o conjunto de transações automáticas criadas ao editar transações
+      setCreatedAutomaticTransactions(new Set());
+      setAutomaticTransactionCreationAttempted(false);
       loadTransactions();
       
       // Mostrar mensagem de sucesso
@@ -507,7 +664,9 @@ export default function CreditCard() {
         if (!totals[transaction.card_id]) {
           totals[transaction.card_id] = 0;
         }
-        totals[transaction.card_id] += transaction.amount;
+        // Garantir que transaction.amount seja um número válido
+        const amount = typeof transaction.amount === 'number' && !isNaN(transaction.amount) ? transaction.amount : 0;
+        totals[transaction.card_id] += amount;
       }
     });
     
@@ -593,12 +752,13 @@ export default function CreditCard() {
   }, [transactions, order, orderBy, cards]);
 
   // Componente para cabeçalho ordenável
-  const SortableTableCell = ({ children, sortKey, align = 'left', ...props }: {
+  const SortableTableCell = ({ children, sortKey, align = 'left', sx, ...props }: {
     children: React.ReactNode;
     sortKey: string;
-    align?: 'left' | 'right' | 'center';
+    align?: 'inherit' | 'left' | 'center' | 'right' | 'justify';
+    sx?: any;
     [key: string]: any;
-  }) => {
+  } & React.HTMLAttributes<HTMLTableCellElement>) => {
     const isActive = orderBy === sortKey;
     const isAsc = order === 'asc';
 
@@ -616,7 +776,7 @@ export default function CreditCard() {
           '&:hover': {
             bgcolor: colors.gray[100]
           },
-          ...props.sx
+          ...sx
         }}
         onClick={() => handleSort(sortKey)}
       >
@@ -1145,7 +1305,7 @@ export default function CreditCard() {
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="body2" sx={{ color: colors.gray[900], fontWeight: 600, fontSize: '0.9rem' }}>
-                          R$ {cardTotals[card.id!] ? cardTotals[card.id!].toFixed(2).replace('.', ',') : '0,00'}
+                          R$ {cardTotals[card.id!] && !isNaN(cardTotals[card.id!]) && typeof cardTotals[card.id!] === 'number' ? cardTotals[card.id!].toFixed(2).replace('.', ',') : '0,00'}
                         </Typography>
                       </Box>
                     </Box>
@@ -1235,7 +1395,7 @@ export default function CreditCard() {
                     </TableCell>
                     <SortableTableCell sortKey="transaction_date">Data</SortableTableCell>
                     <SortableTableCell sortKey="description">Descrição</SortableTableCell>
-                    <SortableTableCell sortKey="amount" align="right">Valor</SortableTableCell>
+                    <SortableTableCell sortKey="amount" align="left">Valor</SortableTableCell>
                     <SortableTableCell sortKey="category_name">Categoria</SortableTableCell>
                     <SortableTableCell sortKey="card_name">Cartão</SortableTableCell>
                     <TableCell sx={{ 
@@ -1280,23 +1440,50 @@ export default function CreditCard() {
                             checked={isItemSelected}
                             onChange={() => handleSelectTransaction(transaction.id!)}
                             sx={{ color: colors.primary[600] }}
-                          />
+                      />
                         </TableCell>
-                        <TableCell>{
-  // Criar data de forma segura para evitar problemas de timezone
-  (() => {
-    const [year, month, day] = transaction.transaction_date.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString('pt-BR');
-  })()
-}</TableCell>
+                        <TableCell>
+                          <Box>
+                            {(() => {
+                              // Encontrar o cartão da transação
+                              const card = cards.find(c => c.id === transaction.card_id);
+                              // Mostrar a data da transação
+                              const [year, month, day] = transaction.transaction_date.split('-').map(Number);
+                              const transactionDate = new Date(year, month - 1, day);
+                              
+                              // Mostrar a data de vencimento (salva no banco de dados ou calculada)
+                              let dueDate;
+                              if (transaction.due_date) {
+                                // Usar a data de vencimento salva no banco de dados
+                                const [dueYear, dueMonth, dueDay] = transaction.due_date.split('-').map(Number);
+                                dueDate = new Date(dueYear, dueMonth - 1, dueDay);
+                              } else if (card && card.due_day) {
+                                // Calcular a data de vencimento se não estiver salva
+                                dueDate = calculateDueDate(transaction.transaction_date, card, transaction);
+                              }
+                              
+                              return (
+                                <Box>
+                                  <Typography variant="body2">
+                                    {transactionDate.toLocaleDateString('pt-BR')}
+                                  </Typography>
+                                  {dueDate && (
+                                    <Typography variant="body2" sx={{ color: colors.gray[500], fontSize: '0.75rem', mt: 0.5 }}>
+                                      Venc.: {dueDate.toLocaleDateString('pt-BR')}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              );
+                            })()}
+                          </Box>
+                        </TableCell>
                         <TableCell>{transaction.description}</TableCell>
-                        <TableCell align="right">
-                          R$ {Number(transaction.amount)?.toFixed(2).replace('.', ',')}
+                        <TableCell align="left">
+                          R$ {typeof transaction.amount === 'number' && !isNaN(transaction.amount) ? transaction.amount.toFixed(2).replace('.', ',') : '0,00'}
                           {/* Valor total da transação de forma discreta */}
                           {transaction.is_installment && transaction.total_installments && transaction.total_installments > 1 && (
                             <Typography variant="body2" sx={{ color: colors.gray[500], fontSize: '0.75rem', mt: 0.5 }}>
-                              R$ {totalAmount.toFixed(2).replace('.', ',')}
+                              R$ {typeof totalAmount === 'number' && !isNaN(totalAmount) ? totalAmount.toFixed(2).replace('.', ',') : '0,00'}
                             </Typography>
                           )}
                         </TableCell>
@@ -1323,7 +1510,7 @@ export default function CreditCard() {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <Typography color="textSecondary">
+                        <Typography variant="body1" sx={{ color: colors.gray[500] }}>
                           Nenhuma transação encontrada
                         </Typography>
                       </TableCell>
@@ -1332,7 +1519,7 @@ export default function CreditCard() {
                 </TableBody>
               </Table>
             </TableContainer>
-            
+              
             <TablePagination
               rowsPerPageOptions={[5, 10, 25, 50]}
               component="div"
@@ -1363,322 +1550,321 @@ export default function CreditCard() {
               }}
             />
           </Paper>
-        </Box>
-        
-        {/* Menu de ações em lote */}
-        <Menu
-          anchorEl={batchActionsAnchor}
-          open={Boolean(batchActionsAnchor)}
-          onClose={() => setBatchActionsAnchor(null)}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <MenuItemComponent onClick={handleBatchEdit}>
-            <ListItemIcon>
-              <EditIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Editar</ListItemText>
-          </MenuItemComponent>
-          <MenuItemComponent onClick={handleBatchDelete}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Excluir</ListItemText>
-          </MenuItemComponent>
-        </Menu>
-        
-        {/* Menu de ações individuais */}
-        <Menu
-          anchorEl={actionMenuAnchor}
-          open={Boolean(actionMenuAnchor)}
-          onClose={handleActionMenuClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <MenuItemComponent onClick={() => {
-            const transaction = transactions.find(t => t.id === selectedTransactionId);
-            if (transaction) {
-              handleEditTransaction(transaction);
-            }
-          }}>
-            <ListItemIcon>
-              <EditIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Editar</ListItemText>
-          </MenuItemComponent>
-          <MenuItemComponent onClick={() => {
-            if (selectedTransactionId) {
-              handleDeleteTransaction(selectedTransactionId);
-            }
-          }}>
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Excluir</ListItemText>
-          </MenuItemComponent>
-        </Menu>
-        
-        {/* Diálogo de edição em lote */}
-        <Dialog
-          open={batchEditDialogOpen}
-          onClose={() => setBatchEditDialogOpen(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle sx={{ bgcolor: colors.primary[50], color: colors.primary[700] }}>
-            Edição em Lote
-            <Typography variant="body2" sx={{ color: colors.gray[600], mt: 0.5 }}>
-              {selectedTransactions.length} transação(ões) selecionada(s)
-            </Typography>
-          </DialogTitle>
-          <DialogContent sx={{ p: 3 }}>
-            <Typography variant="body2" sx={{ mb: 3, color: colors.gray[600] }}>
-              Preencha apenas os campos que deseja alterar. Os campos vazios não serão modificados.
-            </Typography>
-            
-            <Box sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
-              gap: 3
+          
+          {/* Menu de ações em lote */}
+          <Menu
+            anchorEl={batchActionsAnchor}
+            open={Boolean(batchActionsAnchor)}
+            onClose={() => setBatchActionsAnchor(null)}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItemComponent onClick={handleBatchEdit}>
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Editar</ListItemText>
+            </MenuItemComponent>
+            <MenuItemComponent onClick={handleBatchDelete}>
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Excluir</ListItemText>
+            </MenuItemComponent>
+          </Menu>
+          
+          {/* Menu de ações individuais */}
+          <Menu
+            anchorEl={actionMenuAnchor}
+            open={Boolean(actionMenuAnchor)}
+            onClose={handleActionMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItemComponent onClick={() => {
+              const transaction = transactions.find(t => t.id === selectedTransactionId);
+              if (transaction) {
+                handleEditTransaction(transaction);
+              }
             }}>
-              {/* Descrição */}
-              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Editar</ListItemText>
+            </MenuItemComponent>
+            <MenuItemComponent onClick={() => {
+              if (selectedTransactionId) {
+                handleDeleteTransaction(selectedTransactionId);
+              }
+            }}>
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Excluir</ListItemText>
+            </MenuItemComponent>
+          </Menu>
+          
+          {/* Diálogo de edição em lote */}
+          <Dialog
+            open={batchEditDialogOpen}
+            onClose={() => setBatchEditDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ bgcolor: colors.primary[50], color: colors.primary[700] }}>
+              Edição em Lote
+              <Typography variant="body2" sx={{ color: colors.gray[600], mt: 0.5 }}>
+                {selectedTransactions.length} transação(ões) selecionada(s)
+              </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ p: 3 }}>
+              <Typography variant="body2" sx={{ mb: 3, color: colors.gray[600] }}>
+                Preencha apenas os campos que deseja alterar. Os campos vazios não serão modificados.
+              </Typography>
+              
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                gap: 3
+              }}>
+                {/* Descrição */}
+                <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                  <TextField
+                    label="Descrição"
+                    value={batchEditData.description}
+                    onChange={(e) => setBatchEditData(prev => ({ ...prev, description: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    placeholder="Deixe vazio para não alterar"
+                    helperText="Nova descrição para as transações selecionadas"
+                    multiline
+                    rows={2}
+                  />
+                </Box>
+
+                {/* Valor */}
                 <TextField
-                  label="Descrição"
-                  value={batchEditData.description}
-                  onChange={(e) => setBatchEditData(prev => ({ ...prev, description: e.target.value }))}
+                  label="Valor (R$)"
+                  type="text"
+                  value={batchEditData.amount}
+                  onChange={(e) => {
+                    // Permite apenas números, vírgula e ponto
+                    const value = e.target.value.replace(/[^0-9.,]/g, '');
+                    setBatchEditData(prev => ({ ...prev, amount: value }));
+                  }}
+                  onBlur={(e) => {
+                    // Formatar o valor quando perder o foco
+                    const value = e.target.value.replace(/[^0-9.,]/g, '');
+                    if (value) {
+                      // Função para converter formato brasileiro para número
+                      const parseBrazilianNumber = (str: string): number => {
+                        // Remove espaços
+                        str = str.trim();
+                        
+                        // Se não tem vírgula, trata como número inteiro
+                        if (!str.includes(',')) {
+                          // Remove pontos (milhares) e converte
+                          return parseFloat(str.replace(/\./g, '')) || 0;
+                        }
+                        
+                        // Divide em parte inteira e decimal
+                        const parts = str.split(',');
+                        const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+                        const decimalPart = parts[1] || '00'; // Parte decimal
+                        
+                        // Reconstrói o número no formato americano
+                        const americanFormat = integerPart + '.' + decimalPart;
+                        return parseFloat(americanFormat) || 0;
+                      };
+                      
+                      const numericValue = parseBrazilianNumber(value);
+                      if (!isNaN(numericValue) && numericValue >= 0) {
+                        const formattedValue = numericValue.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        });
+                        setBatchEditData(prev => ({ ...prev, amount: formattedValue }));
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    // Converter para formato de edição (sem formatação de milhares)
+                    const value = e.target.value;
+                    if (value) {
+                      // Função para converter formato brasileiro para número
+                      const parseBrazilianNumber = (str: string): number => {
+                        if (typeof str === 'number') return str;
+                        
+                        str = str.toString().trim();
+                        
+                        // Se não tem vírgula, trata como número inteiro
+                        if (!str.includes(',')) {
+                          // Remove pontos (milhares) e converte
+                          return parseFloat(str.replace(/\./g, '')) || 0;
+                        }
+                        
+                        // Divide em parte inteira e decimal
+                        const parts = str.split(',');
+                        const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
+                        const decimalPart = parts[1] || '00'; // Parte decimal
+                        
+                        // Reconstrói o número no formato americano
+                        const americanFormat = integerPart + '.' + decimalPart;
+                        return parseFloat(americanFormat) || 0;
+                      };
+                      
+                      const numericValue = parseBrazilianNumber(value);
+                      if (!isNaN(numericValue)) {
+                        // Converte para formato editável (sem pontos de milhar)
+                        const editableValue = numericValue.toFixed(2).replace('.', ',');
+                        setBatchEditData(prev => ({ ...prev, amount: editableValue }));
+                      }
+                    }
+                  }}
                   fullWidth
                   size="small"
                   placeholder="Deixe vazio para não alterar"
-                  helperText="Nova descrição para as transações selecionadas"
-                  multiline
-                  rows={2}
+                  helperText="Use vírgula para decimais (ex: 150,00)"
+                  InputProps={{
+                    startAdornment: <Box sx={{ mr: 1 }}>R$</Box>
+                  }}
                 />
-              </Box>
 
-              {/* Valor */}
-              <TextField
-                label="Valor (R$)"
-                type="text"
-                value={batchEditData.amount}
-                onChange={(e) => {
-                  // Permite apenas números, vírgula e ponto
-                  const value = e.target.value.replace(/[^0-9.,]/g, '');
-                  setBatchEditData(prev => ({ ...prev, amount: value }));
-                }}
-                onBlur={(e) => {
-                  // Formatar o valor quando perder o foco
-                  const value = e.target.value.replace(/[^0-9.,]/g, '');
-                  if (value) {
-                    // Função para converter formato brasileiro para número
-                    const parseBrazilianNumber = (str: string): number => {
-                      // Remove espaços
-                      str = str.trim();
-                      
-                      // Se não tem vírgula, trata como número inteiro
-                      if (!str.includes(',')) {
-                        // Remove pontos (milhares) e converte
-                        return parseFloat(str.replace(/\./g, '')) || 0;
-                      }
-                      
-                      // Divide em parte inteira e decimal
-                      const parts = str.split(',');
-                      const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
-                      const decimalPart = parts[1] || '00'; // Parte decimal
-                      
-                      // Reconstrói o número no formato americano
-                      const americanFormat = integerPart + '.' + decimalPart;
-                      return parseFloat(americanFormat) || 0;
-                    };
-                    
-                    const numericValue = parseBrazilianNumber(value);
-                    if (!isNaN(numericValue) && numericValue >= 0) {
-                      const formattedValue = numericValue.toLocaleString('pt-BR', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      });
-                      setBatchEditData(prev => ({ ...prev, amount: formattedValue }));
-                    }
-                  }
-                }}
-                onFocus={(e) => {
-                  // Converter para formato de edição (sem formatação de milhares)
-                  const value = e.target.value;
-                  if (value) {
-                    // Função para converter formato brasileiro para número
-                    const parseBrazilianNumber = (str: string): number => {
-                      if (typeof str === 'number') return str;
-                      
-                      str = str.toString().trim();
-                      
-                      // Se não tem vírgula, trata como número inteiro
-                      if (!str.includes(',')) {
-                        // Remove pontos (milhares) e converte
-                        return parseFloat(str.replace(/\./g, '')) || 0;
-                      }
-                      
-                      // Divide em parte inteira e decimal
-                      const parts = str.split(',');
-                      const integerPart = parts[0].replace(/\./g, ''); // Remove pontos dos milhares
-                      const decimalPart = parts[1] || '00'; // Parte decimal
-                      
-                      // Reconstrói o número no formato americano
-                      const americanFormat = integerPart + '.' + decimalPart;
-                      return parseFloat(americanFormat) || 0;
-                    };
-                    
-                    const numericValue = parseBrazilianNumber(value);
-                    if (!isNaN(numericValue)) {
-                      // Converte para formato editável (sem pontos de milhar)
-                      const editableValue = numericValue.toFixed(2).replace('.', ',');
-                      setBatchEditData(prev => ({ ...prev, amount: editableValue }));
-                    }
-                  }
-                }}
-                fullWidth
-                size="small"
-                placeholder="Deixe vazio para não alterar"
-                helperText="Use vírgula para decimais (ex: 150,00)"
-                InputProps={{
-                  startAdornment: <Box sx={{ mr: 1 }}>R$</Box>
-                }}
-              />
-
-              {/* Data de Vencimento */}
-              <TextField
-                label="Data de Vencimento"
-                type="date"
-                value={batchEditData.transaction_date}
-                onChange={(e) => setBatchEditData(prev => ({ ...prev, transaction_date: e.target.value }))}
-                fullWidth
-                size="small"
-                placeholder="Deixe vazio para não alterar"
-                helperText="Nova data de vencimento"
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-
-              {/* Categoria */}
-              <FormControl fullWidth size="small">
-                <InputLabel>Categoria</InputLabel>
-                <Select
-                  value={batchEditData.category_id}
-                  onChange={(e) => {
-                    setBatchEditData(prev => ({ 
-                      ...prev, 
-                      category_id: e.target.value,
-                      // Limpar subcategoria quando categoria muda
-                      subcategory_id: ''
-                    }));
+                {/* Data de Vencimento */}
+                <TextField
+                  label="Data de Vencimento"
+                  type="date"
+                  value={batchEditData.transaction_date}
+                  onChange={(e) => setBatchEditData(prev => ({ ...prev, transaction_date: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Deixe vazio para não alterar"
+                  helperText="Nova data de vencimento"
+                  InputLabelProps={{
+                    shrink: true,
                   }}
-                  label="Categoria"
-                >
-                  <MenuItem value="">
-                    <em>Não alterar</em>
-                  </MenuItem>
-                  {categories.map((category) => (
-                    <MenuItem key={category.id} value={category.id?.toString()}>
-                      {category.name}
+                />
+
+                {/* Categoria */}
+                <FormControl fullWidth size="small">
+                  <InputLabel>Categoria</InputLabel>
+                  <Select
+                    value={batchEditData.category_id}
+                    onChange={(e) => {
+                      setBatchEditData(prev => ({ 
+                        ...prev, 
+                        category_id: e.target.value,
+                        // Limpar subcategoria quando categoria muda
+                        subcategory_id: ''
+                      }));
+                    }}
+                    label="Categoria"
+                  >
+                    <MenuItem value="">
+                      <em>Não alterar</em>
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {/* Subcategoria - Condicionada à categoria selecionada */}
-              <FormControl fullWidth size="small">
-                <InputLabel>Subcategoria</InputLabel>
-                <Select
-                  value={batchEditData.subcategory_id}
-                  onChange={(e) => {
-                    setBatchEditData(prev => ({ 
-                      ...prev, 
-                      subcategory_id: e.target.value
-                    }));
-                  }}
-                  label="Subcategoria"
-                  disabled={!batchEditData.category_id || batchEditData.category_id === ''}
-                >
-                  <MenuItem value="">
-                    <em>{!batchEditData.category_id || batchEditData.category_id === '' ? 'Selecione uma categoria primeiro' : 'Não alterar'}</em>
-                  </MenuItem>
-                  {subcategories
-                    .filter(sub => {
-                      // Se nenhuma categoria específica está selecionada, não mostrar subcategorias
-                      if (!batchEditData.category_id || batchEditData.category_id === '') {
-                        return false;
-                      }
-                      // Se categoria está selecionada, filtrar subcategorias por essa categoria
-                      return sub.category_id?.toString() === batchEditData.category_id;
-                    })
-                    .map((subcategory) => (
-                      <MenuItem key={subcategory.id} value={subcategory.id?.toString()}>
-                        {subcategory.name}
+                    {categories.map((category) => (
+                      <MenuItem key={category.id} value={category.id?.toString()}>
+                        {category.name}
                       </MenuItem>
-                    ))
-                  }
-                </Select>
-              </FormControl>
+                    ))}
+                  </Select>
+                </FormControl>
 
-              {/* Cartão */}
-              <FormControl fullWidth size="small">
-                <InputLabel>Cartão</InputLabel>
-                <Select
-                  value={batchEditData.card_id}
-                  onChange={(e) => setBatchEditData(prev => ({ ...prev, card_id: e.target.value }))}
-                  label="Cartão"
-                >
-                  <MenuItem value="">
-                    <em>Não alterar</em>
-                  </MenuItem>
-                  {cards.map((card) => (
-                    <MenuItem key={card.id} value={card.id?.toString()}>
-                      {card.name}
+                {/* Subcategoria - Condicionada à categoria selecionada */}
+                <FormControl fullWidth size="small">
+                  <InputLabel>Subcategoria</InputLabel>
+                  <Select
+                    value={batchEditData.subcategory_id}
+                    onChange={(e) => {
+                      setBatchEditData(prev => ({ 
+                        ...prev, 
+                        subcategory_id: e.target.value
+                      }));
+                    }}
+                    label="Subcategoria"
+                    disabled={!batchEditData.category_id || batchEditData.category_id === ''}
+                  >
+                    <MenuItem value="">
+                      <em>{!batchEditData.category_id || batchEditData.category_id === '' ? 'Selecione uma categoria primeiro' : 'Não alterar'}</em>
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button 
-              onClick={() => setBatchEditDialogOpen(false)}
-              variant="outlined"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleConfirmBatchEdit}
-              variant="contained"
-              disabled={loading}
-            >
-              Atualizar {selectedTransactions.length} Transação(ões)
-            </Button>
-          </DialogActions>
-        </Dialog>
-        
-        {/* Formulário de Transação */}
-        <CreditCardTransactionForm
-          open={showTransactionForm}
-          onClose={() => {
-            setShowTransactionForm(false);
-            setEditingTransaction(null);
-          }}
-          onSubmit={handleTransactionSubmit}
-          transaction={editingTransaction}
-        />
+                    {subcategories
+                      .filter(sub => {
+                        // Se nenhuma categoria específica está selecionada, não mostrar subcategorias
+                        if (!batchEditData.category_id || batchEditData.category_id === '') {
+                          return false;
+                        }
+                        // Se categoria está selecionada, filtrar subcategorias por essa categoria
+                        return sub.category_id?.toString() === batchEditData.category_id;
+                      })
+                      .map((subcategory) => (
+                        <MenuItem key={subcategory.id} value={subcategory.id?.toString()}>
+                          {subcategory.name}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+
+                {/* Cartão */}
+                <FormControl fullWidth size="small">
+                  <InputLabel>Cartão</InputLabel>
+                  <Select
+                    value={batchEditData.card_id}
+                    onChange={(e) => setBatchEditData(prev => ({ ...prev, card_id: e.target.value }))}
+                    label="Cartão"
+                  >
+                    <MenuItem value="">
+                      <em>Não alterar</em>
+                    </MenuItem>
+                    {cards.map((card) => (
+                      <MenuItem key={card.id} value={card.id?.toString()}>
+                        {card.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button 
+                onClick={() => setBatchEditDialogOpen(false)}
+                variant="outlined"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleConfirmBatchEdit}
+                variant="contained"
+                disabled={loading}
+              >
+                Atualizar {selectedTransactions.length} Transação(ões)
+              </Button>
+            </DialogActions>
+          </Dialog>
+          
+          {/* Formulário de Transação */}
+          <CreditCardTransactionForm
+            open={showTransactionForm}
+            onClose={() => {
+              setShowTransactionForm(false);
+              setEditingTransaction(null);
+            }}
+            onSubmit={handleTransactionSubmit}
+            transaction={editingTransaction}
+          />
+        </Box>
       </Box>
     </LocalizationProvider>
   );

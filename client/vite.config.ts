@@ -12,7 +12,18 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api')
+        // Adicionar logging para debug
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Proxy request:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('Proxy response:', proxyRes.statusCode, req.url);
+          });
+        }
       }
     },
     // Forçar uso da porta 5173 para frontend
@@ -31,6 +42,12 @@ export default defineConfig({
     sourcemap: true,
     commonjsOptions: {
       transformMixedEsModules: true
+    }
+  },
+  // Adicionar configuração para resolver problemas de importação
+  resolve: {
+    alias: {
+      '@': '/src'
     }
   }
 })

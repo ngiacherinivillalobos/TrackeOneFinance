@@ -2,6 +2,34 @@ import { Request, Response } from 'express';
 import { getDatabase } from '../database/connection';
 import { toDatabaseBoolean } from '../utils/booleanUtils';
 
+// Função para calcular a data de vencimento com base na data da transação e dados do cartão
+const calculateDueDate = (transactionDate: string, card: any): string | null => {
+  try {
+    // Verificar se o cartão tem os dados necessários
+    if (!card || !card.closing_day || !card.due_day) {
+      return null;
+    }
+    
+    const [year, month, day] = transactionDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    
+    // Se a data da transação é maior ou igual ao dia de fechamento,
+    // a fatura fecha neste mês e vence no próximo
+    if (date.getDate() >= card.closing_day) {
+      date.setMonth(date.getMonth() + 1);
+    }
+    
+    // Ajustar para o dia de vencimento
+    date.setDate(card.due_day);
+    
+    // Formatar a data como string YYYY-MM-DD
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  } catch (error) {
+    console.error('Error calculating due date:', error);
+    return null;
+  }
+};
+
 // Função helper para criar Date segura para timezone
 const createSafeDate = (dateString: string): Date => {
   // Se a string já tem T, usar diretamente
@@ -61,13 +89,14 @@ const list = async (req: Request, res: Response) => {
       values.push(req.query.is_installment === 'true' ? 1 : 0);
     }
     
+    // Filtro de data baseado na data de vencimento (due_date) em vez da data da transação
     if (req.query.start_date) {
-      conditions.push('cct.transaction_date >= ?');
+      conditions.push('cct.due_date >= ?');
       values.push(req.query.start_date);
     }
     
     if (req.query.end_date) {
-      conditions.push('cct.transaction_date <= ?');
+      conditions.push('cct.due_date <= ?');
       values.push(req.query.end_date);
     }
     
@@ -76,8 +105,8 @@ const list = async (req: Request, res: Response) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    // Ordenação
-    query += ' ORDER BY cct.transaction_date DESC, cct.created_at DESC';
+    // Ordenação baseada na data de vencimento
+    query += ' ORDER BY cct.due_date DESC, cct.created_at DESC';
     
     const transactions = await all(db, query, values);
     
@@ -143,7 +172,7 @@ const create = async (req: Request, res: Response) => {
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { db, run } = getDatabase();
+    const { db, run, get } = getDatabase();
     
     const {
       description,
@@ -172,6 +201,15 @@ const create = async (req: Request, res: Response) => {
       });
     }
 
+    // Obter informações do cartão para calcular a data de vencimento
+    const cardQuery = 'SELECT * FROM cards WHERE id = ?';
+    const card = await get(db, cardQuery, [card_id]);
+    
+    // Calcular a data de vencimento
+    const due_date = card ? calculateDueDate(transaction_date, card) : null;
+    
+    console.log('Calculated due date:', due_date);
+
     const isProduction = process.env.NODE_ENV === 'production';
     const isPaidValue = toDatabaseBoolean(is_paid, isProduction);
     
@@ -181,13 +219,13 @@ const create = async (req: Request, res: Response) => {
     const result: any = await run(db, `
       INSERT INTO credit_card_transactions (
         description, amount, type, category_id, subcategory_id,
-        card_id, transaction_date, is_installment, installment_number, total_installments,
+        card_id, transaction_date, due_date, is_installment, installment_number, total_installments,
         is_paid, payment_date, paid_amount, payment_type, payment_observations,
         discount, interest
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       description, amount, type, category_id, subcategory_id,
-      card_id, transaction_date, toDatabaseBoolean(is_installment, isProduction), 
+      card_id, transaction_date, due_date, toDatabaseBoolean(is_installment, isProduction), 
       installment_number, total_installments,
       isPaidValue, payment_date, paid_amount, payment_type, payment_observations,
       discount, interest
@@ -248,6 +286,15 @@ const update = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
+    // Obter informações do cartão para calcular a data de vencimento
+    const cardQuery = 'SELECT * FROM cards WHERE id = ?';
+    const card = await get(db, cardQuery, [card_id]);
+    
+    // Calcular a data de vencimento
+    const due_date = card ? calculateDueDate(transaction_date, card) : null;
+    
+    console.log('Calculated due date:', due_date);
+
     const isProduction = process.env.NODE_ENV === 'production';
     const isPaidValue = toDatabaseBoolean(is_paid, isProduction);
     
@@ -265,6 +312,7 @@ const update = async (req: Request, res: Response) => {
           subcategory_id = ?,
           card_id = ?,
           transaction_date = ?,
+          due_date = ?,  -- Atualizar também a data de vencimento
           is_installment = ?,
           total_installments = ?,
           is_paid = ?,
@@ -283,6 +331,7 @@ const update = async (req: Request, res: Response) => {
         subcategory_id,
         card_id,
         transaction_date,
+        due_date,  // Incluir a data de vencimento calculada
         toDatabaseBoolean(is_installment, isProduction),
         total_installments,
         isPaidValue,
@@ -312,6 +361,7 @@ const update = async (req: Request, res: Response) => {
           subcategory_id = ?,
           card_id = ?,
           transaction_date = ?,
+          due_date = ?,  -- Atualizar também a data de vencimento
           is_installment = ?,
           installment_number = ?,
           total_installments = ?,
@@ -331,6 +381,7 @@ const update = async (req: Request, res: Response) => {
         subcategory_id,
         card_id,
         transaction_date,
+        due_date,  // Incluir a data de vencimento calculada
         toDatabaseBoolean(is_installment, isProduction), 
         installment_number,
         total_installments,
@@ -417,22 +468,22 @@ const createInstallments = async (req: Request, res: Response) => {
     const cardQuery = 'SELECT * FROM cards WHERE id = ?';
     const card = await get(db, cardQuery, [card_id]);
     
-    // Determinar a data correta com base na data de fechamento do cartão
+    // Manter a data da transação original - não ajustar a data da transação
+    // Apenas usar a data original para determinar em qual fatura a transação aparece
     let adjustedTransactionDate = createSafeDate(transaction_date);
-    
+          
+    // Se a data da transação for maior ou igual ao dia de fechamento do cartão,
+    // ajustar para o próximo mês (próxima fatura)
     if (card && card.closing_day) {
       const transactionDay = adjustedTransactionDate.getDate();
-      
+            
       // Se a data da transação for maior ou igual à data de fechamento,
-      // calcular para o próximo mês (próxima fatura)
-      // CORREÇÃO: Se o dia for menor que a data de fechamento, é referente à fatura do mês atual
+      // ajustar a transação para o próximo mês (aparecer na próxima fatura)
       if (transactionDay >= card.closing_day) {
         adjustedTransactionDate.setMonth(adjustedTransactionDate.getMonth() + 1);
       }
     }
     
-    const adjustedTransactionDateString = adjustedTransactionDate.toISOString().split('T')[0];
-
     // Calcular valor de cada parcela
     const installmentAmount = parseFloat((total_amount / total_installments).toFixed(2));
     
@@ -445,10 +496,13 @@ const createInstallments = async (req: Request, res: Response) => {
     // Criar todas as parcelas
     for (let i = 1; i <= total_installments; i++) {
       // Calcular data da parcela (adicionar meses)
-      const installmentDate = createSafeDate(adjustedTransactionDateString);
+      const installmentDate = createSafeDate(transaction_date);
       installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
       
       const installmentDateString = installmentDate.toISOString().split('T')[0];
+      
+      // Calcular a data de vencimento para esta parcela
+      const due_date = card ? calculateDueDate(installmentDateString, card) : null;
       
       // Valor da parcela (última parcela pode ter valor ajustado)
       const amount = i === total_installments ? lastInstallmentAmount : installmentAmount;
@@ -462,11 +516,11 @@ const createInstallments = async (req: Request, res: Response) => {
           subcategory_id, 
           card_id, 
           transaction_date, 
+          due_date,  -- Adicionar a data de vencimento calculada
           is_installment,
           installment_number,
-          total_installments,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          total_installments
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const installmentDescription = `${description} (${i}/${total_installments})`;
@@ -478,7 +532,8 @@ const createInstallments = async (req: Request, res: Response) => {
         category_id || null,
         subcategory_id || null,
         card_id,
-        installmentDateString,
+        installmentDateString, // Manter a data original da transação
+        due_date,  // Incluir a data de vencimento calculada
         toDatabaseBoolean(true),
         i,
         total_installments

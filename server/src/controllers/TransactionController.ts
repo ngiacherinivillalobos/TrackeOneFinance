@@ -1548,21 +1548,22 @@ const createInstallments = async (req: Request, res: Response) => {
     const cardQuery = 'SELECT * FROM cards WHERE id = ?';
     const card = await get(db, cardQuery, [card_id]);
     
-    // Determinar a data correta com base na data de fechamento do cartão
+    // Manter a data da transação original - não ajustar a data da transação
+    // Apenas usar a data original para determinar em qual fatura a transação aparece
     let adjustedTransactionDate = createSafeDate(transaction_date);
-    
+          
+    // Se a data da transação for maior ou igual ao dia de fechamento do cartão,
+    // ajustar para o próximo mês (próxima fatura)
     if (card && card.closing_day) {
       const transactionDay = adjustedTransactionDate.getDate();
-      
+            
       // Se a data da transação for maior ou igual à data de fechamento,
-      // calcular para o próximo mês (próxima fatura)
+      // ajustar a transação para o próximo mês (aparecer na próxima fatura)
       if (transactionDay >= card.closing_day) {
         adjustedTransactionDate.setMonth(adjustedTransactionDate.getMonth() + 1);
       }
     }
     
-    const adjustedTransactionDateString = adjustedTransactionDate.toISOString().split('T')[0];
-
     // Calcular valor de cada parcela
     const installmentAmount = parseFloat((total_amount / total_installments).toFixed(2));
     
@@ -1575,7 +1576,7 @@ const createInstallments = async (req: Request, res: Response) => {
     // Criar todas as parcelas
     for (let i = 1; i <= total_installments; i++) {
       // Calcular data da parcela (adicionar meses)
-      const installmentDate = createSafeDate(adjustedTransactionDateString);
+      const installmentDate = createSafeDate(transaction_date);
       installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
       
       const installmentDateString = installmentDate.toISOString().split('T')[0];
@@ -1610,7 +1611,7 @@ const createInstallments = async (req: Request, res: Response) => {
         subcategory_id || null,
         card_id,
         cost_center_id || null,
-        installmentDateString,
+        installmentDateString, // Manter a data original da transação
         toDatabaseBoolean(true), // is_installment
         i, // installment_number
         total_installments
