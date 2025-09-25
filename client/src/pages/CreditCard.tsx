@@ -574,6 +574,7 @@ export default function CreditCard() {
   const handleEditTransaction = (transaction: CardTransaction) => {
     setEditingTransaction(transaction);
     setShowTransactionForm(true);
+    handleActionMenuClose(); // Fechar o menu de ações
   };
 
   const handleDeleteTransaction = async (id: number) => {
@@ -589,6 +590,7 @@ export default function CreditCard() {
         alert('Erro ao excluir transação');
       }
     }
+    handleActionMenuClose(); // Fechar o menu de ações
   };
 
   // Funções para ações em lote
