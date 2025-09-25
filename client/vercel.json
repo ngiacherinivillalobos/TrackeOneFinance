@@ -5,7 +5,7 @@
   "installCommand": "npm install",
   "build": {
     "env": {
-      "VITE_API_URL": "https://trackeone-finance-api.onrender.com/api"
+      "VITE_API_URL": "https://trackeone-finance-api.onrender.com"
     }
   },
   "rewrites": [
