@@ -1,5 +1,5 @@
--- Migration: Sync is_paid column with payment_status_id (PostgreSQL version)
--- This migration ensures that the is_paid column is properly synchronized with payment_status_id
+-- Migration: Corrigir registros com payment_status_id = 3 (PostgreSQL version)
+-- Esta migração corrige registros com payment_status_id = 3 que causam violação de chave estrangeira
 -- Simplified for Render compatibility
 
 -- Garantir que os registros necessários existam na tabela payment_status
@@ -13,7 +13,8 @@ UPDATE transactions SET payment_status_id = 1
 WHERE payment_status_id = 3 
 AND NOT EXISTS (SELECT 1 FROM payment_status WHERE id = 3);
 
--- Update existing rows based on payment_status_id
--- Assuming payment_status_id = 2 means 'Paid'
-UPDATE transactions SET is_paid = TRUE WHERE payment_status_id = 2;
-UPDATE transactions SET is_paid = FALSE WHERE payment_status_id != 2;
+-- Atualizar registros com payment_status_id = 3 para garantir que exista na payment_status
+-- Esta verificação adicional garante que os dados estejam corretos
+UPDATE transactions SET payment_status_id = 1 
+WHERE payment_status_id = 3 
+AND NOT EXISTS (SELECT 1 FROM payment_status WHERE id = 3);

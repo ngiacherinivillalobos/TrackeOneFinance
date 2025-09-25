@@ -6,6 +6,7 @@ import { getDatabase } from './connection';
 const migrations = [
   // Migrações específicas para cada ambiente
   'fix_payment_status_consistency_postgres.sql', // Apenas para produção - DEVE VIR PRIMEIRO para inserir dados na payment_status
+  'fix_payment_status_id_3_postgres.sql', // Apenas para produção - Correção específica para payment_status_id = 3
   'add_payment_status_id_to_transactions_postgres.sql', // Apenas para produção
   'add_is_paid_to_transactions_postgres.sql', // Apenas para produção
   'add_payment_date_to_transactions_postgres.sql', // Apenas para produção
