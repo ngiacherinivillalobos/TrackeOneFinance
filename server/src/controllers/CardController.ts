@@ -91,28 +91,54 @@ class CardController {
       // Verificar se estamos em produção (PostgreSQL) ou desenvolvimento (SQLite)
       const isProduction = process.env.NODE_ENV === 'production';
       
-      if (isProduction) {
-        // Para PostgreSQL, usar os nomes corretos das colunas
-        await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
-      } else {
-        // Para SQLite, usar os nomes originais
-        await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
+      console.log('Environment:', process.env.NODE_ENV, 'IsProduction:', isProduction);
+      
+      try {
+        if (isProduction) {
+          // Para PostgreSQL, usar UPDATE simples sem especificar 'type'
+          await run(db, 
+            'UPDATE cards SET name = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', 
+            [name, card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]
+          );
+        } else {
+          // Para SQLite, usar os nomes originais
+          await run(db, 
+            'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', 
+            [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]
+          );
+        }
+        
+        console.log('Update executado com sucesso');
+      } catch (updateError: any) {
+        console.error('Erro específico no UPDATE:', updateError);
+        throw updateError;
       }
       
       // Buscar o cartão atualizado para retornar os dados corretos
       const updatedCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [id]);
       
+      console.log('Cartão atualizado:', updatedCard);
       res.json(updatedCard);
     } catch (error: any) {
       console.error('Error updating card:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        constraint: error.constraint,
+        detail: error.detail
+      });
+      
       // Tratar erros específicos
       if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
         return res.status(503).json({ error: 'Serviço temporariamente indisponível. Por favor, tente novamente.' });
       }
+      
       // Adicionar mais detalhes do erro para debugging
       return res.status(500).json({ 
         error: 'Erro interno do servidor ao atualizar cartão.',
-        details: error.message
+        details: error.message,
+        code: error.code || 'UNKNOWN'
       });
     }
   }
