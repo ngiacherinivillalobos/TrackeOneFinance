@@ -5,6 +5,7 @@ import { getDatabase } from './connection';
 // Lista de migrações na ordem correta
 const migrations = [
   // Migrações específicas para cada ambiente
+  'fix_payment_status_consistency_postgres.sql', // Apenas para produção - DEVE VIR PRIMEIRO para inserir dados na payment_status
   'add_payment_status_id_to_transactions_postgres.sql', // Apenas para produção
   'add_is_paid_to_transactions_postgres.sql', // Apenas para produção
   'add_payment_date_to_transactions_postgres.sql', // Apenas para produção
@@ -15,7 +16,6 @@ const migrations = [
   'add_cost_center_to_cash_flow_postgres.sql', // Apenas para produção
   'add_payment_days_to_cost_centers_postgres.sql', // Apenas para produção
   'sync_is_paid_with_payment_status_postgres.sql', // Apenas para produção
-  'fix_payment_status_consistency_postgres.sql', // Apenas para produção
   'fix_boolean_values_postgres.sql', // Apenas para produção
   'add_missing_payment_fields_postgres.sql', // Apenas para produção
   'ensure_cost_centers_payment_days_postgres.sql', // Apenas para produção
