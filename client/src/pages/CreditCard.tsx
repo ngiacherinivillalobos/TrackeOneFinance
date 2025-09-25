@@ -21,7 +21,7 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  TablePagination,
+
   Menu,
   MenuItem as MenuItemComponent,
   ListItemIcon,
@@ -118,10 +118,7 @@ export default function CreditCard() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   
-  // Estados de paginação
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  
+
   // Adicionar menu de ações individuais
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
@@ -737,22 +734,6 @@ export default function CreditCard() {
   };
 
   const cardTotals = calculateCardTotals();
-
-  // Funções de paginação
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  // Dados paginados
-  const paginatedTransactions = transactions.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
 
   console.log('Estado atual - transações:', transactions);
   console.log('Estado atual - cartões:', cards);
@@ -1480,7 +1461,7 @@ export default function CreditCard() {
                       </TableCell>
                     </TableRow>
                   ) : sortedTransactions && sortedTransactions.length > 0 ? (
-                    sortedTransactions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((transaction) => {
+                    sortedTransactions.map((transaction) => {
                       console.log('=== DEBUGANDO TRANSAÇÃO ===');
                       console.log('Transação completa:', transaction);
                       console.log('Amount original:', transaction.amount, 'tipo:', typeof transaction.amount);
@@ -1666,36 +1647,6 @@ export default function CreditCard() {
                 </TableBody>
               </Table>
             </TableContainer>
-              
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={transactions.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Linhas por página:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              sx={{
-                borderTop: `1px solid ${colors.gray[200]}`,
-                '& .MuiTablePagination-select': {
-                  bgcolor: 'white',
-                  borderRadius: 1,
-                  border: `1px solid ${colors.gray[200]}`
-                },
-                '& .MuiTablePagination-actions': {
-                  '& button': {
-                    bgcolor: 'white',
-                    borderRadius: 1,
-                    border: `1px solid ${colors.gray[200]}`,
-                    '&:hover': {
-                      bgcolor: colors.gray[50]
-                    }
-                  }
-                }
-              }}
-            />
           </Paper>
           
           {/* Menu de ações em lote */}
