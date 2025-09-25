@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS cash_flow (
 );
 
 -- Add foreign key constraints
--- Using ALTER TABLE ... ADD CONSTRAINT for Render compatibility
-ALTER TABLE cash_flow ADD CONSTRAINT IF NOT EXISTS fk_cash_flow_category 
+-- Using plain ALTER TABLE ... ADD CONSTRAINT for Render compatibility
+ALTER TABLE cash_flow ADD CONSTRAINT fk_cash_flow_category 
   FOREIGN KEY (category_id) REFERENCES categories(id);
-ALTER TABLE cash_flow ADD CONSTRAINT IF NOT EXISTS fk_cash_flow_subcategory 
+ALTER TABLE cash_flow ADD CONSTRAINT fk_cash_flow_subcategory 
   FOREIGN KEY (subcategory_id) REFERENCES subcategories(id);
 
 -- Create indexes for better performance on date queries

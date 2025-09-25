@@ -14,10 +14,10 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS discount NUMERIC(10,2) DEFAULT
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS interest NUMERIC(10,2) DEFAULT 0;
 
 -- Add foreign key constraints
--- Using ALTER TABLE ... ADD CONSTRAINT for Render compatibility
-ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS fk_transactions_bank_account 
+-- Using plain ALTER TABLE ... ADD CONSTRAINT for Render compatibility
+ALTER TABLE transactions ADD CONSTRAINT fk_transactions_bank_account 
   FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id);
-ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS fk_transactions_card 
+ALTER TABLE transactions ADD CONSTRAINT fk_transactions_card 
   FOREIGN KEY (card_id) REFERENCES cards(id);
 
 -- Create indexes for better performance

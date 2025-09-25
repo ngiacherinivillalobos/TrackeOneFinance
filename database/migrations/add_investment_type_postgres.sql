@@ -7,7 +7,7 @@
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
 
 -- Adicionar nova constraint com valores atualizados
--- Using ALTER TABLE ... ADD CONSTRAINT for Render compatibility
+-- Using plain ALTER TABLE ... ADD CONSTRAINT for Render compatibility
 ALTER TABLE transactions 
 ADD CONSTRAINT transactions_type_check 
 CHECK (type IN ('expense', 'income', 'investment'));

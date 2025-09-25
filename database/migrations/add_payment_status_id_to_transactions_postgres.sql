@@ -3,12 +3,11 @@
 -- Simplified for Render compatibility
 
 -- Add payment_status_id column to transactions table (PostgreSQL)
--- Using ALTER TABLE ... ADD COLUMN for Render compatibility
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status_id INTEGER DEFAULT 1;
 
 -- Add foreign key constraint
--- Using ALTER TABLE ... ADD CONSTRAINT for Render compatibility
-ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS fk_transactions_payment_status 
+-- Using plain ALTER TABLE ... ADD CONSTRAINT for Render compatibility
+ALTER TABLE transactions ADD CONSTRAINT fk_transactions_payment_status 
   FOREIGN KEY (payment_status_id) REFERENCES payment_status(id);
 
 -- Add index for better performance

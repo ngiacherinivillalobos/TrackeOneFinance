@@ -9,8 +9,8 @@ ALTER TABLE cards ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'Crédito';
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS bank_account_id INTEGER;
 
 -- Add foreign key constraint
--- Using ALTER TABLE ... ADD CONSTRAINT for Render compatibility
-ALTER TABLE cards ADD CONSTRAINT IF NOT EXISTS fk_cards_bank_account 
+-- Using plain ALTER TABLE ... ADD CONSTRAINT for Render compatibility
+ALTER TABLE cards ADD CONSTRAINT fk_cards_bank_account 
   FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id);
 
 -- Adicionar coluna 'limit_amount' se não existir
