@@ -25,8 +25,8 @@ const migrations = [
   'add_due_date_to_credit_card_transactions_postgres.sql', // Nova migração para PostgreSQL
   'add_savings_goals_table_postgres.sql', // Apenas para produção - Corrigido para PostgreSQL
   
-  // Migrações para SQLite (desenvolvimento)
-  'add_savings_goals_table.sql',
+  // Migrações para SQLite (desenvolvimento) - REMOVIDAS da lista de produção
+  //'add_savings_goals_table.sql', // APENAS PARA DESENVOLVIMENTO SQLite
   'add_card_details_to_cards_table_sqlite.sql',
   'create_credit_card_transactions_table_sqlite.sql',
   'add_due_date_to_credit_card_transactions_sqlite.sql' // Nova migração para SQLite
