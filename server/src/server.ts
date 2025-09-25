@@ -10,29 +10,14 @@ dotenv.config();
 
 const app = express();
 
-// Configuração correta do CORS para ambiente de produção e desenvolvimento
+// Configuração simples e segura do CORS para ambiente de produção
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Lista de origens permitidas
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3004',
-      'https://trackeone-finance.vercel.app',
-      'https://ngvtech.com.br'
-    ];
-    
-    // Em desenvolvimento, permitir qualquer origem
-    if (!origin && process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
-    
-    // Em produção, verificar se a origem está na lista de permitidas
-    if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.ngvtech.com.br'))) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3004',
+    'https://trackeone-finance.vercel.app',
+    'https://ngvtech.com.br'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin'],
@@ -40,36 +25,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// Middleware adicional para garantir que o CORS funcione corretamente
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3004',
-    'https://trackeone-finance.vercel.app',
-    'https://ngvtech.com.br'
-  ];
-  
-  const origin = req.get('Origin');
-  if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.ngvtech.com.br'))) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else if (process.env.NODE_ENV === 'development') {
-    // Em desenvolvimento, permitir qualquer origem
-    res.header('Access-Control-Allow-Origin', origin || '*');
-  }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Responde imediatamente às solicitações OPTIONS
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-  
-  next();
-});
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -126,8 +81,8 @@ app.use((req: Request, res: Response) => {
 
 // Middleware de tratamento de erros
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Erro interno do servidor' });
+  console.error('Erro interno do servidor:', err.stack);
+  res.status(500).json({ error: 'Erro interno do servidor', details: err.message });
 });
 
 const PORT = process.env.PORT || 3001;
