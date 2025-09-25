@@ -5,27 +5,21 @@
 Durante o deploy no Render, ocorreu um erro de sintaxe no PostgreSQL:
 
 ```
-error: syntax error at or near "NOT"
+error: unterminated dollar-quoted string at or near "$$"
 ```
 
-Este erro estava relacionado ao uso de comandos `IF NOT EXISTS` em migrações do PostgreSQL, que não são totalmente compatíveis com o ambiente do Render.
+Este erro estava relacionado ao uso de blocos `DO $$` nas migrações do PostgreSQL, que não são totalmente compatíveis com o ambiente do Render.
 
 ## 🔧 Solução Aplicada
 
-### 1. Substituição de `IF NOT EXISTS` por blocos `DO $$`
+### 1. Substituição de blocos `DO $$` por comandos diretos com `IF NOT EXISTS`
 
-Todos os arquivos de migração do PostgreSQL foram atualizados para usar blocos `DO $$` com verificações condicionais ao invés de `IF NOT EXISTS`.
+Todos os arquivos de migração do PostgreSQL foram atualizados para usar comandos diretos com `IF NOT EXISTS` ao invés de blocos `DO $$`.
 
 **Exemplo da correção:**
 
 ```sql
 -- Antes (incompatível com Render)
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status_id INTEGER DEFAULT 1;
-ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS fk_transactions_payment_status 
-  FOREIGN KEY (payment_status_id) REFERENCES payment_status(id);
-CREATE INDEX IF NOT EXISTS idx_transactions_payment_status ON transactions(payment_status_id);
-
--- Depois (compatível com Render)
 DO $$ 
 BEGIN
   IF NOT EXISTS (
@@ -36,26 +30,8 @@ BEGIN
   END IF;
 END $$;
 
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'fk_transactions_payment_status'
-  ) THEN
-    ALTER TABLE transactions ADD CONSTRAINT fk_transactions_payment_status 
-      FOREIGN KEY (payment_status_id) REFERENCES payment_status(id);
-  END IF;
-END $$;
-
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes 
-    WHERE indexname = 'idx_transactions_payment_status'
-  ) THEN
-    CREATE INDEX idx_transactions_payment_status ON transactions(payment_status_id);
-  END IF;
-END $$;
+-- Depois (compatível com Render)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status_id INTEGER DEFAULT 1;
 ```
 
 ### 2. Arquivos Corrigidos
@@ -82,7 +58,7 @@ Foram corrigidos os seguintes arquivos de migração:
 
 ### 3. Script de Verificação
 
-Foi criado um script `test_postgres_migrations_fixed.js` para verificar se todas as migrações estão corretas e não contêm comandos `IF NOT EXISTS` fora de blocos `DO $$`.
+Foi atualizado o script `test_postgres_migrations_fixed.js` para verificar se todas as migrações estão corretas e não contêm blocos `DO $$`.
 
 ## ✅ Resultado
 
