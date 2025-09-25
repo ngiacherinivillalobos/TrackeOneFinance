@@ -5,7 +5,7 @@
   "installCommand": "npm install",
   "build": {
     "env": {
-      "VITE_API_URL": "https://trackeone-finance-api.onrender.com"
+      "VITE_API_URL": "/api"
     }
   },
   "rewrites": [
@@ -37,6 +37,18 @@
         {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
         }
       ]
     }

@@ -337,6 +337,9 @@ export default function Dashboard() {
   const [allDataLoaded, setAllDataLoaded] = useState(false);
   const [dashboardCalculated, setDashboardCalculated] = useState(false);
   
+  // Estado para controlar se já foi feito o cálculo inicial
+  const [initialCalculationDone, setInitialCalculationDone] = useState(false);
+  
   // Adicionar useEffect para monitorar mudanças no totalInvestmentsPaid
   useEffect(() => {
     console.log('totalInvestmentsPaid atualizado:', totalInvestmentsPaid);
@@ -438,17 +441,33 @@ export default function Dashboard() {
 
   // useEffect para calcular o dashboard apenas quando todos os dados estiverem carregados
   useEffect(() => {
-    if (allDataLoaded && transactions.length > 0 && !dashboardCalculated) {
+    // Evitar cálculos desnecessários - só calcular se realmente necessário
+    if (allDataLoaded && transactions.length > 0 && !dashboardCalculated && !initialCalculationDone) {
       console.log('Calculando dashboard - todos os dados carregados');
-      calculateDashboardData(transactions, {
-        dateFilterType,
-        month: currentDate.getMonth(),
-        year: currentDate.getFullYear(),
-        cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
-      });
-      setDashboardCalculated(true);
+      
+      // Adicionar um pequeno delay para evitar cálculos múltiplos
+      const timeoutId = setTimeout(() => {
+        calculateDashboardData(transactions, {
+          dateFilterType,
+          month: currentDate.getMonth(),
+          year: currentDate.getFullYear(),
+          cost_center_id: selectedCostCenter?.id || user?.cost_center_id || null
+        });
+        setDashboardCalculated(true);
+        setInitialCalculationDone(true);
+      }, 100); // 100ms de delay
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [allDataLoaded, transactions, currentDate, selectedCostCenter, user?.cost_center_id, dateFilterType, dashboardCalculated]);
+  }, [allDataLoaded, transactions, dashboardCalculated, initialCalculationDone]);
+  
+  // useEffect separado para quando filtros mudam (forçar recálculo)
+  useEffect(() => {
+    if (allDataLoaded && transactions.length > 0) {
+      setInitialCalculationDone(false);
+      setDashboardCalculated(false);
+    }
+  }, [currentDate, selectedCostCenter, dateFilterType]);
 
   // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
   useEffect(() => {
@@ -673,7 +692,22 @@ export default function Dashboard() {
     };
     
     console.log('Novo monthSummary:', newMonthSummary);
-    setMonthSummary(newMonthSummary);
+    
+    // Usar callback para evitar re-renderizações desnecessárias
+    setMonthSummary(prevSummary => {
+      // Só atualizar se houver mudança real nos valores
+      const hasChanges = Object.keys(newMonthSummary).some(key => 
+        prevSummary[key as keyof typeof prevSummary] !== newMonthSummary[key as keyof typeof newMonthSummary]
+      );
+      
+      if (hasChanges) {
+        console.log('Atualizando monthSummary com novos valores');
+        return newMonthSummary;
+      } else {
+        console.log('Valores iguais, mantendo estado anterior');
+        return prevSummary;
+      }
+    });
     
     // REMOVIDO: calculateWeeklyBalances(transactionsData); - Movido para página separada
   };

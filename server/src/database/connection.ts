@@ -248,12 +248,12 @@ const initializePostgreSQLTables = async (pool: Pool): Promise<void> => {
     // Verificar e adicionar colunas faltantes
     if (!cardColumns.includes('card_number')) {
       console.log('Adicionando coluna card_number à tabela cards');
-      await pool.query('ALTER TABLE cards ADD COLUMN card_number VARCHAR(4)');
+      await pool.query('ALTER TABLE cards ADD COLUMN card_number VARCHAR(20)');
     }
     
     if (!cardColumns.includes('expiry_date')) {
       console.log('Adicionando coluna expiry_date à tabela cards');
-      await pool.query('ALTER TABLE cards ADD COLUMN expiry_date VARCHAR(7)');
+      await pool.query('ALTER TABLE cards ADD COLUMN expiry_date VARCHAR(10)');
     }
     
     if (!cardColumns.includes('brand')) {

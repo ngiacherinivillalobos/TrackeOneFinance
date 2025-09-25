@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Button,
   Dialog,
@@ -104,16 +104,141 @@ export default function Cards() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Verificar se o usuário está autenticado
+    const token = localStorage.getItem('token');
+    console.log('Token exists:', !!token);
+    console.log('Token value:', token ? 'TOKEN_SET' : 'NO_TOKEN');
+    
+    if (!token) {
+      alert('Você precisa estar logado para salvar um cartão');
+      window.location.href = '/login';
+      return;
+    }
+    
     try {
-      if (editingCard) {
-        await cardService.update(editingCard.id!, formData);
-      } else {
-        await cardService.create(formData);
+      console.log('Saving card data:', formData);
+      console.log('Editing card:', editingCard);
+      console.log('Token exists:', !!token);
+      
+      // Validar dados obrigatórios
+      if (!formData.name.trim()) {
+        alert('Nome do cartão é obrigatório');
+        return;
       }
+      
+      let result;
+      if (editingCard) {
+        console.log('Updating card with ID:', editingCard.id);
+        result = await cardService.update(editingCard.id!, formData);
+        console.log('Update result:', result);
+      } else {
+        console.log('Creating new card');
+        result = await cardService.create(formData);
+        console.log('Create result:', result);
+      }
+      
       await loadData();
       handleClose();
-    } catch (error) {
+      console.log('Card saved successfully');
+    } catch (error: any) {
       console.error('Error saving card:', error);
+      
+      // Log completo do erro para debug
+      console.error('=== ERRO COMPLETO DEBUG ===');
+      console.error('Error object:', error);
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error stack:', error.stack);
+      console.error('=== FIM DEBUG ===');
+      
+      let errorMessage = 'Erro desconhecido';
+      
+      if (error.response) {
+        // Erro da API
+        console.error('API Error Response:', error.response);
+        console.error('API Error Data:', error.response.data);
+        
+        if (error.response.status === 500) {
+          console.error('Erro 500 - Detalhes completos:', {
+            data: error.response.data,
+            status: error.response.status,
+            headers: error.response.headers,
+            config: error.config
+          });
+          
+          // Tentar extrair mensagem específica do erro 500
+          if (error.response.data?.details) {
+            console.error('Detalhes do backend:', error.response.data.details);
+            if (error.response.data.details.includes('value too long')) {
+              errorMessage = 'Número do cartão muito longo. Use no máximo 16 dígitos.';
+            } else if (error.response.data.details.includes('character varying')) {
+              errorMessage = 'Formato inválido no campo. Verifique os dados inseridos.';
+            } else if (error.response.data.details.includes('column') && error.response.data.details.includes('does not exist')) {
+              errorMessage = 'Erro de estrutura do banco. Entre em contato com suporte.';
+            } else {
+              errorMessage = `Erro no servidor: ${error.response.data.details}`;
+            }
+          } else if (error.response.data?.message) {
+            errorMessage = `Erro no servidor: ${error.response.data.message}`;
+          } else if (error.response.data?.error) {
+            errorMessage = `Erro no servidor: ${error.response.data.error}`;
+          } else {
+            errorMessage = 'Erro interno do servidor. Aguarde alguns minutos e tente novamente.';
+          }
+        } else {
+          errorMessage = error.response.data?.message || error.response.data?.error || `Erro ${error.response.status}`;
+        }
+        
+        if (error.response.status === 401) {
+          errorMessage = 'Sessão expirada. Redirecionando para login...';
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          alert(errorMessage);
+          window.location.href = '/login';
+          return;
+        } else if (error.response.status === 403) {
+          errorMessage = 'Acesso negado';
+        } else if (error.response.status === 404) {
+          errorMessage = 'Recurso não encontrado';
+        } else if (error.response.status >= 500) {
+          errorMessage = 'Erro interno do servidor. Tente novamente em alguns momentos.';
+        }
+      } else if (error.request) {
+        // Erro de rede
+        console.error('Network Error:', error.request);
+        console.error('Request details:', {
+          readyState: error.request.readyState,
+          status: error.request.status,
+          statusText: error.request.statusText,
+          responseURL: error.request.responseURL
+        });
+        
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          errorMessage = 'Tempo esgotado. Verifique sua conexão e tente novamente.';
+        } else if (error.request.status === 0) {
+          errorMessage = 'Sem conexão com o servidor. Verifique sua internet.';
+        } else {
+          errorMessage = 'Erro de conexão. Verifique sua internet.';
+        }
+      } else {
+        // Erro de configuração
+        console.error('Request Setup Error:', error.message);
+        errorMessage = error.message || 'Erro na configuração da requisição';
+      }
+      
+      console.error('Error details:', {
+        message: errorMessage,
+        originalError: error,
+        formData,
+        editingCard
+      });
+      
+      // Mostrar erro para o usuário
+      alert(`Erro ao salvar cartão: ${errorMessage}`);
     }
   };
 

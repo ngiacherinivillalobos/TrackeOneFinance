@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache Test - TrackeOne Finance</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+</head>
+<body>
+    <h1>Cache Clear Test</h1>
+    <p>URL atual: <span id="currentUrl"></span></p>
+    <p>Timestamp: <span id="timestamp"></span></p>
+    
+    <h2>Teste de API</h2>
+    <button onclick="testAPI()">Testar Chamada API</button>
+    <div id="result"></div>
+    
+    <h2>Limpar Cache</h2>
+    <button onclick="clearAllCache()">Limpar Todo Cache</button>
+    
+    <script>
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+        
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p>Testando...</p>';
+            
+            try {
+                console.log('=== TESTE DE API ===');
+                console.log('URL Base:', window.location.origin);
+                
+                const response = await fetch('/api/transactions/filtered?transaction_type=investment&payment_status=paid&dateFilterType=all&cost_center_id=1', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                const data = await response.text();
+                
+                result.innerHTML = `
+                    <h3>Resultado:</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>URL:</strong> ${response.url}</p>
+                    <p><strong>Headers:</strong></p>
+                    <pre>${JSON.stringify([...response.headers.entries()], null, 2)}</pre>
+                    <p><strong>Response:</strong></p>
+                    <pre>${data}</pre>
+                `;
+            } catch (error) {
+                console.error('Erro na API:', error);
+                result.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+            }
+        }
+        
+        async function clearAllCache() {
+            // Limpar localStorage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Limpar cache do service worker se existir
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+            
+            // Limpar cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            alert('Cache limpo! Recarregando página...');
+            window.location.reload(true);
+        }
+    </script>
+</body>
+</html>

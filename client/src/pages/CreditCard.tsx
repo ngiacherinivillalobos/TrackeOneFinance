@@ -275,16 +275,34 @@ export default function CreditCard() {
 
   // Função para verificar se uma transação pertence ao período com base na data de vencimento
   const isTransactionInPeriod = (transaction: CardTransaction, card: CreditCard, startDate: Date, endDate: Date): boolean => {
+    console.log('  >>> Verificando período para transação', transaction.id);
+    
     // Usar a data de vencimento salva no banco de dados, se disponível
     if (transaction.due_date) {
-      const [year, month, day] = transaction.due_date.split('-').map(Number);
-      const dueDate = new Date(year, month - 1, day);
-      return dueDate >= startDate && dueDate <= endDate;
+      let dueDate: Date;
+      
+      // Verificar se a data inclui informações de tempo (formato ISO)
+      if (transaction.due_date.includes('T')) {
+        // Para PostgreSQL em produção, extrair apenas a parte da data para evitar problema d-1
+        const dateOnly = transaction.due_date.split('T')[0];
+        const [year, month, day] = dateOnly.split('-').map(Number);
+        dueDate = new Date(year, month - 1, day);
+      } else {
+        // Formato YYYY-MM-DD
+        const [year, month, day] = transaction.due_date.split('-').map(Number);
+        dueDate = new Date(year, month - 1, day);
+      }
+      
+      const isInPeriod = dueDate >= startDate && dueDate <= endDate;
+      console.log('  >>> Vencimento salvo:', dueDate.toLocaleDateString('pt-BR'), 'Período:', startDate.toLocaleDateString('pt-BR'), '-', endDate.toLocaleDateString('pt-BR'), 'Resultado:', isInPeriod);
+      return isInPeriod;
     }
     
     // Caso contrário, calcular a data de vencimento com base na data da transação e dados do cartão
     const dueDate = calculateDueDate(transaction.transaction_date, card, transaction);
-    return dueDate >= startDate && dueDate <= endDate;
+    const isInPeriod = dueDate >= startDate && dueDate <= endDate;
+    console.log('  >>> Vencimento calculado:', dueDate.toLocaleDateString('pt-BR'), 'Período:', startDate.toLocaleDateString('pt-BR'), '-', endDate.toLocaleDateString('pt-BR'), 'Resultado:', isInPeriod);
+    return isInPeriod;
   };
 
   // Função para carregar transações com filtros
@@ -314,6 +332,10 @@ export default function CreditCard() {
         
         // Sempre filtrar localmente com base na data de vencimento
         if (startDate && endDate) {
+          console.log('=== FILTRO DE DATA ===');
+          console.log('StartDate:', startDate, 'EndDate:', endDate);
+          console.log('Cards disponíveis:', cards.length);
+          
           // Carregar todas as transações sem filtro de data do backend
           const allTransactions = await cardTransactionService.getFiltered({
             card_id: filters.cardId || undefined,
@@ -321,27 +343,56 @@ export default function CreditCard() {
             subcategory_id: filters.subcategoryId || undefined
           });
           
+          console.log('Todas as transações carregadas:', allTransactions.length);
+          allTransactions.forEach(t => {
+            console.log('- Transação:', t.id, 'Data:', t.transaction_date, 'Vencimento:', t.due_date, 'Amount:', t.amount);
+          });
+          
           // Filtrar localmente com base na data de vencimento
           const start = new Date(startDate);
           const end = new Date(endDate);
           
+          console.log('Período de filtro:', start.toLocaleDateString('pt-BR'), 'até', end.toLocaleDateString('pt-BR'));
+          
           const filteredTransactions = allTransactions.filter(transaction => {
             // Encontrar o cartão da transação
             const card = cards.find(c => c.id === transaction.card_id);
+            console.log('Processando transação', transaction.id, 'Cartão encontrado:', card?.name);
+            
             if (card) {
-              return isTransactionInPeriod(transaction, card, start, end);
+              const isInPeriod = isTransactionInPeriod(transaction, card, start, end);
+              console.log('- Está no período?', isInPeriod);
+              return isInPeriod;
             }
             // Se não encontrar o cartão, filtrar pela data de vencimento salva
             if (transaction.due_date) {
-              const [year, month, day] = transaction.due_date.split('-').map(Number);
-              const dueDate = new Date(year, month - 1, day);
-              return dueDate >= start && dueDate <= end;
+              let dueDate: Date;
+              
+              // Verificar se a data inclui informações de tempo (formato ISO)
+              if (transaction.due_date.includes('T')) {
+                // Para PostgreSQL em produção, extrair apenas a parte da data para evitar problema d-1
+                const dateOnly = transaction.due_date.split('T')[0];
+                const [year, month, day] = dateOnly.split('-').map(Number);
+                dueDate = new Date(year, month - 1, day);
+              } else {
+                // Formato YYYY-MM-DD
+                const [year, month, day] = transaction.due_date.split('-').map(Number);
+                dueDate = new Date(year, month - 1, day);
+              }
+              
+              const isInPeriod = dueDate >= start && dueDate <= end;
+              console.log('- Vencimento salvo:', dueDate.toLocaleDateString('pt-BR'), 'Está no período?', isInPeriod);
+              return isInPeriod;
             }
             // Se não tiver data de vencimento, manter a transação (para não perder dados)
+            console.log('- Sem vencimento definido, mantendo transação');
             return true;
           });
           
-          console.log('Transações filtradas por data de vencimento:', filteredTransactions);
+          console.log('Transações filtradas por data de vencimento:', filteredTransactions.length);
+          filteredTransactions.forEach(t => {
+            console.log('- Filtrada:', t.id, 'Amount:', t.amount);
+          });
           setTransactions(filteredTransactions);
           setSelectedTransactions([]); // Limpar seleção ao recarregar
           return;
@@ -403,11 +454,14 @@ export default function CreditCard() {
 
   // Carregar transações quando os filtros mudarem
   useEffect(() => {
-    // Limpar o conjunto de transações automáticas criadas quando os filtros mudam
-    setCreatedAutomaticTransactions(new Set());
-    setAutomaticTransactionCreationAttempted(false);
-    loadTransactions();
-  }, [filters, advancedFilters]);
+    // Aguardar que os cartões sejam carregados antes de carregar transações
+    if (cards.length > 0) {
+      // Limpar o conjunto de transações automáticas criadas quando os filtros mudam
+      setCreatedAutomaticTransactions(new Set());
+      setAutomaticTransactionCreationAttempted(false);
+      loadTransactions();
+    }
+  }, [filters, advancedFilters, cards]); // Adicionar cards como dependência
 
   // Função para lidar com o envio do formulário
   const handleTransactionSubmit = () => {
@@ -665,11 +719,20 @@ export default function CreditCard() {
           totals[transaction.card_id] = 0;
         }
         // Garantir que transaction.amount seja um número válido
-        const amount = typeof transaction.amount === 'number' && !isNaN(transaction.amount) ? transaction.amount : 0;
+        let amount = 0;
+        if (typeof transaction.amount === 'number' && !isNaN(transaction.amount)) {
+          amount = transaction.amount;
+        } else if (typeof transaction.amount === 'string') {
+          const parsed = parseFloat(transaction.amount);
+          amount = isNaN(parsed) ? 0 : parsed;
+        }
+        
+        console.log('Somando ao cartão', transaction.card_id, ':', amount);
         totals[transaction.card_id] += amount;
       }
     });
     
+    console.log('Totais por cartão calculados:', totals);
     return totals;
   };
 
@@ -1305,7 +1368,9 @@ export default function CreditCard() {
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="body2" sx={{ color: colors.gray[900], fontWeight: 600, fontSize: '0.9rem' }}>
-                          R$ {cardTotals[card.id!] && !isNaN(cardTotals[card.id!]) && typeof cardTotals[card.id!] === 'number' ? cardTotals[card.id!].toFixed(2).replace('.', ',') : '0,00'}
+                          R$ {cardTotals[card.id!] && !isNaN(cardTotals[card.id!]) && typeof cardTotals[card.id!] === 'number' ? 
+                               cardTotals[card.id!].toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 
+                               '0,00'}
                         </Typography>
                       </Box>
                     </Box>
@@ -1402,7 +1467,8 @@ export default function CreditCard() {
                       fontWeight: 600, 
                       color: colors.gray[700],
                       bgcolor: colors.gray[50],
-                      borderBottom: `2px solid ${colors.gray[200]}`
+                      borderBottom: `2px solid ${colors.gray[200]}`,
+                      width: 80 // Diminuir largura da coluna Ações
                     }}>Ações</TableCell>
                   </TableRow>
                 </TableHead>
@@ -1415,14 +1481,36 @@ export default function CreditCard() {
                     </TableRow>
                   ) : sortedTransactions && sortedTransactions.length > 0 ? (
                     sortedTransactions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((transaction) => {
-                      console.log('Renderizando transação:', transaction);
+                      console.log('=== DEBUGANDO TRANSAÇÃO ===');
+                      console.log('Transação completa:', transaction);
+                      console.log('Amount original:', transaction.amount, 'tipo:', typeof transaction.amount);
+                      console.log('Is installment:', transaction.is_installment);
+                      console.log('Total installments:', transaction.total_installments);
+                      
                       const cardName = cards.find((card) => card.id === transaction.card_id)?.name || 'Cartão não encontrado';
-                      console.log('Nome do cartão encontrado:', cardName);
                       
                       // Calcular valor total da transação (para transações parceladas)
-                      let totalAmount = transaction.amount;
+                      let totalAmount = 0;
+                      
+                      // Garantir que amount seja um número válido
+                      const baseAmount = (() => {
+                        if (typeof transaction.amount === 'number' && !isNaN(transaction.amount)) {
+                          return transaction.amount;
+                        }
+                        if (typeof transaction.amount === 'string') {
+                          const parsed = parseFloat(transaction.amount);
+                          return isNaN(parsed) ? 0 : parsed;
+                        }
+                        return 0;
+                      })();
+                      console.log('Base amount processado:', baseAmount);
+                      
                       if (transaction.is_installment && transaction.total_installments) {
-                        totalAmount = transaction.amount * transaction.total_installments;
+                        totalAmount = baseAmount * transaction.total_installments;
+                        console.log('Cálculo parcela:', baseAmount, 'x', transaction.total_installments, '=', totalAmount);
+                      } else {
+                        totalAmount = baseAmount;
+                        console.log('Valor único:', totalAmount);
                       }
                       
                       const isItemSelected = selectedTransactions.includes(transaction.id!);
@@ -1442,21 +1530,57 @@ export default function CreditCard() {
                             sx={{ color: colors.primary[600] }}
                       />
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ width: 140 }}> {/* Ajustar largura do campo Data para acomodar vencimento */}
                           <Box>
                             {(() => {
                               // Encontrar o cartão da transação
                               const card = cards.find(c => c.id === transaction.card_id);
-                              // Mostrar a data da transação
-                              const [year, month, day] = transaction.transaction_date.split('-').map(Number);
-                              const transactionDate = new Date(year, month - 1, day);
                               
+                              // Função para criar data de forma segura corrigindo problema d-1 do PostgreSQL
+                              const createSafeDate = (dateString: string): Date => {
+                                if (!dateString) return new Date();
+                                
+                                try {
+                                  // Se a data inclui 'T', é formato ISO (PostgreSQL)
+                                  if (dateString.includes('T')) {
+                                    // Para PostgreSQL em produção, criar data local sem considerar timezone
+                                    // Extrair apenas a parte da data (YYYY-MM-DD) ignorando tempo e timezone
+                                    const dateOnly = dateString.split('T')[0];
+                                    const [year, month, day] = dateOnly.split('-').map(Number);
+                                    
+                                    // Verificar se os valores são válidos
+                                    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                                      console.warn('Data ISO inválida encontrada:', dateString);
+                                      return new Date();
+                                    }
+                                    
+                                    // Criar data local sem considerar timezone
+                                    return new Date(year, month - 1, day);
+                                  }
+                                  
+                                  // Se é formato YYYY-MM-DD
+                                  const [year, month, day] = dateString.split('-').map(Number);
+                                  
+                                  // Verificar se os valores são válidos
+                                  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                                    console.warn('Data inválida encontrada:', dateString);
+                                    return new Date();
+                                  }
+                                  
+                                  return new Date(year, month - 1, day);
+                                } catch (error) {
+                                  console.error('Erro ao processar data:', dateString, error);
+                                  return new Date();
+                                }
+                              };
+                              
+                              // Mostrar a data da transação
+                              const transactionDate = createSafeDate(transaction.transaction_date);
                               // Mostrar a data de vencimento (salva no banco de dados ou calculada)
                               let dueDate;
                               if (transaction.due_date) {
                                 // Usar a data de vencimento salva no banco de dados
-                                const [dueYear, dueMonth, dueDay] = transaction.due_date.split('-').map(Number);
-                                dueDate = new Date(dueYear, dueMonth - 1, dueDay);
+                                dueDate = createSafeDate(transaction.due_date);
                               } else if (card && card.due_day) {
                                 // Calcular a data de vencimento se não estiver salva
                                 dueDate = calculateDueDate(transaction.transaction_date, card, transaction);
@@ -1477,18 +1601,41 @@ export default function CreditCard() {
                             })()}
                           </Box>
                         </TableCell>
-                        <TableCell>{transaction.description}</TableCell>
+                        <TableCell sx={{ width: '40%', minWidth: 200 }}>{transaction.description}</TableCell> {/* Aumentar largura da Descrição */}
                         <TableCell align="left">
-                          R$ {typeof transaction.amount === 'number' && !isNaN(transaction.amount) ? transaction.amount.toFixed(2).replace('.', ',') : '0,00'}
+                          R$ {(() => {
+                            const amount = (() => {
+                              if (typeof transaction.amount === 'number' && !isNaN(transaction.amount)) {
+                                return transaction.amount;
+                              }
+                              if (typeof transaction.amount === 'string') {
+                                const parsed = parseFloat(transaction.amount);
+                                return isNaN(parsed) ? 0 : parsed;
+                              }
+                              return 0;
+                            })();
+                            return amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          })()}
                           {/* Valor total da transação de forma discreta */}
                           {transaction.is_installment && transaction.total_installments && transaction.total_installments > 1 && (
                             <Typography variant="body2" sx={{ color: colors.gray[500], fontSize: '0.75rem', mt: 0.5 }}>
-                              R$ {typeof totalAmount === 'number' && !isNaN(totalAmount) ? totalAmount.toFixed(2).replace('.', ',') : '0,00'}
+                              R$ {typeof totalAmount === 'number' && !isNaN(totalAmount) ? 
+                                   totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 
+                                   ((baseAmount || 0) * (transaction.total_installments || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </Typography>
                           )}
                         </TableCell>
                         <TableCell>
-                          {transaction.category_name || (transaction.category_id ? `Categoria ${transaction.category_id}` : '-')}
+                          <Box>
+                            <Typography variant="body2">
+                              {transaction.category_name || (transaction.category_id ? `Categoria ${transaction.category_id}` : '-')}
+                            </Typography>
+                            {transaction.subcategory_name && (
+                              <Typography variant="body2" sx={{ color: colors.gray[500], fontSize: '0.75rem', mt: 0.5 }}>
+                                {transaction.subcategory_name}
+                              </Typography>
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell>
                           {cardName}
