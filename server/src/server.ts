@@ -10,22 +10,54 @@ dotenv.config();
 
 const app = express();
 
-// Configuração extremamente permissiva do CORS para ambiente de desenvolvimento
-app.use(cors({
-  origin: function(origin, callback) {
-    // Permitir qualquer origem
-    callback(null, true);
+// Configuração correta do CORS para ambiente de produção e desenvolvimento
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Lista de origens permitidas
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3004',
+      'https://trackeone-finance.vercel.app',
+      'https://ngvtech.com.br'
+    ];
+    
+    // Em desenvolvimento, permitir qualquer origem
+    if (!origin && process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Em produção, verificar se a origem está na lista de permitidas
+    if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.ngvtech.com.br'))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin'],
+  exposedHeaders: ['Authorization']
+};
+
+app.use(cors(corsOptions));
 
 // Middleware adicional para garantir que o CORS funcione
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3004',
+    'https://trackeone-finance.vercel.app',
+    'https://ngvtech.com.br'
+  ];
+  
+  const origin = req.get('Origin');
+  if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.ngvtech.com.br'))) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   
   // Responde imediatamente às solicitações OPTIONS
   if (req.method === 'OPTIONS') {
