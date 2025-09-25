@@ -41,7 +41,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Middleware adicional para garantir que o CORS funcione
+// Middleware adicional para garantir que o CORS funcione corretamente
 app.use((req, res, next) => {
   const allowedOrigins = [
     'http://localhost:3000',
@@ -53,6 +53,9 @@ app.use((req, res, next) => {
   const origin = req.get('Origin');
   if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.ngvtech.com.br'))) {
     res.header('Access-Control-Allow-Origin', origin);
+  } else if (process.env.NODE_ENV === 'development') {
+    // Em desenvolvimento, permitir qualquer origem
+    res.header('Access-Control-Allow-Origin', origin || '*');
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
@@ -61,7 +64,8 @@ app.use((req, res, next) => {
   
   // Responde imediatamente às solicitações OPTIONS
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    res.status(204).end();
+    return;
   }
   
   next();
