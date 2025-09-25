@@ -23,6 +23,7 @@ const migrations = [
   'create_credit_card_transactions_table_postgres.sql', // Apenas para produção
   'fix_cards_table_postgres.sql', // Apenas para produção
   'add_due_date_to_credit_card_transactions_postgres.sql', // Nova migração para PostgreSQL
+  'add_savings_goals_table_postgres.sql', // Apenas para produção - Corrigido para PostgreSQL
   
   // Migrações para SQLite (desenvolvimento)
   'add_savings_goals_table.sql',
