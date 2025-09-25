@@ -49,7 +49,7 @@ class CardController {
       
       if (isProduction) {
         // Para PostgreSQL, usar os nomes corretos das colunas
-        const result: any = await run(db, 'INSERT INTO cards (name, card_type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
+        const result: any = await run(db, 'INSERT INTO cards (name, type, card_number, expiry_date, brand, closing_day, due_day) VALUES (?, ?, ?, ?, ?, ?, ?)', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10]);
         
         // Buscar o cartão recém-criado para retornar os dados corretos
         const createdCard = await get(db, 'SELECT * FROM cards WHERE id = ?', [result.lastID || result.rows[0].id]);
@@ -93,7 +93,7 @@ class CardController {
       
       if (isProduction) {
         // Para PostgreSQL, usar os nomes corretos das colunas
-        await run(db, 'UPDATE cards SET name = ?, card_type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
+        await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
       } else {
         // Para SQLite, usar os nomes originais
         await run(db, 'UPDATE cards SET name = ?, type = ?, card_number = ?, expiry_date = ?, brand = ?, closing_day = ?, due_day = ? WHERE id = ?', [name, brand || 'Crédito', card_number, expiry_date, brand, closing_day || 15, due_day || 10, id]);
