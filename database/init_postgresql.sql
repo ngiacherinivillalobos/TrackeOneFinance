@@ -171,7 +171,7 @@ INSERT INTO cost_centers (name, number, description) VALUES
 ('Geral', '001', 'Centro de custo geral'),
 ('Pessoal', '002', 'Gastos pessoais'),
 ('Empresa', '003', 'Gastos empresariais')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO categories (name, description) VALUES 
 ('Alimentação', 'Gastos com alimentação'),
@@ -182,7 +182,7 @@ INSERT INTO categories (name, description) VALUES
 ('Lazer', 'Gastos com lazer'),
 ('Trabalho', 'Receitas do trabalho'),
 ('Investimentos', 'Aplicações financeiras')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO payment_methods (name, description) VALUES 
 ('Dinheiro', 'Pagamento em dinheiro'),
@@ -191,7 +191,7 @@ INSERT INTO payment_methods (name, description) VALUES
 ('PIX', 'Pagamento via PIX'),
 ('Transferência', 'Transferência bancária'),
 ('Boleto', 'Pagamento via boleto')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- Trigger para atualizar updated_at automaticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
