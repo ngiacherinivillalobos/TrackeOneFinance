@@ -117,12 +117,13 @@ export default function Dashboard() {
     }
   };
   
-  // Função para carregar top 5 categorias do Controle Mensal
+  // Função para carregar top 5 categorias do Controle Mensal (apenas despesas)
   const loadBudgetCategoriesData = async () => {
     try {
       // Parâmetros para buscar transações do controle mensal
       const params: any = {
         dateFilterType,
+        transaction_type: 'expense', // Filtrar apenas despesas (em inglês no banco)
       };
       
       if (dateFilterType === 'month') {
@@ -152,12 +153,13 @@ export default function Dashboard() {
         categoryTotals[categoryName] += amount;
       });
       
-      // Converter para array e ordenar
+      // Converter para array e ordenar do maior para o menor valor
       const sortedCategories = Object.entries(categoryTotals)
         .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a, b) => Number(b.value) - Number(a.value)) // Forçar ordenação numérica
         .slice(0, 5); // Top 5
       
+      console.log('Categorias ordenadas (Controle Mensal):', sortedCategories);
       setBudgetCategoriesData(sortedCategories);
     } catch (error) {
       console.error('Erro ao carregar categorias do controle mensal:', error);
@@ -165,7 +167,7 @@ export default function Dashboard() {
     }
   };
   
-  // Função para carregar top 5 categorias do Fluxo de Caixa
+  // Função para carregar top 5 categorias do Fluxo de Caixa (apenas despesas)
   const loadCashFlowCategoriesData = async () => {
     try {
       const params: any = {};
@@ -184,26 +186,30 @@ export default function Dashboard() {
       
       const response = await api.get('/cash-flow', { params });
       
-      // Agrupar por categoria e calcular totais
+      // Agrupar por categoria e calcular totais (apenas despesas)
       const categoryTotals: { [key: string]: number } = {};
       
       response.data.forEach((record: any) => {
-        const categoryName = record.category_name || 'Sem categoria';
-        const amount = typeof record.amount === 'string' ? 
-          parseFloat(record.amount) : record.amount;
-        
-        if (!categoryTotals[categoryName]) {
-          categoryTotals[categoryName] = 0;
+        // Filtrar apenas despesas
+        if (record.record_type === 'Despesa') {
+          const categoryName = record.category_name || 'Sem categoria';
+          const amount = typeof record.amount === 'string' ? 
+            parseFloat(record.amount) : record.amount;
+          
+          if (!categoryTotals[categoryName]) {
+            categoryTotals[categoryName] = 0;
+          }
+          categoryTotals[categoryName] += Math.abs(amount);
         }
-        categoryTotals[categoryName] += Math.abs(amount); // Usar valor absoluto para visualização
       });
       
-      // Converter para array e ordenar
+      // Converter para array e ordenar do maior para o menor valor
       const sortedCategories = Object.entries(categoryTotals)
         .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a, b) => Number(b.value) - Number(a.value)) // Forçar ordenação numérica
         .slice(0, 5); // Top 5
       
+      console.log('Categorias ordenadas (Fluxo de Caixa):', sortedCategories);
       setCashFlowCategoriesData(sortedCategories);
     } catch (error) {
       console.error('Erro ao carregar categorias do fluxo de caixa:', error);
@@ -244,12 +250,13 @@ export default function Dashboard() {
         categoryTotals[categoryName] += amount;
       });
       
-      // Converter para array e ordenar
+      // Converter para array e ordenar do maior para o menor valor
       const sortedCategories = Object.entries(categoryTotals)
         .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a, b) => Number(b.value) - Number(a.value)) // Forçar ordenação numérica
         .slice(0, 5); // Top 5
       
+      console.log('Categorias ordenadas (Cartão de Crédito):', sortedCategories);
       setCreditCardCategoriesData(sortedCategories);
     } catch (error) {
       console.error('Erro ao carregar categorias do cartão de crédito:', error);
