@@ -651,7 +651,7 @@ export default function CashFlowPage() {
       date: new Date().toISOString().split('T')[0],
       category_id: '',
       subcategory_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       record_type: type
     });
     setEditingRecord(null);

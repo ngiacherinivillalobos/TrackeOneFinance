@@ -133,12 +133,19 @@ const CalculatorModal: React.FC = () => {
       setWaitingForNewValue(false);
     } else {
       const newDisplay = display === '0' ? num : display + num;
-      // Formatar o número para exibição com até 5 casas decimais
-      const numericValue = parseFloat(newDisplay.replace(',', '.'));
-      if (!isNaN(numericValue)) {
-        setDisplay(formatCalculatorNumber(numericValue, 5));
-      } else {
+      
+      // Se o display já tem vírgula (modo decimal), não aplicar formatação de milhares
+      if (display.includes(',')) {
         setDisplay(newDisplay);
+      } else {
+        // Aplicar formatação para números grandes (acima de 999)
+        const cleanedDisplay = newDisplay.replace(/\./g, '');
+        const numericValue = parseFloat(cleanedDisplay);
+        if (!isNaN(numericValue) && numericValue > 999) {
+          setDisplay(formatCalculatorNumber(numericValue, 0));
+        } else {
+          setDisplay(newDisplay);
+        }
       }
     }
   }, [display, waitingForNewValue]);
@@ -156,17 +163,17 @@ const CalculatorModal: React.FC = () => {
 
   // Modify inputOperation to track history
   const inputOperation = useCallback((nextOperation: string) => {
-    const inputValue = parseFloat(display);
+    const inputValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
 
     if (previousValue === null) {
       setPreviousValue(inputValue);
-      setOperationHistory(`${inputValue} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
+      setOperationHistory(`${formatCalculatorNumber(inputValue, 5)} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
     } else if (operation) {
       const currentValue = previousValue || 0;
       const newValue = calculate(currentValue, inputValue, operation);
 
-      setOperationHistory(`${currentValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
-      setDisplay(String(newValue));
+      setOperationHistory(`${formatCalculatorNumber(currentValue, 5)} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${formatCalculatorNumber(inputValue, 5)} ${nextOperation === '*' ? '×' : nextOperation === '/' ? '÷' : nextOperation === '-' ? '−' : nextOperation} `);
+      setDisplay(formatCalculatorNumber(newValue, 5));
       setPreviousValue(newValue);
     }
 
@@ -199,11 +206,11 @@ const CalculatorModal: React.FC = () => {
 
   // Modify performCalculation to track history
   const performCalculation = () => {
-    const inputValue = parseFloat(display.replace(',', '.'));
+    const inputValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
 
     if (previousValue !== null && operation) {
       const newValue = calculate(previousValue, inputValue, operation);
-      setOperationHistory(`${previousValue} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${inputValue} =`);
+      setOperationHistory(`${formatCalculatorNumber(previousValue, 5)} ${operation === '*' ? '×' : operation === '/' ? '÷' : operation === '-' ? '−' : operation} ${formatCalculatorNumber(inputValue, 5)} =`);
       // Formatar o resultado com até 5 casas decimais, mas remover zeros desnecessários
       setDisplay(formatCalculatorNumber(newValue, 5));
       setPreviousValue(null);
@@ -213,20 +220,22 @@ const CalculatorModal: React.FC = () => {
   };
 
   const handleButtonClick = (button: string) => {
-    if (button >= '0' && button <= '9' || button === '.') {
+    if (button >= '0' && button <= '9') {
       inputNumber(button);
     } else if (['+', '-', '*', '/'].includes(button)) {
       inputOperation(button);
-    } else if (button === '=') {
+    } else if (button === '=' || button === 'Enter') {
       performCalculation();
     } else if (button === 'C') {
       clearDisplay();
+    } else if (button === '.' || button === ',') {
+      inputDecimal();
     } else if (button === '±') {
-      const currentValue = parseFloat(display.replace(',', '.'));
+      const currentValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
       const newValue = currentValue * -1;
       setDisplay(formatCalculatorNumber(newValue, 5));
     } else if (button === '%') {
-      const currentValue = parseFloat(display.replace(',', '.'));
+      const currentValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
       const newValue = currentValue / 100;
       setDisplay(formatCalculatorNumber(newValue, 5));
     }
@@ -254,9 +263,7 @@ const CalculatorModal: React.FC = () => {
       if (key >= '0' && key <= '9') {
         inputNumber(key);
       } else if (key === '.' || key === ',') {
-        if (!display.includes('.')) {
-          inputNumber('.');
-        }
+        inputDecimal();
       } else if (key === '+') {
         inputOperation('+');
       } else if (key === '-') {
@@ -271,12 +278,26 @@ const CalculatorModal: React.FC = () => {
         clearDisplay();
       } else if (key === 'Backspace') {
         if (display.length > 1) {
-          setDisplay(display.slice(0, -1));
+          const newDisplay = display.slice(0, -1);
+          // Se o novo display é um número sem vírgula e maior que 999, reformatar
+          if (!newDisplay.includes(',') && newDisplay !== '0') {
+            const cleanedDisplay = newDisplay.replace(/\./g, '');
+            const numericValue = parseFloat(cleanedDisplay);
+            if (!isNaN(numericValue) && numericValue > 999) {
+              setDisplay(formatCalculatorNumber(numericValue, 0));
+            } else {
+              setDisplay(newDisplay || '0');
+            }
+          } else {
+            setDisplay(newDisplay || '0');
+          }
         } else {
           setDisplay('0');
         }
       } else if (key === '%') {
-        setDisplay((parseFloat(display) / 100).toString());
+        const currentValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
+        const newValue = currentValue / 100;
+        setDisplay(formatCalculatorNumber(newValue, 5));
       }
     };
 
@@ -931,7 +952,7 @@ const CalculatorModal: React.FC = () => {
                 </Button>
                 <Button
                   variant="outlined"
-                  onClick={() => handleButtonClick('.')}
+                  onClick={() => inputDecimal()}
                   sx={{
                     height: 44,
                     fontSize: '1.2rem',
@@ -950,7 +971,7 @@ const CalculatorModal: React.FC = () => {
                     },
                   }}
                 >
-                  .
+                  ,
                 </Button>
                 <Button
                   variant="contained"

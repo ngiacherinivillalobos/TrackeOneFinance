@@ -47,6 +47,7 @@ import {
   FilterList as FilterListIcon,
   Clear as ClearIcon
 } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/axios';
 
 // Interfaces
@@ -109,6 +110,9 @@ interface RecurrencePreview {
 }
 
 export default function Transactions() {
+  // Hook de autenticação
+  const { user } = useAuth();
+  
   // Estados principais
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -309,7 +313,7 @@ export default function Transactions() {
       subcategory_id: '',
       payment_status_id: '',
       contact_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       transaction_type: type,
       is_recurring: false,
       recurrence_type: 'mensal',

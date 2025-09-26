@@ -1649,6 +1649,89 @@ export default function CreditCard() {
                 </TableBody>
               </Table>
             </TableContainer>
+            
+            {/* Totalizador das Transações Exibidas */}
+            {transactions.length > 0 && (
+              <Box sx={{ 
+                p: 0, 
+                bgcolor: '#fafafa', 
+                borderTop: `1px solid ${colors.gray[200]}`,
+              }}>
+                <Table>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell sx={{ 
+                        width: '4%',
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1
+                      }} />
+                      <TableCell sx={{ 
+                        width: 140,
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1
+                      }} />
+                      <TableCell sx={{ 
+                        width: '40%',
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1,
+                        fontWeight: 500,
+                        color: colors.gray[600],
+                        fontSize: '0.875rem'
+                      }}>
+                        Total das {transactions.length} transações:
+                      </TableCell>
+                      <TableCell sx={{ 
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1,
+                        fontWeight: 600,
+                        color: colors.gray[700],
+                        fontSize: '0.9rem'
+                      }}>
+                        R$ {(() => {
+                          const total = transactions.reduce((sum, transaction) => {
+                            // Calcular o valor correto considerando se é parcelado ou não
+                            let amount = 0;
+                            
+                            if (typeof transaction.amount === 'number' && !isNaN(transaction.amount)) {
+                              amount = transaction.amount;
+                            } else if (typeof transaction.amount === 'string') {
+                              const parsed = parseFloat((transaction.amount as string).replace(',', '.'));
+                              amount = isNaN(parsed) ? 0 : parsed;
+                            }
+                            
+                            return sum + amount;
+                          }, 0);
+                          
+                          return total.toLocaleString('pt-BR', { 
+                            minimumFractionDigits: 2, 
+                            maximumFractionDigits: 2 
+                          });
+                        })()}
+                      </TableCell>
+                      <TableCell sx={{ 
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1
+                      }} />
+                      <TableCell sx={{ 
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1
+                      }} />
+                      <TableCell sx={{ 
+                        bgcolor: '#fafafa',
+                        border: 'none',
+                        py: 1
+                      }} />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
           </Paper>
           
           {/* Menu de ações em lote */}

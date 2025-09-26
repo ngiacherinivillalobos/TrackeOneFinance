@@ -80,12 +80,19 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
       setWaitingForNewValue(false);
     } else {
       const newDisplay = display === '0' ? num : display + num;
-      // Formatar o número para exibição com até 5 casas decimais
-      const numericValue = parseFloat(newDisplay.replace(',', '.'));
-      if (!isNaN(numericValue)) {
-        setDisplay(formatCalculatorNumber(numericValue, 5));
-      } else {
+      
+      // Se o display já tem vírgula (modo decimal), não aplicar formatação de milhares
+      if (display.includes(',')) {
         setDisplay(newDisplay);
+      } else {
+        // Aplicar formatação para números grandes (acima de 999)
+        const cleanedDisplay = newDisplay.replace(/\./g, '');
+        const numericValue = parseFloat(cleanedDisplay);
+        if (!isNaN(numericValue) && numericValue > 999) {
+          setDisplay(formatCalculatorNumber(numericValue, 0));
+        } else {
+          setDisplay(newDisplay);
+        }
       }
     }
   }, [display, waitingForNewValue]);
@@ -107,7 +114,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
   }, []);
 
   const performOperation = useCallback((nextOperation: string) => {
-    const inputValue = parseFloat(display.replace(',', '.'));
+    const inputValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
 
     if (previousValue === null) {
       setPreviousValue(inputValue);
@@ -220,11 +227,11 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     } else if (buttonValue === '.') {
       inputDecimal();
     } else if (buttonValue === '±') {
-      const currentValue = parseFloat(display.replace(',', '.'));
+      const currentValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
       const newValue = currentValue * -1;
       setDisplay(formatCalculatorNumber(newValue, 5));
     } else if (buttonValue === '%') {
-      const currentValue = parseFloat(display.replace(',', '.'));
+      const currentValue = parseFloat(display.replace(/\./g, '').replace(',', '.'));
       const newValue = currentValue / 100;
       setDisplay(formatCalculatorNumber(newValue, 5));
     } else {
@@ -260,7 +267,7 @@ const Calculator: React.FC<CalculatorProps> = ({ onClose }) => {
     ],
     [
       { label: '0', type: 'number', span: 2 },
-      { label: '.', type: 'decimal' },
+      { label: ',', type: 'decimal' },
       { label: '=', type: 'equals', color: 'primary' }
     ]
   ];

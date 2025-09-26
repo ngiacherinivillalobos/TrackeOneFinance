@@ -1126,7 +1126,7 @@ export default function MonthlyControl() {
       subcategory_id: '',
       payment_status_id: '',
       contact_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       transaction_type: 'Despesa',
       is_recurring: false,
       recurrence_type: 'mensal',
@@ -1575,7 +1575,7 @@ export default function MonthlyControl() {
       subcategory_id: '',
       payment_status_id: '',
       contact_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       transaction_type: type,
       is_recurring: false,
       recurrence_type: 'mensal',

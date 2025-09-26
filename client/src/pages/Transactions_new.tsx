@@ -55,9 +55,13 @@ import { PaymentStatus, paymentStatusService } from '../services/paymentStatusSe
 import { Contact, contactService } from '../services/contactService';
 import { CostCenter, costCenterService } from '../services/costCenterService';
 import { Subcategory, subcategoryService } from '../services/subcategoryService';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/axios';
 
 export default function Transactions() {
+  // Hook de autenticação
+  const { user } = useAuth();
+  
   // Estados principais
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -251,7 +255,7 @@ export default function Transactions() {
       subcategory_id: '',
       payment_status_id: '',
       contact_id: '',
-      cost_center_id: '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       observacoes: '',
       tipo: type,
       recorrencia: 'Nenhuma',
@@ -432,7 +436,7 @@ export default function Transactions() {
       subcategory_id: transaction.subcategory_id?.toString() ?? '',
       payment_status_id: transaction.payment_status_id?.toString() ?? '',
       contact_id: transaction.contact_id?.toString() ?? '',
-      cost_center_id: transaction.cost_center_id?.toString() ?? '',
+      cost_center_id: user?.cost_center_id?.toString() || '', // Pré-preencher com o centro de custo do usuário
       observacoes: '',
       tipo: transaction.transaction_type ?? 'Despesa',
       recorrencia: 'Nenhuma',

@@ -353,6 +353,63 @@ export default function CardTransactions({ selectedCard }: CardTransactionsProps
           </TableBody>
         </Table>
       </TableContainer>
+      
+      {/* Totalizador das Transações Exibidas */}
+      {transactions.length > 0 && (
+        <Box sx={{ 
+          p: 0, 
+          bgcolor: '#fafafa', 
+          borderTop: `1px solid ${colors.gray[200]}`,
+          borderRadius: '0 0 8px 8px'
+        }}>
+          <Table>
+            <TableBody>
+              <TableRow>
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1,
+                  fontWeight: 500,
+                  color: colors.gray[600],
+                  fontSize: '0.875rem'
+                }}>
+                  Total das {transactions.length} transações:
+                </TableCell>
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1,
+                  fontWeight: 600,
+                  color: colors.gray[700],
+                  fontSize: '0.9rem'
+                }}>
+                  {formatCurrency(transactions.reduce((sum, transaction) => sum + transaction.amount, 0))}
+                </TableCell>
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1
+                }} />
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1
+                }} />
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1
+                }} />
+                <TableCell sx={{ 
+                  bgcolor: '#fafafa',
+                  border: 'none',
+                  py: 1
+                }} />
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Box>
+      )}
 
       {/* Form Dialog */}
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>

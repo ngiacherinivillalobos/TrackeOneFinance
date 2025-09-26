@@ -446,7 +446,7 @@ export default function useMonthlyControl() {
   const handleNewTransaction = (type: 'Despesa' | 'Receita' | 'Investimento') => {
     setFormData({
         description: '', amount: '', transaction_date: new Date().toISOString().split('T')[0],
-        category_id: '', subcategory_id: '', payment_status_id: '', contact_id: '', cost_center_id: '',
+        category_id: '', subcategory_id: '', payment_status_id: '', contact_id: '', cost_center_id: user?.cost_center_id?.toString() || '',
         transaction_type: type, is_recurring: false, recurrence_type: 'mensal', recurrence_count: 1,
         recurrence_interval: 1, recurrence_weekday: 1, is_paid: false, is_installment: false, total_installments: 1
     });
