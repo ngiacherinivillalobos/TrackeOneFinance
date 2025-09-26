@@ -126,11 +126,22 @@ export default function Dashboard() {
         transaction_type: 'expense', // Filtrar apenas despesas (em inglês no banco)
       };
       
+      // Adicionar filtros de data baseados no período selecionado
       if (dateFilterType === 'month') {
         params.month = currentDate.getMonth();
         params.year = currentDate.getFullYear();
+        // Adicionar datas exatas para garantir filtragem correta
+        const startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+        params.start_date = startDate;
+        params.end_date = endDate;
       } else if (dateFilterType === 'year') {
         params.year = currentDate.getFullYear();
+        // Adicionar datas exatas para o ano
+        const startDate = format(new Date(currentDate.getFullYear(), 0, 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), 11, 31), 'yyyy-MM-dd');
+        params.start_date = startDate;
+        params.end_date = endDate;
       }
       
       if (selectedCostCenter?.id || user?.cost_center_id) {
@@ -139,10 +150,23 @@ export default function Dashboard() {
       
       const response = await api.get('/transactions/filtered', { params });
       
+      // Filtrar adicionalmente por data no frontend para garantir precisão
+      const filteredData = response.data.filter((transaction: any) => {
+        const transactionDate = new Date(transaction.transaction_date);
+        
+        if (dateFilterType === 'month') {
+          return transactionDate.getMonth() === currentDate.getMonth() && 
+                 transactionDate.getFullYear() === currentDate.getFullYear();
+        } else if (dateFilterType === 'year') {
+          return transactionDate.getFullYear() === currentDate.getFullYear();
+        }
+        return true; // Para 'all'
+      });
+      
       // Agrupar por categoria e calcular totais
       const categoryTotals: { [key: string]: number } = {};
       
-      response.data.forEach((transaction: any) => {
+      filteredData.forEach((transaction: any) => {
         const categoryName = transaction.category_name || 'Sem categoria';
         const amount = typeof transaction.amount === 'string' ? 
           parseFloat(transaction.amount) : transaction.amount;
@@ -172,29 +196,61 @@ export default function Dashboard() {
     try {
       const params: any = {};
       
+      // Aplicar filtros de data baseados no período selecionado
       if (dateFilterType === 'month') {
         const startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
         const endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
         params.startDate = startDate;
         params.endDate = endDate;
+        // Usar mês correto (currentDate.getMonth() retorna 0-11, mas precisamos 1-12 para a API)
+        params.month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+        params.year = currentDate.getFullYear().toString();
       } else if (dateFilterType === 'year') {
         const startDate = format(new Date(currentDate.getFullYear(), 0, 1), 'yyyy-MM-dd');
         const endDate = format(new Date(currentDate.getFullYear(), 11, 31), 'yyyy-MM-dd');
         params.startDate = startDate;
         params.endDate = endDate;
+        params.year = currentDate.getFullYear().toString();
       }
       
-      const response = await api.get('/cash-flow', { params });
+      console.log('=== DEBUG FLUXO DE CAIXA ===');
+      console.log('dateFilterType:', dateFilterType);
+      console.log('currentDate:', currentDate);
+      console.log('Parâmetros para fluxo de caixa:', params);
       
-      // Agrupar por categoria e calcular totais (apenas despesas)
+      const response = await api.get('/cash-flow', { params });
+      console.log('Total de registros retornados:', response.data?.length || 0);
+      console.log('Dados retornados do fluxo de caixa:', response.data);
+      
+      // Remover filtro adicional do frontend - confiar apenas na API
+      const filteredData = response.data || [];
+      
+      // Agrupar por categoria e calcular totais (todas as transações com valor negativo)
       const categoryTotals: { [key: string]: number } = {};
       
-      response.data.forEach((record: any) => {
-        // Filtrar apenas despesas
-        if (record.record_type === 'Despesa') {
+      filteredData.forEach((record: any, index: number) => {
+        console.log(`Registro ${index + 1}:`, {
+          description: record.description,
+          amount: record.amount,
+          record_type: record.record_type,
+          category_name: record.category_name,
+          transaction_date: record.transaction_date
+        });
+        
+        // Considerar tipos em inglês do banco: 'expense' para despesas
+        const amount = typeof record.amount === 'string' ? 
+          parseFloat(record.amount) : record.amount;
+        
+        // Verificar tanto em português quanto em inglês
+        const isExpense = !record.record_type || 
+                         record.record_type === 'Despesa' || 
+                         record.record_type === 'expense' || 
+                         amount < 0;
+        
+        console.log(`  -> É despesa: ${isExpense} (amount: ${amount}, record_type: ${record.record_type})`);
+        
+        if (isExpense) {
           const categoryName = record.category_name || 'Sem categoria';
-          const amount = typeof record.amount === 'string' ? 
-            parseFloat(record.amount) : record.amount;
           
           if (!categoryTotals[categoryName]) {
             categoryTotals[categoryName] = 0;
@@ -203,6 +259,8 @@ export default function Dashboard() {
         }
       });
       
+      console.log('Totais por categoria (Fluxo de Caixa):', categoryTotals);
+      
       // Converter para array e ordenar do maior para o menor valor
       const sortedCategories = Object.entries(categoryTotals)
         .map(([name, value]) => ({ name, value }))
@@ -210,6 +268,8 @@ export default function Dashboard() {
         .slice(0, 5); // Top 5
       
       console.log('Categorias ordenadas (Fluxo de Caixa):', sortedCategories);
+      console.log('=== FIM DEBUG FLUXO DE CAIXA ===');
+      
       setCashFlowCategoriesData(sortedCategories);
     } catch (error) {
       console.error('Erro ao carregar categorias do fluxo de caixa:', error);
@@ -222,6 +282,7 @@ export default function Dashboard() {
     try {
       const params: any = {};
       
+      // Aplicar filtros de data baseados no período selecionado
       if (dateFilterType === 'month') {
         const startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
         const endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
@@ -236,10 +297,24 @@ export default function Dashboard() {
       
       const response = await api.get('/credit-card-transactions', { params });
       
+      // Filtrar adicionalmente por data no frontend para garantir precisão
+      const filteredData = response.data.filter((transaction: any) => {
+        // Usar due_date para cartão de crédito (data de vencimento)
+        const transactionDate = new Date(transaction.due_date || transaction.transaction_date);
+        
+        if (dateFilterType === 'month') {
+          return transactionDate.getMonth() === currentDate.getMonth() && 
+                 transactionDate.getFullYear() === currentDate.getFullYear();
+        } else if (dateFilterType === 'year') {
+          return transactionDate.getFullYear() === currentDate.getFullYear();
+        }
+        return true; // Para 'all'
+      });
+      
       // Agrupar por categoria e calcular totais
       const categoryTotals: { [key: string]: number } = {};
       
-      response.data.forEach((transaction: any) => {
+      filteredData.forEach((transaction: any) => {
         const categoryName = transaction.category_name || 'Sem categoria';
         const amount = typeof transaction.amount === 'string' ? 
           parseFloat(transaction.amount) : transaction.amount;
@@ -266,6 +341,11 @@ export default function Dashboard() {
 
   // Carregar dados dos gráficos quando os filtros mudarem
   useEffect(() => {
+    console.log('=== EFFECT DOS GRÁFICOS ===');
+    console.log('currentDate:', currentDate);
+    console.log('dateFilterType:', dateFilterType);
+    console.log('selectedCostCenter:', selectedCostCenter);
+    console.log('==============================');
     loadChartsData();
   }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
 
