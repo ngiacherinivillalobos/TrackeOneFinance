@@ -48,6 +48,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { createSafeDate, formatToBrazilianDate } from '../utils/dateUtils';
 import PieChart from '../components/charts/PieChart';
+import AnnualChart from '../components/charts/AnnualChart';
 
 interface Transaction {
   id: number;
@@ -100,6 +101,10 @@ export default function Dashboard() {
   const [cashFlowCategoriesData, setCashFlowCategoriesData] = useState<any[]>([]);
   const [creditCardCategoriesData, setCreditCardCategoriesData] = useState<any[]>([]);
   const [chartsLoading, setChartsLoading] = useState(false);
+  
+  // Estado para o gráfico anual
+  const [annualData, setAnnualData] = useState<any[]>([]);
+  const [annualLoading, setAnnualLoading] = useState(false);
 
   // Função para carregar dados dos gráficos de pizza
   const loadChartsData = async () => {
@@ -114,6 +119,112 @@ export default function Dashboard() {
       console.error('Erro ao carregar dados dos gráficos:', error);
     } finally {
       setChartsLoading(false);
+    }
+  };
+
+  // Função para carregar dados do gráfico anual
+  const loadAnnualData = async () => {
+    setAnnualLoading(true);
+    try {
+      const year = currentDate.getFullYear();
+      const months = [
+        'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+        'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+      ];
+      
+      const annualDataArray = [];
+      
+      // Buscar dados para cada mês do ano
+      for (let month = 0; month < 12; month++) {
+        const startDate = format(new Date(year, month, 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(year, month + 1, 0), 'yyyy-MM-dd');
+        
+        // Parâmetros base para as consultas
+        const baseParams = {
+          dateFilterType: 'month',
+          month: month,
+          year: year,
+          start_date: startDate,
+          end_date: endDate,
+          cost_center_id: selectedCostCenter?.id || user?.cost_center_id || 1
+        };
+        
+        try {
+          let receitas = 0, despesas = 0, economias = 0;
+          
+          // Buscar receitas (income) - usar endpoint de transações filtradas
+          try {
+            const receitasResponse = await api.get('/transactions/filtered', {
+              params: { ...baseParams, transaction_type: 'income' }
+            });
+            receitas = receitasResponse.data.reduce((sum: number, t: any) => {
+              const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount;
+              return sum + (isNaN(amount) ? 0 : amount);
+            }, 0);
+          } catch (error) {
+            console.log(`Erro ao buscar receitas para ${months[month]}:`, error);
+          }
+          
+          // Buscar despesas (expense) - usar endpoint de transações filtradas
+          try {
+            const despesasResponse = await api.get('/transactions/filtered', {
+              params: { ...baseParams, transaction_type: 'expense' }
+            });
+            despesas = despesasResponse.data.reduce((sum: number, t: any) => {
+              const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount;
+              return sum + (isNaN(amount) ? 0 : amount);
+            }, 0);
+          } catch (error) {
+            console.log(`Erro ao buscar despesas para ${months[month]}:`, error);
+          }
+          
+          // Buscar investimentos/economias (investment)
+          try {
+            const investimentosResponse = await api.get('/transactions/filtered', {
+              params: { ...baseParams, transaction_type: 'investment' }
+            });
+            economias = investimentosResponse.data.reduce((sum: number, t: any) => {
+              const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount;
+              return sum + (isNaN(amount) ? 0 : amount);
+            }, 0);
+          } catch (error) {
+            console.log(`Erro ao buscar investimentos para ${months[month]}:`, error);
+          }
+          
+          // Calcular saldo (receitas - despesas - economias)
+          const saldo = receitas - despesas - economias;
+          
+          console.log(`Dados para ${months[month]}/${year}:`, {
+            receitas, despesas, economias, saldo
+          });
+          
+          annualDataArray.push({
+            month: months[month],
+            receitas,
+            despesas,
+            economias,
+            saldo
+          });
+        } catch (error) {
+          console.error(`Erro ao carregar dados para ${months[month]}:`, error);
+          // Em caso de erro, adicionar dados zerados
+          annualDataArray.push({
+            month: months[month],
+            receitas: 0,
+            despesas: 0,
+            economias: 0,
+            saldo: 0
+          });
+        }
+      }
+      
+      console.log('Dados anuais carregados:', annualDataArray);
+      setAnnualData(annualDataArray);
+    } catch (error) {
+      console.error('Erro ao carregar dados anuais:', error);
+      setAnnualData([]);
+    } finally {
+      setAnnualLoading(false);
     }
   };
   
@@ -348,6 +459,11 @@ export default function Dashboard() {
     console.log('==============================');
     loadChartsData();
   }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+  
+  // Carregar dados anuais quando o ano ou centro de custo mudarem
+  useEffect(() => {
+    loadAnnualData();
+  }, [currentDate.getFullYear(), selectedCostCenter, refreshTrigger]);
 
   // Carregar centros de custo
   useEffect(() => {
@@ -1547,6 +1663,23 @@ export default function Dashboard() {
             height={300}
           />
         </Box>
+      </Box>
+      
+      {/* Gráfico Anual */}
+      <Box sx={{ mt: 4, mb: 3 }}>
+        <ModernSection
+          title="Relatório Anual"
+          subtitle={`Visão geral do ano ${currentDate.getFullYear()}`}
+          icon={<Timeline sx={{ fontSize: 24 }} />}
+        >
+          {annualLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <LinearProgress sx={{ width: '100%' }} />
+            </Box>
+          ) : (
+            <AnnualChart data={annualData} />
+          )}
+        </ModernSection>
       </Box>
 
       {/* Weekly Balance Table */}
