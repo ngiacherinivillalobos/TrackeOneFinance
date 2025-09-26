@@ -47,6 +47,7 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
 import { savingsGoalService, SavingsGoal } from '../services/savingsGoalService';
 import { createSafeDate, formatToBrazilianDate } from '../utils/dateUtils';
+import PieChart from '../components/charts/PieChart';
 
 interface Transaction {
   id: number;
@@ -93,6 +94,173 @@ export default function Dashboard() {
   
   // Estados para exibição
   const [savingsGoal, setSavingsGoal] = useState<SavingsGoal | null>(null);
+  
+  // Estados para os gráficos de pizza
+  const [budgetCategoriesData, setBudgetCategoriesData] = useState<any[]>([]);
+  const [cashFlowCategoriesData, setCashFlowCategoriesData] = useState<any[]>([]);
+  const [creditCardCategoriesData, setCreditCardCategoriesData] = useState<any[]>([]);
+  const [chartsLoading, setChartsLoading] = useState(false);
+
+  // Função para carregar dados dos gráficos de pizza
+  const loadChartsData = async () => {
+    setChartsLoading(true);
+    try {
+      await Promise.all([
+        loadBudgetCategoriesData(),
+        loadCashFlowCategoriesData(),
+        loadCreditCardCategoriesData()
+      ]);
+    } catch (error) {
+      console.error('Erro ao carregar dados dos gráficos:', error);
+    } finally {
+      setChartsLoading(false);
+    }
+  };
+  
+  // Função para carregar top 5 categorias do Controle Mensal
+  const loadBudgetCategoriesData = async () => {
+    try {
+      // Parâmetros para buscar transações do controle mensal
+      const params: any = {
+        dateFilterType,
+      };
+      
+      if (dateFilterType === 'month') {
+        params.month = currentDate.getMonth();
+        params.year = currentDate.getFullYear();
+      } else if (dateFilterType === 'year') {
+        params.year = currentDate.getFullYear();
+      }
+      
+      if (selectedCostCenter?.id || user?.cost_center_id) {
+        params.cost_center_id = selectedCostCenter?.id || user?.cost_center_id;
+      }
+      
+      const response = await api.get('/transactions/filtered', { params });
+      
+      // Agrupar por categoria e calcular totais
+      const categoryTotals: { [key: string]: number } = {};
+      
+      response.data.forEach((transaction: any) => {
+        const categoryName = transaction.category_name || 'Sem categoria';
+        const amount = typeof transaction.amount === 'string' ? 
+          parseFloat(transaction.amount) : transaction.amount;
+        
+        if (!categoryTotals[categoryName]) {
+          categoryTotals[categoryName] = 0;
+        }
+        categoryTotals[categoryName] += amount;
+      });
+      
+      // Converter para array e ordenar
+      const sortedCategories = Object.entries(categoryTotals)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5); // Top 5
+      
+      setBudgetCategoriesData(sortedCategories);
+    } catch (error) {
+      console.error('Erro ao carregar categorias do controle mensal:', error);
+      setBudgetCategoriesData([]);
+    }
+  };
+  
+  // Função para carregar top 5 categorias do Fluxo de Caixa
+  const loadCashFlowCategoriesData = async () => {
+    try {
+      const params: any = {};
+      
+      if (dateFilterType === 'month') {
+        const startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+        params.startDate = startDate;
+        params.endDate = endDate;
+      } else if (dateFilterType === 'year') {
+        const startDate = format(new Date(currentDate.getFullYear(), 0, 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), 11, 31), 'yyyy-MM-dd');
+        params.startDate = startDate;
+        params.endDate = endDate;
+      }
+      
+      const response = await api.get('/cash-flow', { params });
+      
+      // Agrupar por categoria e calcular totais
+      const categoryTotals: { [key: string]: number } = {};
+      
+      response.data.forEach((record: any) => {
+        const categoryName = record.category_name || 'Sem categoria';
+        const amount = typeof record.amount === 'string' ? 
+          parseFloat(record.amount) : record.amount;
+        
+        if (!categoryTotals[categoryName]) {
+          categoryTotals[categoryName] = 0;
+        }
+        categoryTotals[categoryName] += Math.abs(amount); // Usar valor absoluto para visualização
+      });
+      
+      // Converter para array e ordenar
+      const sortedCategories = Object.entries(categoryTotals)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5); // Top 5
+      
+      setCashFlowCategoriesData(sortedCategories);
+    } catch (error) {
+      console.error('Erro ao carregar categorias do fluxo de caixa:', error);
+      setCashFlowCategoriesData([]);
+    }
+  };
+  
+  // Função para carregar top 5 categorias do Cartão de Crédito
+  const loadCreditCardCategoriesData = async () => {
+    try {
+      const params: any = {};
+      
+      if (dateFilterType === 'month') {
+        const startDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+        params.start_date = startDate;
+        params.end_date = endDate;
+      } else if (dateFilterType === 'year') {
+        const startDate = format(new Date(currentDate.getFullYear(), 0, 1), 'yyyy-MM-dd');
+        const endDate = format(new Date(currentDate.getFullYear(), 11, 31), 'yyyy-MM-dd');
+        params.start_date = startDate;
+        params.end_date = endDate;
+      }
+      
+      const response = await api.get('/credit-card-transactions', { params });
+      
+      // Agrupar por categoria e calcular totais
+      const categoryTotals: { [key: string]: number } = {};
+      
+      response.data.forEach((transaction: any) => {
+        const categoryName = transaction.category_name || 'Sem categoria';
+        const amount = typeof transaction.amount === 'string' ? 
+          parseFloat(transaction.amount) : transaction.amount;
+        
+        if (!categoryTotals[categoryName]) {
+          categoryTotals[categoryName] = 0;
+        }
+        categoryTotals[categoryName] += amount;
+      });
+      
+      // Converter para array e ordenar
+      const sortedCategories = Object.entries(categoryTotals)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5); // Top 5
+      
+      setCreditCardCategoriesData(sortedCategories);
+    } catch (error) {
+      console.error('Erro ao carregar categorias do cartão de crédito:', error);
+      setCreditCardCategoriesData([]);
+    }
+  };
+
+  // Carregar dados dos gráficos quando os filtros mudarem
+  useEffect(() => {
+    loadChartsData();
+  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
 
   // Carregar centros de custo
   useEffect(() => {
@@ -1233,7 +1401,7 @@ export default function Dashboard() {
               />
             </Box>
             
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 3.5 }}>
               <Box>
                 <Typography variant="h5" fontWeight={700} color={colors.primary[700]}>
                   {formatCurrency(totalInvestmentsPaid)}
@@ -1254,6 +1422,43 @@ export default function Dashboard() {
               </Box>
             </Box>
           </ModernSection>
+        </Box>
+      </Box>
+
+      {/* Seção dos Gráficos de Pizza */}
+      <Box sx={{ mt: 4, mb: 3 }}>
+        <Box sx={{ 
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(2, 1fr)',
+            lg: 'repeat(3, 1fr)'
+          },
+          gap: 3
+        }}>
+          {/* Gráfico Controle Mensal */}
+          <PieChart
+            title="Controle Mensal"
+            data={budgetCategoriesData}
+            loading={chartsLoading}
+            height={300}
+          />
+          
+          {/* Gráfico Fluxo de Caixa */}
+          <PieChart
+            title="Fluxo de Caixa"
+            data={cashFlowCategoriesData}
+            loading={chartsLoading}
+            height={300}
+          />
+          
+          {/* Gráfico Cartão de Crédito */}
+          <PieChart
+            title="Cartão de Crédito"
+            data={creditCardCategoriesData}
+            loading={chartsLoading}
+            height={300}
+          />
         </Box>
       </Box>
 
