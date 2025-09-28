@@ -33,8 +33,8 @@ export default function Cards() {
     card_number: '',
     expiry_date: '',
     brand: '',
-    closing_day: 15, // Valor padrão
-    due_day: 10 // Valor padrão
+    closing_day: undefined, // Sem valor padrão
+    due_day: undefined // Sem valor padrão
   });
 
   const loadData = async () => {
@@ -67,8 +67,8 @@ export default function Cards() {
       card_number: '', 
       expiry_date: '', 
       brand: '',
-      closing_day: 15, // Valor padrão
-      due_day: 10 // Valor padrão
+      closing_day: undefined, // Sem valor padrão
+      due_day: undefined // Sem valor padrão
     });
   };
 
@@ -79,8 +79,8 @@ export default function Cards() {
       card_number: card.card_number || '',
       expiry_date: card.expiry_date || '',
       brand: card.brand || '',
-      closing_day: card.closing_day || 15, // Usar o valor do cartão ou padrão
-      due_day: card.due_day || 10 // Usar o valor do cartão ou padrão
+      closing_day: card.closing_day, // Usar exatamente o valor do cartão
+      due_day: card.due_day // Usar exatamente o valor do cartão
     });
     setOpen(true);
   };
@@ -122,8 +122,33 @@ export default function Cards() {
       console.log('Token exists:', !!token);
       
       // Validar dados obrigatórios
-      if (!formData.name.trim()) {
+      if (!formData.name || !formData.name.trim()) {
         alert('Nome do cartão é obrigatório');
+        return;
+      }
+      
+      if (!formData.card_number || !formData.card_number.trim()) {
+        alert('Número do cartão é obrigatório');
+        return;
+      }
+      
+      if (!formData.expiry_date || !formData.expiry_date.trim()) {
+        alert('Data de vencimento é obrigatória');
+        return;
+      }
+      
+      if (!formData.brand || !formData.brand.trim()) {
+        alert('Bandeira do cartão é obrigatória');
+        return;
+      }
+      
+      if (!formData.closing_day || formData.closing_day < 1 || formData.closing_day > 31) {
+        alert('Dia de fechamento é obrigatório (1-31)');
+        return;
+      }
+      
+      if (!formData.due_day || formData.due_day < 1 || formData.due_day > 31) {
+        alert('Dia de vencimento é obrigatório (1-31)');
         return;
       }
       
@@ -328,7 +353,7 @@ export default function Cards() {
             <TextField
               autoFocus
               margin="dense"
-              label="Nome"
+              label="Nome *"
               type="text"
               fullWidth
               value={formData.name}
@@ -338,16 +363,17 @@ export default function Cards() {
             />
             <TextField
               margin="dense"
-              label="Número do Cartão"
+              label="Número do Cartão *"
               type="text"
               fullWidth
               value={formData.card_number}
               onChange={(e) => setFormData({ ...formData, card_number: e.target.value })}
+              required
               sx={{ mb: 2 }}
             />
             <TextField
               margin="dense"
-              label="Data de Vencimento"
+              label="Data de Vencimento *"
               type="text"
               placeholder="MM/AAAA"
               fullWidth
@@ -363,11 +389,12 @@ export default function Cards() {
               inputProps={{
                 maxLength: 7, // MM/AAAA = 7 caracteres
               }}
+              required
               sx={{ mb: 2 }}
             />
             <TextField
               margin="dense"
-              label="Dia de Fechamento"
+              label="Dia de Fechamento *"
               type="number"
               fullWidth
               value={formData.closing_day || ''}
@@ -383,11 +410,12 @@ export default function Cards() {
                 max: 31
               }}
               helperText="Dia do mês em que a fatura é fechada (1-31)"
+              required
               sx={{ mb: 2 }}
             />
             <TextField
               margin="dense"
-              label="Dia de Vencimento"
+              label="Dia de Vencimento *"
               type="number"
               fullWidth
               value={formData.due_day || ''}
@@ -403,15 +431,17 @@ export default function Cards() {
                 max: 31
               }}
               helperText="Dia do mês em que a fatura vence (1-31)"
+              required
               sx={{ mb: 2 }}
             />
             <TextField
               margin="dense"
-              label="Bandeira"
+              label="Bandeira *"
               type="text"
               fullWidth
               value={formData.brand}
               onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+              required
             />
           </DialogContent>
           <DialogActions>
