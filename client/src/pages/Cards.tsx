@@ -127,21 +127,6 @@ export default function Cards() {
         return;
       }
       
-      if (!formData.card_number || !formData.card_number.trim()) {
-        alert('Número do cartão é obrigatório');
-        return;
-      }
-      
-      if (!formData.expiry_date || !formData.expiry_date.trim()) {
-        alert('Data de vencimento é obrigatória');
-        return;
-      }
-      
-      if (!formData.brand || !formData.brand.trim()) {
-        alert('Bandeira do cartão é obrigatória');
-        return;
-      }
-      
       if (!formData.closing_day || formData.closing_day < 1 || formData.closing_day > 31) {
         alert('Dia de fechamento é obrigatório (1-31)');
         return;
@@ -363,17 +348,16 @@ export default function Cards() {
             />
             <TextField
               margin="dense"
-              label="Número do Cartão *"
+              label="Número do Cartão"
               type="text"
               fullWidth
               value={formData.card_number}
               onChange={(e) => setFormData({ ...formData, card_number: e.target.value })}
-              required
               sx={{ mb: 2 }}
             />
             <TextField
               margin="dense"
-              label="Data de Vencimento *"
+              label="Data de Vencimento"
               type="text"
               placeholder="MM/AAAA"
               fullWidth
@@ -389,7 +373,6 @@ export default function Cards() {
               inputProps={{
                 maxLength: 7, // MM/AAAA = 7 caracteres
               }}
-              required
               sx={{ mb: 2 }}
             />
             <TextField
@@ -436,12 +419,11 @@ export default function Cards() {
             />
             <TextField
               margin="dense"
-              label="Bandeira *"
+              label="Bandeira"
               type="text"
               fullWidth
               value={formData.brand}
               onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-              required
             />
           </DialogContent>
           <DialogActions>
