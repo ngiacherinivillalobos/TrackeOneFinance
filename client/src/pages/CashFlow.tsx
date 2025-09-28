@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Updated with all filters in same line
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Box,
   Typography,
@@ -349,6 +350,137 @@ export default function CashFlowPage() {
     const formatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     console.log('Formatando moeda:', { value, formatted });
     return formatted;
+  };
+
+  // Helper function para converter datas de forma segura
+  const formatSafeDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString + 'T00:00:00');
+      return date.toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.warn('Erro ao converter data:', dateString, error);
+      return 'Data inválida';
+    }
+  };
+
+  // Helper function para converter valores monetários de forma segura
+  const getSafeAmount = (amount: any): number => {
+    if (typeof amount === 'number') return amount;
+    if (typeof amount === 'string') {
+      const parsed = parseFloat(amount);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  // Função para aplicar ordenação (semelhante ao MonthlyControl)
+  const getComparator = (order: 'asc' | 'desc', orderBy: string) => {
+    return order === 'desc'
+      ? (a: any, b: any) => descendingComparator(a, b, orderBy)
+      : (a: any, b: any) => -descendingComparator(a, b, orderBy);
+  };
+
+  const descendingComparator = (a: any, b: any, orderBy: string) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (orderBy) {
+      case 'date':
+        aValue = new Date(a.date + 'T00:00:00');
+        bValue = new Date(b.date + 'T00:00:00');
+        break;
+      case 'description':
+        aValue = a.description.toLowerCase();
+        bValue = b.description.toLowerCase();
+        break;
+      case 'amount':
+        aValue = getSafeAmount(a.amount);
+        bValue = getSafeAmount(b.amount);
+        break;
+      default:
+        aValue = a[orderBy];
+        bValue = b[orderBy];
+    }
+
+    // Corrigido: Para ordem decrescente, b deve vir antes de a se b > a
+    if (bValue < aValue) {
+      return -1;
+    }
+    if (bValue > aValue) {
+      return 1;
+    }
+    return 0;
+  };
+
+  // Função para exportar para Excel
+  const handleExportToExcel = () => {
+    try {
+      // Aplicar a mesma ordenação que está sendo usada na tabela
+      const orderedRecords = [...filteredRecords].sort(getComparator(order, orderBy));
+      
+      // Mapear os dados dos registros para o formato de exportação
+      const exportData = orderedRecords.map(record => {
+        return {
+          'Data': formatSafeDate(record.date),
+          'Descrição': record.description || '-',
+          'Valor': `R$ ${getSafeAmount(record.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'Tipo de Registro': record.record_type || '-',
+          'Centro de Custo': record.cost_center ? 
+            (record.cost_center.number ? `${record.cost_center.number} - ${record.cost_center.name}` : record.cost_center.name) : '-',
+          'Categoria': record.category?.name || '-',
+          'Subcategoria': record.subcategory?.name || '-'
+        };
+      });
+      
+      // Criar workbook e worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Adicionar o worksheet ao workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Fluxo de Caixa');
+      
+      // Gerar nome do arquivo com data e hora da exportação
+      const getFileName = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hour = String(now.getHours()).padStart(2, '0');
+        const minute = String(now.getMinutes()).padStart(2, '0');
+        return `fluxo-caixa-${year}${month}${day}-${hour}${minute}.xlsx`;
+      };
+      
+      // Criar blob e URL
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      
+      // Criar link temporário para download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = getFileName();
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpar recursos e exibir notificação apenas após o clique no download
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Exibir mensagem de sucesso apenas após iniciar o download
+      setSnackbar({
+        open: true,
+        message: `Arquivo exportado com sucesso! ${orderedRecords.length} registros exportados.`,
+        severity: 'success'
+      });
+      
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao exportar arquivo. Tente novamente.',
+        severity: 'error'
+      });
+    }
   };
 
   // Função para filtrar registros por data
@@ -918,6 +1050,7 @@ export default function CashFlowPage() {
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
+                  onClick={handleExportToExcel}
                   sx={{
                     borderRadius: 1.5,
                     borderColor: colors.gray[300],
@@ -2039,13 +2172,13 @@ export default function CashFlowPage() {
           {/* Snackbar para notificações */}
           <Snackbar
             open={snackbar.open}
-            autoHideDuration={4000}
-            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            autoHideDuration={7000}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
           >
             <Alert 
-              onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+              onClose={() => setSnackbar({ ...snackbar, open: false })} 
               severity={snackbar.severity}
+              variant="filled"
               sx={{ width: '100%' }}
             >
               {snackbar.message}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Grid,
   Typography,
@@ -105,6 +105,7 @@ export default function Dashboard() {
   // Estado para o gráfico anual
   const [annualData, setAnnualData] = useState<any[]>([]);
   const [annualLoading, setAnnualLoading] = useState(false);
+  const [selectedAnnualYear, setSelectedAnnualYear] = useState(new Date().getFullYear()); // Ano selecionado para o relatório anual
 
   // Função para carregar dados dos gráficos de pizza
   const loadChartsData = async () => {
@@ -126,7 +127,7 @@ export default function Dashboard() {
   const loadAnnualData = async () => {
     setAnnualLoading(true);
     try {
-      const year = currentDate.getFullYear();
+      const year = selectedAnnualYear; // Usar o ano selecionado
       const months = [
         'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
         'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
@@ -458,12 +459,12 @@ export default function Dashboard() {
     console.log('selectedCostCenter:', selectedCostCenter);
     console.log('==============================');
     loadChartsData();
-  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+  }, [currentDate, selectedCostCenter, dateFilterType]);
   
-  // Carregar dados anuais quando o ano ou centro de custo mudarem
+  // Carregar dados anuais quando o ano selecionado ou centro de custo mudarem
   useEffect(() => {
     loadAnnualData();
-  }, [currentDate.getFullYear(), selectedCostCenter, refreshTrigger]);
+  }, [selectedAnnualYear, selectedCostCenter]);
 
   // Carregar centros de custo
   useEffect(() => {
@@ -500,7 +501,7 @@ export default function Dashboard() {
   // Carregar transações com base nos filtros
   useEffect(() => {
     loadTransactions();
-  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+  }, [currentDate, selectedCostCenter, dateFilterType]);
   
   const loadTransactions = async () => {
     try {
@@ -780,7 +781,7 @@ export default function Dashboard() {
     };
     
     loadAllPaidTransactions();
-  }, [selectedCostCenter, user?.cost_center_id, refreshTrigger]); // Removido transactions das dependências para evitar loops
+  }, [selectedCostCenter, user?.cost_center_id]); // Removido refreshTrigger e transactions das dependências para evitar loops
 
   // Adicionar ao useEffect para carregar todos os dados
   useEffect(() => {
@@ -808,7 +809,7 @@ export default function Dashboard() {
     };
     
     loadData();
-  }, [currentDate, selectedCostCenter, dateFilterType, refreshTrigger]);
+  }, [currentDate, selectedCostCenter, dateFilterType]); // Removido refreshTrigger
 
   // useEffect para calcular o dashboard apenas quando todos os dados estiverem carregados
   useEffect(() => {
@@ -840,14 +841,14 @@ export default function Dashboard() {
     }
   }, [currentDate, selectedCostCenter, dateFilterType]);
 
-  // Auto-refresh a cada 30 segundos para capturar mudanças (como estornos)
+  // Auto-refresh a cada 5 minutos para capturar mudanças (como estornos)
   useEffect(() => {
     const interval = setInterval(() => {
       // Só atualiza se a página estiver visível
       if (document.visibilityState === 'visible') {
         setRefreshTrigger(prev => prev + 1);
       }
-    }, 30000); // 30 segundos
+    }, 300000); // 5 minutos (300 segundos)
 
     return () => clearInterval(interval);
   }, []); // Array de dependências vazio para evitar looping
@@ -1669,9 +1670,77 @@ export default function Dashboard() {
       <Box sx={{ mt: 4, mb: 3 }}>
         <ModernSection
           title="Relatório Anual"
-          subtitle={`Visão geral do ano ${currentDate.getFullYear()}`}
+          subtitle={`Visão geral do ano ${selectedAnnualYear}`}
           icon={<Timeline sx={{ fontSize: 24 }} />}
         >
+          {/* Filtro de Ano Discreto Integrado */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'flex-end', 
+            alignItems: 'center', 
+            mb: 2,
+            mt: -1
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: colors.gray[600],
+                  mr: 1,
+                  fontSize: '0.75rem'
+                }}
+              >
+                Ano:
+              </Typography>
+              
+              <IconButton 
+                onClick={() => setSelectedAnnualYear(prev => prev - 1)}
+                size="small"
+                sx={{ 
+                  width: 24,
+                  height: 24,
+                  color: colors.gray[500],
+                  '&:hover': { 
+                    bgcolor: colors.gray[100],
+                    color: colors.primary[600]
+                  }
+                }}
+              >
+                <ChevronLeftIcon fontSize="small" />
+              </IconButton>
+              
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  minWidth: 45, 
+                  textAlign: 'center',
+                  fontWeight: 500,
+                  color: colors.gray[700],
+                  fontSize: '0.875rem',
+                  px: 1
+                }}
+              >
+                {selectedAnnualYear}
+              </Typography>
+              
+              <IconButton 
+                onClick={() => setSelectedAnnualYear(prev => prev + 1)}
+                size="small"
+                sx={{ 
+                  width: 24,
+                  height: 24,
+                  color: colors.gray[500],
+                  '&:hover': { 
+                    bgcolor: colors.gray[100],
+                    color: colors.primary[600]
+                  }
+                }}
+              >
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          </Box>
+          
           {annualLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <LinearProgress sx={{ width: '100%' }} />

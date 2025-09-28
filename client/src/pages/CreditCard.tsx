@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Paper,
   Typography,
@@ -21,7 +22,6 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-
   Menu,
   MenuItem as MenuItemComponent,
   ListItemIcon,
@@ -30,6 +30,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -37,6 +39,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import AddIcon from '@mui/icons-material/Add';
+import DownloadIcon from '@mui/icons-material/Download';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import FilterIcon from '@mui/icons-material/FilterAlt';
@@ -136,6 +139,13 @@ export default function CreditCard() {
   // Estados para ordenação
   const [orderBy, setOrderBy] = useState<string>('transaction_date');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  
+  // Estados de notificação
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as 'success' | 'error' | 'warning' | 'info'
+  });
   
   // Carregar dados para filtros
   useEffect(() => {
@@ -302,6 +312,89 @@ export default function CreditCard() {
     return isInPeriod;
   };
 
+  // Helper function para converter datas de forma segura
+  const formatSafeDate = (dateString: string): string => {
+    try {
+      // Se a data já está no formato ISO (PostgreSQL: "2025-09-05T00:00:00.000Z")
+      if (dateString.includes('T')) {
+        // Extrair apenas a parte da data YYYY-MM-DD e criar data local
+        const datePart = dateString.split('T')[0];
+        const [year, month, day] = datePart.split('-').map(Number);
+        const localDate = new Date(year, month - 1, day); // mês é 0-indexed
+        return localDate.toLocaleDateString('pt-BR');
+      }
+      // Se é apenas YYYY-MM-DD (SQLite), criar data local diretamente
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateString.split('-').map(Number);
+        const localDate = new Date(year, month - 1, day);
+        return localDate.toLocaleDateString('pt-BR');
+      }
+      // Fallback: tentar converter diretamente
+      return new Date(dateString).toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.warn('Erro ao converter data:', dateString, error);
+      return 'Data inválida';
+    }
+  };
+
+  // Helper function para converter valores monetários de forma segura
+  const getSafeAmount = (amount: any): number => {
+    if (typeof amount === 'number') return amount;
+    if (typeof amount === 'string') {
+      const parsed = parseFloat(amount);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  // Função para aplicar ordenação (semelhante ao MonthlyControl)
+  const getComparator = (order: 'asc' | 'desc', orderBy: string) => {
+    return order === 'desc'
+      ? (a: any, b: any) => descendingComparator(a, b, orderBy)
+      : (a: any, b: any) => -descendingComparator(a, b, orderBy);
+  };
+
+  const descendingComparator = (a: any, b: any, orderBy: string) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (orderBy) {
+      case 'transaction_date':
+        aValue = new Date(a.transaction_date);
+        bValue = new Date(b.transaction_date);
+        break;
+      case 'amount':
+        aValue = getSafeAmount(a.amount);
+        bValue = getSafeAmount(b.amount);
+        break;
+      case 'description':
+        aValue = (a.description || '').toLowerCase();
+        bValue = (b.description || '').toLowerCase();
+        break;
+      default:
+        aValue = a[orderBy];
+        bValue = b[orderBy];
+    }
+
+    // Corrigido: Para ordem decrescente, b deve vir antes de a se b > a
+    if (bValue < aValue) {
+      return -1;
+    }
+    if (bValue > aValue) {
+      return 1;
+    }
+    return 0;
+  };
+
+  // Função para exibir notificações
+  const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    setSnackbar({
+      open: true,
+      message,
+      severity
+    });
+  };
+
   // Função para carregar transações com filtros
   const loadTransactions = async () => {
     try {
@@ -446,6 +539,84 @@ export default function CreditCard() {
       console.error('Error loading transactions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Função para exportar para Excel
+  const handleExportToExcel = () => {
+    try {
+      // Aplicar a mesma ordenação que está sendo usada na tabela
+      const orderedTransactions = [...sortedTransactions].sort(getComparator(order, orderBy));
+      
+      // Mapear os dados das transações para o formato de exportação
+      const exportData = orderedTransactions.map(transaction => {
+        // Obter nome do cartão
+        const cardName = cards.find(card => card.id === transaction.card_id)?.name || '-';
+        
+        // Calcular data de vencimento
+        let dueDate = '-';
+        if (transaction.due_date) {
+          dueDate = formatSafeDate(transaction.due_date);
+        } else {
+          // Calcular data de vencimento se não estiver salva
+          const card = cards.find(c => c.id === transaction.card_id);
+          if (card) {
+            const calculatedDueDate = calculateDueDate(transaction.transaction_date, card, transaction);
+            dueDate = calculatedDueDate.toLocaleDateString('pt-BR');
+          }
+        }
+        
+        return {
+          'Data da transação': formatSafeDate(transaction.transaction_date),
+          'Data de vencimento': dueDate,
+          'Descrição': transaction.description || '-',
+          'Valor': `R$ ${getSafeAmount(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'Categoria': transaction.category_name || '-',
+          'Subcategoria': transaction.subcategory_name || '-',
+          'Cartão': cardName
+        };
+      });
+      
+      // Criar workbook e worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Adicionar o worksheet ao workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Cartão de Crédito');
+      
+      // Gerar nome do arquivo com data e hora da exportação
+      const getFileName = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hour = String(now.getHours()).padStart(2, '0');
+        const minute = String(now.getMinutes()).padStart(2, '0');
+        return `cartao-credito-${year}${month}${day}-${hour}${minute}.xlsx`;
+      };
+      
+      // Criar blob e URL
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      
+      // Criar link temporário para download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = getFileName();
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpar recursos e exibir notificação apenas após o clique no download
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Exibir mensagem de sucesso apenas após iniciar o download
+      showSnackbar(`Arquivo exportado com sucesso! ${orderedTransactions.length} transações exportadas.`, 'success');
+      
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      showSnackbar('Erro ao exportar arquivo. Tente novamente.', 'error');
     }
   };
 
@@ -871,25 +1042,97 @@ export default function CreditCard() {
               { label: 'Cartões de Crédito' }
             ]}
             actions={(
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setEditingTransaction(null);
-                  setShowTransactionForm(true);
-                }}
-                sx={{
-                  background: gradients.primary,
-                  borderRadius: 1.5,
-                  boxShadow: shadows.md,
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
-                    boxShadow: shadows.lg
-                  }
-                }}
-              >
-                Nova Transação
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={() => {
+                    try {
+                      // Função simples de exportação
+                      const orderedTransactions = [...transactions].sort((a, b) => {
+                        if (order === 'asc') {
+                          return new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime();
+                        } else {
+                          return new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime();
+                        }
+                      });
+                      
+                      const exportData = orderedTransactions.map(transaction => {
+                        const card = cards.find(c => c.id === transaction.card_id);
+                        return {
+                          'Data da transação': new Date(transaction.transaction_date).toLocaleDateString('pt-BR'),
+                          'Data de vencimento': transaction.due_date ? new Date(transaction.due_date).toLocaleDateString('pt-BR') : '-',
+                          'Descrição': transaction.description || '-',
+                          'Valor': `R$ ${Number(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                          'Categoria': transaction.category_name || '-',
+                          'Subcategoria': transaction.subcategory_name || '-',
+                          'Cartão': card?.name || '-'
+                        };
+                      });
+                      
+                      const wb = XLSX.utils.book_new();
+                      const ws = XLSX.utils.json_to_sheet(exportData);
+                      XLSX.utils.book_append_sheet(wb, ws, 'Cartão de Crédito');
+                      
+                      const now = new Date();
+                      const year = now.getFullYear();
+                      const month = String(now.getMonth() + 1).padStart(2, '0');
+                      const day = String(now.getDate()).padStart(2, '0');
+                      const hour = String(now.getHours()).padStart(2, '0');
+                      const minute = String(now.getMinutes()).padStart(2, '0');
+                      const fileName = `cartao-credito-${year}${month}${day}-${hour}${minute}.xlsx`;
+                      
+                      // Criar blob e URL
+                      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+                      const url = URL.createObjectURL(blob);
+                      
+                      // Criar link temporário para download
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = fileName;
+                      document.body.appendChild(link);
+                      link.click();
+                      
+                      // Limpar recursos e exibir notificação apenas após o clique no download
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                      
+                      showSnackbar(`Arquivo exportado com sucesso! ${orderedTransactions.length} transações exportadas.`, 'success');
+                    } catch (error) {
+                      console.error('Erro ao exportar:', error);
+                      showSnackbar('Erro ao exportar arquivo. Tente novamente.', 'error');
+                    }
+                  }}
+                  sx={{
+                    borderRadius: 1.5,
+                    borderColor: colors.gray[300],
+                    color: colors.gray[700],
+                    '&:hover': { borderColor: colors.primary[400], bgcolor: colors.primary[50] }
+                  }}
+                >
+                  Exportar
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    setEditingTransaction(null);
+                    setShowTransactionForm(true);
+                  }}
+                  sx={{
+                    background: gradients.primary,
+                    borderRadius: 1.5,
+                    boxShadow: shadows.md,
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+                      boxShadow: shadows.lg
+                    }
+                  }}
+                >
+                  Nova Transação
+                </Button>
+              </Box>
             )}
           />
 
@@ -2047,6 +2290,22 @@ export default function CreditCard() {
             onSubmit={handleTransactionSubmit}
             transaction={editingTransaction}
           />
+          
+          {/* Snackbar para notificações */}
+          <Snackbar
+            open={snackbar.open}
+            autoHideDuration={7000}
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
+          >
+            <Alert 
+              onClose={() => setSnackbar({ ...snackbar, open: false })} 
+              severity={snackbar.severity}
+              variant="filled"
+              sx={{ width: '100%' }}
+            >
+              {snackbar.message}
+            </Alert>
+          </Snackbar>
         </Box>
       </Box>
     </LocalizationProvider>

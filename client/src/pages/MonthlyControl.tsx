@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Box,
   Grid,
@@ -1106,6 +1107,107 @@ export default function MonthlyControl() {
     });
   };
 
+  // Função para exportar para Excel
+  const handleExportToExcel = () => {
+    try {
+      // Aplicar a mesma ordenação que está sendo usada na tabela
+      const orderedTransactions = [...transactions].sort(getComparator(order, orderBy));
+      
+      // Mapear os dados das transações para o formato de exportação
+      const exportData = orderedTransactions.map(transaction => {
+        // Função para obter o status legível
+        const getStatusText = (t: Transaction) => {
+          const isPaid = t.is_paid || t.payment_status_id === 2;
+          if (isPaid) return 'Pago';
+          
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const transactionDate = getSafeDate(t.transaction_date);
+          
+          if (transactionDate < today) return 'Vencido';
+          if (transactionDate.getTime() === today.getTime()) return 'Vence Hoje';
+          return 'Em Aberto';
+        };
+        
+        // Formatar número de parcela
+        const formatInstallment = (t: Transaction) => {
+          if (t.is_installment && t.installment_number && t.total_installments) {
+            return `${t.installment_number}/${t.total_installments}`;
+          }
+          return '-';
+        };
+        
+        return {
+          'Vencimento': formatSafeDate(transaction.transaction_date),
+          'Contato': transaction.contact?.name || '-',
+          'Descrição': transaction.description || '-',
+          'Nº de Parcela': formatInstallment(transaction),
+          'Categoria': transaction.category?.name || '-',
+          'Subcategoria': transaction.subcategory?.name || '-',
+          'Valor': `R$ ${getSafeAmount(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          'Situação': getStatusText(transaction),
+          'Centro de Custo': transaction.cost_center ? 
+            (transaction.cost_center.number ? `${transaction.cost_center.number} - ${transaction.cost_center.name}` : transaction.cost_center.name) : '-',
+          'Tipo de Registro': transaction.transaction_type || '-',
+          'Data do Pagamento': (transaction as any).payment_date ? formatSafeDate((transaction as any).payment_date) : '-',
+          'Valor Pago': (transaction as any).paid_amount ? 
+            `R$ ${getSafeAmount((transaction as any).paid_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-',
+          'Desconto': (transaction as any).discount ? 
+            `R$ ${getSafeAmount((transaction as any).discount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00',
+          'Juros': (transaction as any).interest ? 
+            `R$ ${getSafeAmount((transaction as any).interest).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00',
+          'Forma de Pagamento': (transaction as any).payment_type || '-',
+          'Conta Bancária': (transaction as any).bank_account?.name || '-',
+          'Observação': (transaction as any).payment_observations || '-'
+        };
+      });
+      
+      // Criar workbook e worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Adicionar o worksheet ao workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Transações');
+      
+      // Gerar nome do arquivo com data e hora da exportação
+      const getFileName = () => {
+        const now = format(new Date(), 'yyyyMMdd-HHmm');
+        return `controle-mensal-${now}.xlsx`;
+      };
+      
+      // Criar blob e URL
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      
+      // Criar link temporário para download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = getFileName();
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpar recursos e exibir notificação apenas após o clique no download
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Exibir mensagem de sucesso apenas após iniciar o download
+      setSnackbar({
+        open: true,
+        message: `Arquivo exportado com sucesso! ${orderedTransactions.length} transações exportadas.`,
+        severity: 'success'
+      });
+      
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao exportar arquivo. Tente novamente.',
+        severity: 'error'
+      });
+    }
+  };
+
   const handleMoreFiltersToggle = () => {
     setMoreFiltersOpen(prev => !prev);
   };
@@ -1763,6 +1865,7 @@ export default function MonthlyControl() {
         bValue = b[orderBy];
     }
 
+    // Corrigido: Para ordem decrescente, b deve vir antes de a se b > a
     if (bValue < aValue) {
       return -1;
     }
@@ -1915,6 +2018,7 @@ export default function MonthlyControl() {
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
+                  onClick={handleExportToExcel}
                   sx={{
                     borderRadius: 1.5,
                     borderColor: colors.gray[300],
