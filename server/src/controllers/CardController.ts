@@ -143,6 +143,57 @@ class CardController {
     }
   }
 
+  async fixCardNumberLength(req: Request, res: Response) {
+    try {
+      const { db, run, all } = getDatabase();
+      
+      console.log('🔧 Aplicando correção no campo card_number...');
+      
+      // Verificar se estamos em produção (PostgreSQL)
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isProduction) {
+        try {
+          // Para PostgreSQL, alterar tipo da coluna
+          await run(db, 'ALTER TABLE cards ALTER COLUMN card_number TYPE VARCHAR(20);');
+          console.log('✅ Correção aplicada: card_number agora suporta 20 caracteres');
+          
+          // Verificar se foi aplicada
+          const result = await all(db, `
+            SELECT column_name, data_type, character_maximum_length 
+            FROM information_schema.columns 
+            WHERE table_name = 'cards' AND column_name = 'card_number';
+          `);
+          
+          res.json({
+            success: true,
+            message: 'Correção aplicada com sucesso',
+            columnInfo: result[0] || null
+          });
+        } catch (dbError: any) {
+          console.error('Erro ao aplicar correção:', dbError);
+          res.status(500).json({
+            success: false,
+            error: 'Erro ao aplicar correção no banco',
+            details: dbError.message
+          });
+        }
+      } else {
+        res.json({
+          success: false,
+          message: 'Correção não necessária em ambiente de desenvolvimento'
+        });
+      }
+    } catch (error: any) {
+      console.error('Error in fixCardNumberLength:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor',
+        details: error.message
+      });
+    }
+  }
+
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
