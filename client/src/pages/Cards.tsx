@@ -338,7 +338,7 @@ export default function Cards() {
             <TextField
               autoFocus
               margin="dense"
-              label="Nome *"
+              label="Nome"
               type="text"
               fullWidth
               value={formData.name}
@@ -377,7 +377,7 @@ export default function Cards() {
             />
             <TextField
               margin="dense"
-              label="Dia de Fechamento *"
+              label="Dia de Fechamento"
               type="number"
               fullWidth
               value={formData.closing_day || ''}
@@ -398,7 +398,7 @@ export default function Cards() {
             />
             <TextField
               margin="dense"
-              label="Dia de Vencimento *"
+              label="Dia de Vencimento"
               type="number"
               fullWidth
               value={formData.due_day || ''}
