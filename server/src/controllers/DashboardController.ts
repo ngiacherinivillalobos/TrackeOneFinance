@@ -14,8 +14,23 @@ export const DashboardController = {
       const transactionsQuery = 'SELECT COUNT(*) as count FROM transactions';
       const transactionsResult = await dbWrapper.get(dbWrapper.db, transactionsQuery);
 
-      // Get balance (sum of transaction amounts)
-      const balanceQuery = 'SELECT SUM(amount) as balance FROM transactions';
+      // Get balance (sum of transaction amounts) - PostgreSQL ULTRA RESTRITIVO
+      const balanceQuery = `
+        SELECT 
+          COALESCE(SUM(CASE 
+            WHEN type::text = 'income' 
+            AND (is_paid = true OR payment_status_id = 2)
+            AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+            AND payment_type IS DISTINCT FROM 'credit_card'
+            THEN amount::numeric ELSE 0 END), 0) -
+          COALESCE(SUM(CASE 
+            WHEN type::text = 'expense' 
+            AND (is_paid = true OR payment_status_id = 2)
+            AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+            AND payment_type IS DISTINCT FROM 'credit_card'
+            THEN amount::numeric ELSE 0 END), 0) as balance
+        FROM transactions
+      `;
       const balanceResult = await dbWrapper.get(dbWrapper.db, balanceQuery);
 
       res.json({

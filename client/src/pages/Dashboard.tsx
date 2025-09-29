@@ -751,7 +751,9 @@ export default function Dashboard() {
         const paidTransactions = response.data.filter((t: any) => {
           // Verificar se está pago em ambos os ambientes
           const isPaid = t.is_paid || t.payment_status_id === 2;
-          return isPaid;
+          // FILTRAR CARTÃO DE CRÉDITO
+          const isNotCreditCard = !t.payment_type || t.payment_type !== 'credit_card';
+          return isPaid && isNotCreditCard;
         });
         
         // Separar por tipo e calcular totais
@@ -977,10 +979,10 @@ export default function Dashboard() {
     const saldoInicialBancos = bankAccounts.reduce((sum, account) => 
       sum + getSafeAmount(account.initial_balance), 0);
 
-    // 2. Receitas pagas (TODAS, independentemente do período)
+    // 2. Receitas pagas (APENAS conta corrente - NUNCA cartão)
     const receitasPagas = allPaidIncome;
 
-    // 3. Despesas pagas (TODAS, independentemente do período)
+    // 3. Despesas pagas (APENAS conta corrente - NUNCA cartão)
     const despesasPagas = allPaidExpenses;
 
     // 4. Investimentos pagos (TODOS, independentemente do período)
@@ -1000,18 +1002,22 @@ export default function Dashboard() {
     // Saldo atual real = Saldo Inicial + TODAS Receitas Pagas - TODAS Despesas Pagas - TODOS Investimentos Pagos + Fluxo de Caixa
     const saldoAtualReal = saldoInicialBancos + receitasPagas - despesasPagas - investimentosPagos + totalFluxoCaixa;
     
-    // Calcular "A Receber" e "Recebido" com base em transações de receita
+    // Calcular "A Receber" e "Recebido" com base em transações de receita (EXCLUIR cartão)
     const receitasPagasPeriodo = transactionsData
-      .filter(t => t.type === 'income' && (t.is_paid || t.payment_status_id === 2))
+      .filter(t => t.type === 'income' 
+        && (t.is_paid || t.payment_status_id === 2)
+        && (!(t as any).payment_type || (t as any).payment_type !== 'credit_card'))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const receitasNaoPagasPeriodo = transactionsData
       .filter(t => t.type === 'income' && !(t.is_paid || t.payment_status_id === 2))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
     
-    // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (não incluir investimentos)
+    // Calcular "A Pagar" e "Pago" com base em transações de despesa apenas (EXCLUIR cartão)
     const despesasPagasPeriodo = transactionsData
-      .filter(t => t.type === 'expense' && (t.is_paid || t.payment_status_id === 2))
+      .filter(t => t.type === 'expense' 
+        && (t.is_paid || t.payment_status_id === 2)
+        && (!(t as any).payment_type || (t as any).payment_type !== 'credit_card'))
       .reduce((sum, t) => sum + getSafeAmount(t.amount), 0);
       
     const despesasNaoPagasPeriodo = transactionsData

@@ -1460,6 +1460,7 @@ const reversePayment = async (req: Request, res: Response) => {
     }
 
     // Atualizar o status de pagamento (voltar para "Em aberto") e limpar todos os campos de pagamento
+    // IMPORTANTE: payment_type deve ser 'bank_account' (não NULL) para compatibilidade com COALESCE
     const isProduction = process.env.NODE_ENV === 'production';
     const isPaidValue = toDatabaseBoolean(false, isProduction);
     const result: any = await run(db, `
@@ -1468,7 +1469,7 @@ const reversePayment = async (req: Request, res: Response) => {
           is_paid = ?,
           payment_date = NULL,
           paid_amount = NULL,
-          payment_type = NULL,
+          payment_type = 'bank_account',
           bank_account_id = NULL,
           card_id = NULL,
           payment_observations = NULL,
@@ -1554,6 +1555,9 @@ const getTransactionStats = async (req: Request, res: Response) => {
         SUM(amount) as total
       FROM transactions
       WHERE 1=1
+        AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+        AND payment_type IS DISTINCT FROM 'credit_card'
+        AND (is_paid = true OR payment_status_id = 2)
     `;
     
     const conditions: string[] = [];

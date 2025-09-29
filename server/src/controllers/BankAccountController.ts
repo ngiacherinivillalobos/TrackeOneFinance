@@ -122,48 +122,47 @@ class BankAccountController {
       let movementsQuery;
       let queryParams;
       if (isProduction) {
-        // PostgreSQL - APENAS transações pagas com forma de pagamento conta corrente
-        // CRÍTICO: Só considera transações pagas especificamente com conta corrente
-        // IMPORTANTE: Exclui explicitamente transações pagas com cartão
+        // PostgreSQL - ULTRA RESTRITIVO: NUNCA incluir cartão de crédito
         movementsQuery = `
           SELECT 
             COALESCE((SELECT SUM(amount::numeric) FROM transactions 
               WHERE bank_account_id = $1 
               AND type::text = 'income' 
               AND (is_paid = true OR payment_status_id = 2)
-              AND payment_type = 'bank_account'
-              AND payment_type != 'credit_card'
+              AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+              AND payment_type IS DISTINCT FROM 'credit_card'
             ), 0) as total_income,
             COALESCE((SELECT SUM(amount::numeric) FROM transactions 
               WHERE bank_account_id = $1 
               AND type::text = 'expense' 
               AND (is_paid = true OR payment_status_id = 2)
-              AND payment_type = 'bank_account'
-              AND payment_type != 'credit_card'
+              AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+              AND payment_type IS DISTINCT FROM 'credit_card'
             ), 0) as total_expense
         `;
         queryParams = [id];
         console.log('Using PostgreSQL query (ONLY bank_account payments) with params:', queryParams);
       } else {
-        // SQLite - APENAS transações pagas com forma de pagamento conta corrente
-        // CRÍTICO: Só considera transações pagas especificamente com conta corrente
-        // IMPORTANTE: Exclui explicitamente transações pagas com cartão
+        // SQLite - ULTRA RESTRITIVO: ZERO TOLERANCE PARA CARTÃO
         movementsQuery = `
           SELECT 
             COALESCE(SUM(CASE 
               WHEN CAST(type AS TEXT) = 'income' 
               AND (is_paid = 1 OR payment_status_id = 2)
-              AND payment_type = 'bank_account'
-              AND payment_type != 'credit_card'
+              AND (payment_type IS NULL OR payment_type = 'bank_account')
+              AND payment_type NOT IN ('credit_card', 'credit')
               THEN amount ELSE 0 END), 0) as total_income,
             COALESCE(SUM(CASE 
               WHEN CAST(type AS TEXT) = 'expense' 
               AND (is_paid = 1 OR payment_status_id = 2)
-              AND payment_type = 'bank_account'
-              AND payment_type != 'credit_card'
+              AND (payment_type IS NULL OR payment_type = 'bank_account')
+              AND payment_type NOT IN ('credit_card', 'credit')
               THEN amount ELSE 0 END), 0) as total_expense
           FROM transactions 
-          WHERE bank_account_id = ? AND type IS NOT NULL
+          WHERE bank_account_id = ? 
+            AND type IS NOT NULL
+            AND (payment_type IS NULL OR payment_type = 'bank_account')
+            AND (payment_type IS NULL OR payment_type NOT IN ('credit_card', 'credit'))
         `;
         queryParams = [id];
         console.log('Using SQLite query (ONLY bank_account payments) with params:', queryParams);
@@ -219,48 +218,47 @@ class BankAccountController {
           let movementsQuery;
           let queryParams;
           if (isProduction) {
-            // PostgreSQL - APENAS transações pagas com forma de pagamento conta corrente
-            // CRÍTICO: Só considera transações pagas especificamente com conta corrente
-            // IMPORTANTE: Exclui explicitamente transações pagas com cartão
+            // PostgreSQL - ULTRA RESTRITIVO: NUNCA incluir cartão de crédito
             movementsQuery = `
               SELECT 
                 COALESCE((SELECT SUM(amount::numeric) FROM transactions 
                   WHERE bank_account_id = $1 
                   AND type::text = 'income' 
                   AND (is_paid = true OR payment_status_id = 2)
-                  AND payment_type = 'bank_account'
-                  AND payment_type != 'credit_card'
+                  AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+                  AND payment_type IS DISTINCT FROM 'credit_card'
                 ), 0) as total_income,
                 COALESCE((SELECT SUM(amount::numeric) FROM transactions 
                   WHERE bank_account_id = $1 
                   AND type::text = 'expense' 
                   AND (is_paid = true OR payment_status_id = 2)
-                  AND payment_type = 'bank_account'
-                  AND payment_type != 'credit_card'
+                  AND COALESCE(payment_type, 'bank_account') != 'credit_card'
+                  AND payment_type IS DISTINCT FROM 'credit_card'
                 ), 0) as total_expense
             `;
             queryParams = [account.id];
             console.log(`Using PostgreSQL query (ONLY bank_account payments) for account ${account.id} with params:`, queryParams);
           } else {
-            // SQLite - APENAS transações pagas com forma de pagamento conta corrente
-            // CRÍTICO: Só considera transações pagas especificamente com conta corrente
-            // IMPORTANTE: Exclui explicitamente transações pagas com cartão
+            // SQLite - ULTRA RESTRITIVO: ZERO TOLERANCE PARA CARTÃO
             movementsQuery = `
               SELECT 
                 COALESCE(SUM(CASE 
                   WHEN CAST(type AS TEXT) = 'income' 
                   AND (is_paid = 1 OR payment_status_id = 2)
-                  AND payment_type = 'bank_account'
-                  AND payment_type != 'credit_card'
+                  AND (payment_type IS NULL OR payment_type = 'bank_account')
+                  AND payment_type NOT IN ('credit_card', 'credit')
                   THEN amount ELSE 0 END), 0) as total_income,
                 COALESCE(SUM(CASE 
                   WHEN CAST(type AS TEXT) = 'expense' 
                   AND (is_paid = 1 OR payment_status_id = 2)
-                  AND payment_type = 'bank_account'
-                  AND payment_type != 'credit_card'
+                  AND (payment_type IS NULL OR payment_type = 'bank_account')
+                  AND payment_type NOT IN ('credit_card', 'credit')
                   THEN amount ELSE 0 END), 0) as total_expense
               FROM transactions 
-              WHERE bank_account_id = ? AND type IS NOT NULL
+              WHERE bank_account_id = ? 
+                AND type IS NOT NULL
+                AND (payment_type IS NULL OR payment_type = 'bank_account')
+                AND (payment_type IS NULL OR payment_type NOT IN ('credit_card', 'credit'))
             `;
             queryParams = [account.id];
             console.log(`Using SQLite query (ONLY bank_account payments) for account ${account.id} with params:`, queryParams);
