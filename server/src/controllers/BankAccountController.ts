@@ -122,25 +122,25 @@ class BankAccountController {
       let movementsQuery;
       let queryParams;
       if (isProduction) {
-        // PostgreSQL - abordagem mais segura usando subconsultas e conversão explícita
+        // PostgreSQL - apenas transações pagas com forma de pagamento conta corrente
         movementsQuery = `
           SELECT 
-            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
-            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
+            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income' AND is_paid = true AND (payment_type = 'bank_account' OR payment_type IS NULL)), 0) as total_income,
+            COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense' AND is_paid = true AND (payment_type = 'bank_account' OR payment_type IS NULL)), 0) as total_expense
         `;
         queryParams = [id];
-        console.log('Using PostgreSQL query with subqueries and explicit conversion and params:', queryParams);
+        console.log('Using PostgreSQL query (only bank_account payments) with params:', queryParams);
       } else {
-        // SQLite
+        // SQLite - apenas transações pagas com forma de pagamento conta corrente
         movementsQuery = `
           SELECT 
-            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END), 0) as total_income,
-            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' AND is_paid = 1 AND (payment_type = 'bank_account' OR payment_type IS NULL) THEN amount ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' AND is_paid = 1 AND (payment_type = 'bank_account' OR payment_type IS NULL) THEN amount ELSE 0 END), 0) as total_expense
           FROM transactions 
           WHERE bank_account_id = ? AND type IS NOT NULL
         `;
         queryParams = [id];
-        console.log('Using SQLite query with params:', queryParams);
+        console.log('Using SQLite query (only bank_account payments) with params:', queryParams);
       }
       
       console.log('Executing movements query:', movementsQuery, 'with params:', queryParams);
@@ -193,25 +193,25 @@ class BankAccountController {
           let movementsQuery;
           let queryParams;
           if (isProduction) {
-            // PostgreSQL - abordagem mais segura usando subconsultas e conversão explícita
+            // PostgreSQL - apenas transações pagas com forma de pagamento conta corrente
             movementsQuery = `
               SELECT 
-                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income'), 0) as total_income,
-                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense'), 0) as total_expense
+                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'income' AND is_paid = true AND (payment_type = 'bank_account' OR payment_type IS NULL)), 0) as total_income,
+                COALESCE((SELECT SUM(amount::numeric) FROM transactions WHERE bank_account_id = $1 AND type::text = 'expense' AND is_paid = true AND (payment_type = 'bank_account' OR payment_type IS NULL)), 0) as total_expense
             `;
             queryParams = [account.id];
-            console.log(`Using PostgreSQL query for account ${account.id} with subqueries and explicit conversion and params:`, queryParams);
+            console.log(`Using PostgreSQL query (only bank_account payments) for account ${account.id} with params:`, queryParams);
           } else {
-            // SQLite
+            // SQLite - apenas transações pagas com forma de pagamento conta corrente
             movementsQuery = `
               SELECT 
-                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' THEN amount ELSE 0 END), 0) as total_income,
-                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' THEN amount ELSE 0 END), 0) as total_expense
+                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'income' AND is_paid = 1 AND (payment_type = 'bank_account' OR payment_type IS NULL) THEN amount ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN CAST(type AS TEXT) = 'expense' AND is_paid = 1 AND (payment_type = 'bank_account' OR payment_type IS NULL) THEN amount ELSE 0 END), 0) as total_expense
               FROM transactions 
               WHERE bank_account_id = ? AND type IS NOT NULL
             `;
             queryParams = [account.id];
-            console.log(`Using SQLite query for account ${account.id} with params:`, queryParams);
+            console.log(`Using SQLite query (only bank_account payments) for account ${account.id} with params:`, queryParams);
           }
           
           console.log(`Executing movements query for account ${account.id}:`, movementsQuery);
