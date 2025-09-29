@@ -1269,9 +1269,14 @@ const markAsPaid = async (req: Request, res: Response) => {
       updateValues.push(payment_type);
     }
     
-    if (bank_account_id !== undefined) {
+    // CRÍTICO: Se pagamento é com cartão, NÃO deve atualizar bank_account_id
+    // Se pagamento é com conta corrente, deve atualizar bank_account_id
+    if (payment_type === 'bank_account' && bank_account_id !== undefined) {
       updateFields.push('bank_account_id = ?');
       updateValues.push(bank_account_id);
+    } else if (payment_type === 'credit_card') {
+      // Para cartão de crédito, garantir que bank_account_id seja NULL
+      updateFields.push('bank_account_id = NULL');
     }
     
     if (card_id !== undefined) {
