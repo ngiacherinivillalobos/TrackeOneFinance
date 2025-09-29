@@ -1311,6 +1311,72 @@ const markAsPaid = async (req: Request, res: Response) => {
     // Buscar a transação atualizada
     const updatedTransaction = await get(db, 'SELECT * FROM transactions WHERE id = ?', [transactionId]);
 
+    // Se o pagamento foi feito com cartão de crédito, criar transação no cartão
+    if (payment_type === 'credit_card' && card_id) {
+      try {
+        console.log('Creating credit card transaction for payment...');
+        
+        // Calcular data de vencimento baseada no cartão
+        const card = await get(db, 'SELECT * FROM cards WHERE id = ?', [card_id]);
+        let due_date = null;
+        
+        if (card && card.closing_day && card.due_day) {
+          const [year, month, day] = payment_date.split('-').map(Number);
+          const paymentDateObj = new Date(year, month - 1, day);
+          
+          // Determinar se o vencimento é para o mês seguinte
+          // Caso 1: Se o dia de vencimento for APÓS o dia de fechamento (ex: fechamento=10, vencimento=15)
+          // Caso 2: Se o pagamento for APÓS o dia de fechamento do mês atual
+          if (card.due_day > card.closing_day || paymentDateObj.getDate() > card.closing_day) {
+            paymentDateObj.setMonth(paymentDateObj.getMonth() + 1);
+          }
+          
+          // Ajustar para o dia de vencimento
+          paymentDateObj.setDate(card.due_day);
+          
+          // Formatar a data como string YYYY-MM-DD
+          due_date = `${paymentDateObj.getFullYear()}-${String(paymentDateObj.getMonth() + 1).padStart(2, '0')}-${String(paymentDateObj.getDate()).padStart(2, '0')}`;
+        }
+        
+        const isProduction = process.env.NODE_ENV === 'production';
+        const isPaidValue = toDatabaseBoolean(false, isProduction); // Transação no cartão inicia como não paga
+        
+        // Criar transação no cartão de crédito
+        const insertResult = await run(db, `
+          INSERT INTO credit_card_transactions (
+            description, amount, type, category_id, subcategory_id,
+            card_id, transaction_date, due_date, is_installment, installment_number, total_installments,
+            is_paid, payment_date, paid_amount, payment_type, payment_observations,
+            discount, interest
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          `Pagamento: ${transaction.description}`, // Descrição indicando que é um pagamento
+          paid_amount || transaction.amount, // Valor pago
+          'expense', // Tipo sempre despesa
+          transaction.category_id, // Categoria da transação original
+          transaction.subcategory_id, // Subcategoria da transação original
+          card_id, // Cartão selecionado
+          payment_date, // Data do pagamento como data da transação
+          due_date, // Data de vencimento calculada
+          toDatabaseBoolean(false, isProduction), // Não é parcelamento
+          null, // Número da parcela
+          null, // Total de parcelas
+          isPaidValue, // Não pago inicialmente
+          null, // Data de pagamento
+          null, // Valor pago
+          null, // Tipo de pagamento
+          `Transação criada automaticamente pelo pagamento da transação #${transactionId}`, // Observações
+          0, // Desconto
+          0  // Juros
+        ]);
+        
+        console.log('✅ Credit card transaction created successfully. ID:', insertResult.lastID);
+      } catch (cardError) {
+        console.error('Error creating credit card transaction:', cardError);
+        // Não falhar o processo principal, apenas logar o erro
+      }
+    }
+
     res.json({ 
       id: transactionId, 
       message: 'Transaction marked as paid successfully',
@@ -1343,6 +1409,35 @@ const reversePayment = async (req: Request, res: Response) => {
     
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    // Se o pagamento foi feito com cartão de crédito, excluir a transação do cartão
+    if (transaction.payment_type === 'credit_card' && transaction.card_id) {
+      try {
+        console.log('Deleting credit card transaction for payment reversal...');
+        
+        // Buscar e excluir a transação do cartão que foi criada automaticamente
+        const cardTransactionQuery = `
+          SELECT id FROM credit_card_transactions 
+          WHERE payment_observations LIKE ? AND card_id = ?
+        `;
+        
+        const cardTransaction = await get(db, cardTransactionQuery, [
+          `%transação #${transactionId}%`,
+          transaction.card_id
+        ]);
+        
+        if (cardTransaction) {
+          await run(db, 'DELETE FROM credit_card_transactions WHERE id = ?', [cardTransaction.id]);
+          console.log('✅ Credit card transaction deleted successfully. ID:', cardTransaction.id);
+        } else {
+          console.log('No corresponding credit card transaction found to delete');
+        }
+        
+      } catch (cardError) {
+        console.error('Error deleting credit card transaction:', cardError);
+        // Não falhar o processo principal, apenas logar o erro
+      }
     }
 
     // Atualizar o status de pagamento (voltar para "Em aberto") e is_paid = false

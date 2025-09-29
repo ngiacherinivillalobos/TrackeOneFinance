@@ -13,9 +13,10 @@ const calculateDueDate = (transactionDate: string, card: any): string | null => 
     const [year, month, day] = transactionDate.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     
-    // Se a data da transação é maior ou igual ao dia de fechamento,
-    // a fatura fecha neste mês e vence no próximo
-    if (date.getDate() >= card.closing_day) {
+    // Se a data da transação for após o fechamento do cartão,
+    // ou se o dia de vencimento for maior que o dia de fechamento,
+    // o vencimento é para o mês seguinte
+    if (date.getDate() > card.closing_day || card.due_day > card.closing_day) {
       date.setMonth(date.getMonth() + 1);
     }
     
