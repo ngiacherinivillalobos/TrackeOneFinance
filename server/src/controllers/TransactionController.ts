@@ -1275,8 +1275,11 @@ const markAsPaid = async (req: Request, res: Response) => {
       updateFields.push('bank_account_id = ?');
       updateValues.push(bank_account_id);
     } else if (payment_type === 'credit_card') {
-      // Para cartão de crédito, garantir que bank_account_id seja NULL
+      // Para cartão de crédito, SEMPRE garantir que bank_account_id seja NULL
       // IMPORTANTE: Isso garante que a transação não seja considerada no cálculo do saldo da conta corrente
+      updateFields.push('bank_account_id = NULL');
+    } else if (payment_type !== 'bank_account') {
+      // Para qualquer outro tipo de pagamento que não seja conta corrente, também definir como NULL
       updateFields.push('bank_account_id = NULL');
     }
     
