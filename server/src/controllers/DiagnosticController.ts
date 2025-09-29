@@ -63,12 +63,20 @@ const debugController = {
       results.queryTests = {};
       
       try {
-        // Testar query do BankAccountController
+        // Testar query do BankAccountController - APENAS conta corrente
         console.log('Testando query de bank accounts...');
         const bankAccountTest = await all(db, `
           SELECT 
-            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
-            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense
+            SUM(CASE WHEN type = 'income' 
+              AND (is_paid = 1 OR payment_status_id = 2)
+              AND (payment_type IS NULL OR payment_type = 'bank_account')
+              AND payment_type NOT IN ('credit_card', 'credit')
+              THEN amount ELSE 0 END) as total_income,
+            SUM(CASE WHEN type = 'expense' 
+              AND (is_paid = 1 OR payment_status_id = 2)
+              AND (payment_type IS NULL OR payment_type = 'bank_account')
+              AND payment_type NOT IN ('credit_card', 'credit')
+              THEN amount ELSE 0 END) as total_expense
           FROM transactions 
           WHERE bank_account_id = $1
         `, [1]);
