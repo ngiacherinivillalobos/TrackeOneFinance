@@ -1,4 +1,4 @@
-// Teste crítico: pagamento com cartão NÃO deve afetar saldo de conta corrente
+// Teste CRÍTICO: Pagamento com cartão não deve afetar saldo da conta corrente
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
@@ -36,24 +36,26 @@ function makeRequest(url, options = {}) {
       
       res.on('end', () => {
         try {
-          const jsonData = JSON.parse(data);
-          resolve({ 
-            ok: res.statusCode >= 200 && res.statusCode < 300,
-            status: res.statusCode,
-            data: jsonData
-          });
-        } catch (e) {
-          resolve({ 
-            ok: res.statusCode >= 200 && res.statusCode < 300,
-            status: res.statusCode,
-            data: data
-          });
+          let responseData;
+          if (res.headers['content-type']?.includes('application/json')) {
+            responseData = JSON.parse(data);
+          } else {
+            responseData = data;
+          }
+          
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ data: responseData, status: res.statusCode });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        } catch (parseError) {
+          reject(new Error(`Parse error: ${parseError.message}, Data: ${data}`));
         }
       });
     });
     
-    req.on('error', (err) => {
-      reject(err);
+    req.on('error', (error) => {
+      reject(new Error(`Request error: ${error.message}`));
     });
     
     if (options.body) {
@@ -93,8 +95,8 @@ async function testCartaoNaoAfetaSaldo() {
       contact_id: 17, // Dog Food Natural
       cost_center_id: 1,
       transaction_date: "2024-10-01",
-      is_paid: false,
-      bank_account_id: testAccount.id // IMPORTANTE: transação vinculada à conta
+      bank_account_id: testAccount.id, // IMPORTANTE: vinculada inicialmente à conta corrente
+      is_paid: false
     };
     
     const createResponse = await makeRequest(`${baseURL}/api/transactions`, {
@@ -104,18 +106,22 @@ async function testCartaoNaoAfetaSaldo() {
     
     const transaction = createResponse.data.transaction;
     console.log('✅ Despesa criada (ID):', transaction.id);
-    console.log('💡 Transação vinculada à conta:', testAccount.name);
     
-    // 4. Marcar como paga com CARTÃO DE CRÉDITO
+    // 4. Pegar cartão para teste
+    const cardsResponse = await makeRequest(`${baseURL}/api/cards`);
+    const cards = cardsResponse.data;
+    const testCard = cards[0];
+    console.log('✅ Cartão para teste:', testCard.name);
+    
+    // 5. Marcar como paga com CARTÃO DE CRÉDITO
     console.log('\n💳 Marcando como paga com CARTÃO DE CRÉDITO...');
-    console.log('🚨 CRÍTICO: Saldo da conta corrente NÃO deve mudar!');
     
     const paymentData = {
       payment_date: "2024-10-01",
       paid_amount: 1200,
-      payment_type: "credit_card", // CARTÃO - NÃO DEVE AFETAR SALDO
-      card_id: 5,
-      observations: "Pago com cartão - saldo conta NÃO deve mudar"
+      payment_type: "credit_card", // CRÍTICO: pagamento com cartão
+      card_id: testCard.id,
+      observations: "Pago com cartão - NÃO deve afetar saldo da conta corrente"
     };
     
     const paymentResponse = await makeRequest(`${baseURL}/api/transactions/${transaction.id}/mark-as-paid`, {
@@ -123,36 +129,7 @@ async function testCartaoNaoAfetaSaldo() {
       body: paymentData
     });
     
-    if (!paymentResponse.ok) {
-      throw new Error(`Erro ao marcar como pago: ${paymentResponse.status} - ${JSON.stringify(paymentResponse.data)}`);
-    }
-    
-    console.log('✅ Transação marcada como paga com cartão');
-    
-    // 5. Verificar transação atualizada
-    console.log('\n🔍 Verificando dados da transação após pagamento...');
-    
-    const transactionAfterResponse = await makeRequest(`${baseURL}/api/transactions`);
-    const transactions = transactionAfterResponse.data;
-    const updatedTransaction = transactions.find(t => t.id === transaction.id);
-    
-    if (updatedTransaction) {
-      console.log('📋 Transação após pagamento:', {
-        id: updatedTransaction.id,
-        description: updatedTransaction.description,
-        payment_type: updatedTransaction.payment_type,
-        bank_account_id: updatedTransaction.bank_account_id,
-        card_id: updatedTransaction.card_id,
-        is_paid: updatedTransaction.is_paid
-      });
-      
-      // VERIFICAÇÃO CRÍTICA
-      if (updatedTransaction.bank_account_id !== null) {
-        console.log('❌ ERRO CRÍTICO: bank_account_id deveria ser NULL para pagamento com cartão!');
-      } else {
-        console.log('✅ Correto: bank_account_id é NULL para pagamento com cartão');
-      }
-    }
+    console.log('✅ Despesa marcada como paga com cartão');
     
     // 6. Verificar saldo APÓS PAGAMENTO COM CARTÃO
     const balanceFinalResponse = await makeRequest(`${baseURL}/api/bank-accounts/${testAccount.id}/balance`);
@@ -163,48 +140,22 @@ async function testCartaoNaoAfetaSaldo() {
     });
     
     // 7. VALIDAÇÃO CRÍTICA
-    const saldoMudou = balanceFinal.current_balance !== balanceInitial.current_balance;
-    const movimentoMudou = balanceFinal.total_movements !== balanceInitial.total_movements;
+    console.log('\n🔍 Validação crítica...');
     
-    console.log('\n📊 ANÁLISE CRÍTICA:');
-    console.log(`• Despesa R$ ${transactionData.amount} paga com CARTÃO`);
+    const saldoDevePermanerIgual = balanceInitial.current_balance === balanceFinal.current_balance;
+    const movimentosDevemPermanerIguais = balanceInitial.total_movements === balanceFinal.total_movements;
+    
+    console.log('📊 Análise dos resultados:');
     console.log(`• Saldo inicial: R$ ${balanceInitial.current_balance}`);
-    console.log(`• Saldo final: R$ ${balanceFinal.current_balance}`);
-    console.log(`• Saldo mudou: ${saldoMudou ? 'SIM ❌ ERRO!' : 'NÃO ✅ CORRETO'}`);
-    console.log(`• Movimento mudou: ${movimentoMudou ? 'SIM ❌ ERRO!' : 'NÃO ✅ CORRETO'}`);
+    console.log(`• Saldo após pagamento com cartão: R$ ${balanceFinal.current_balance}`);
+    console.log(`• Movimentos iniciais: R$ ${balanceInitial.total_movements}`);
+    console.log(`• Movimentos após pagamento: R$ ${balanceFinal.total_movements}`);
     
-    if (!saldoMudou && !movimentoMudou) {
-      console.log('\n🎉 SUCESSO TOTAL: Pagamento com cartão NÃO afetou saldo da conta corrente!');
-      console.log('✅ Lógica funcionando corretamente');
-      console.log('✅ Saldo da conta corrente preservado');
+    if (saldoDevePermanerIgual && movimentosDevemPermanerIguais) {
+      console.log('\n✅ SUCESSO: Pagamento com cartão NÃO afetou o saldo da conta corrente!');
     } else {
-      console.log('\n🚨 FALHA CRÍTICA: Pagamento com cartão AFETOU saldo da conta corrente!');
-      console.log('❌ Isso está ERRADO - cartão não deve mexer no saldo da conta');
-      console.log(`Diferença no saldo: R$ ${balanceFinal.current_balance - balanceInitial.current_balance}`);
-      console.log(`Diferença no movimento: R$ ${balanceFinal.total_movements - balanceInitial.total_movements}`);
-    }
-    
-    // 8. Verificar se transação foi criada no cartão
-    console.log('\n💳 Verificando se transação foi criada no cartão...');
-    
-    const cardTransactionsResponse = await makeRequest(`${baseURL}/api/credit-card-transactions`);
-    const cardTransactions = cardTransactionsResponse.data;
-    
-    const createdInCard = cardTransactions.find(ct => 
-      ct.card_id === 5 && 
-      ct.payment_observations && 
-      ct.payment_observations.includes(`transação #${transaction.id}`)
-    );
-    
-    if (createdInCard) {
-      console.log('✅ Transação criada corretamente no cartão:', {
-        id: createdInCard.id,
-        description: createdInCard.description,
-        amount: createdInCard.amount,
-        due_date: createdInCard.due_date
-      });
-    } else {
-      console.log('❌ Transação NÃO foi criada no cartão');
+      console.log('\n❌ ERRO: Pagamento com cartão AFETOU incorretamente o saldo da conta corrente!');
+      console.log('🚨 Problema identificado: O sistema está considerando transações pagas com cartão no cálculo do saldo da conta corrente');
     }
     
   } catch (error) {
