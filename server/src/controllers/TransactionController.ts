@@ -1450,12 +1450,21 @@ const reversePayment = async (req: Request, res: Response) => {
       }
     }
 
-    // Atualizar o status de pagamento (voltar para "Em aberto") e is_paid = false
+    // Atualizar o status de pagamento (voltar para "Em aberto") e limpar todos os campos de pagamento
     const isProduction = process.env.NODE_ENV === 'production';
     const isPaidValue = toDatabaseBoolean(false, isProduction);
     const result: any = await run(db, `
       UPDATE transactions 
-      SET payment_status_id = 1, is_paid = ?
+      SET payment_status_id = 1, 
+          is_paid = ?,
+          payment_date = NULL,
+          paid_amount = NULL,
+          payment_type = NULL,
+          bank_account_id = NULL,
+          card_id = NULL,
+          payment_observations = NULL,
+          discount = 0,
+          interest = 0
       WHERE id = ?
     `, [isPaidValue, transactionId]);
 
