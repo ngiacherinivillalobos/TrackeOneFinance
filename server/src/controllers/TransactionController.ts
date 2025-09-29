@@ -1341,6 +1341,16 @@ const markAsPaid = async (req: Request, res: Response) => {
         const isProduction = process.env.NODE_ENV === 'production';
         const isPaidValue = toDatabaseBoolean(false, isProduction); // Transação no cartão inicia como não paga
         
+        // Buscar informações do contato para incluir na descrição
+        const contact = await get(db, 'SELECT name FROM contacts WHERE id = ?', [transaction.contact_id]);
+        const contactName = contact ? contact.name : '';
+        
+        // Montar descrição com nome do contato entre parênteses
+        let description = `Pagamento: ${transaction.description}`;
+        if (contactName) {
+          description += ` (${contactName})`;
+        }
+        
         // Criar transação no cartão de crédito
         const insertResult = await run(db, `
           INSERT INTO credit_card_transactions (
@@ -1350,7 +1360,7 @@ const markAsPaid = async (req: Request, res: Response) => {
             discount, interest
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          `Pagamento: ${transaction.description}`, // Descrição indicando que é um pagamento
+          description, // Descrição com contato entre parênteses
           paid_amount || transaction.amount, // Valor pago
           'expense', // Tipo sempre despesa
           transaction.category_id, // Categoria da transação original
