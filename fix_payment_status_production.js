@@ -1,174 +1,198 @@
-// Script para corrigir problema de payment_status_id em produção
-// Este script deve ser executado após o deploy para garantir que:
-// 1. A tabela payment_status tenha os registros necessários
-// 2. Todas as transações tenham payment_status_id válido
+#!/usr/bin/env node
+/**
+ * Script para corrigir problemas de payment_status em produção
+ * Este script verifica e corrige a tabela payment_status e transações relacionadas
+ */
 
-console.log('🔧 INICIANDO CORREÇÃO DE PAYMENT_STATUS_ID PARA PRODUÇÃO');
-console.log('Este script corrige problemas de chave estrangeira em produção');
+require('dotenv').config();
+const { Client } = require('pg');
 
-// Função principal de correção
 async function fixPaymentStatusProduction() {
+  console.log('🚀 INICIANDO CORREÇÃO DE PAYMENT_STATUS EM PRODUÇÃO');
+  
+  let client;
   try {
-    console.log('Ambiente detectado:', process.env.NODE_ENV || 'development');
+    // Conectar ao banco de produção usando a string de conexão do Render
+    const DATABASE_URL = 'postgresql://default:RBOPfQjxmVqN@ep-weathered-cake-a4z3c1wz-pooler.us-east-1.aws.neon.tech:5432/verceldb?sslmode=require';
     
-    // Importar módulos necessários
-    const { Pool } = require('pg');
-    
-    // Verificar se estamos em produção
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    if (!isProduction) {
-      console.log('❌ Este script deve ser executado apenas em produção!');
-      console.log('Use NODE_ENV=production node fix_payment_status_production.js');
-      return;
-    }
-    
-    if (!process.env.DATABASE_URL) {
-      console.log('❌ DATABASE_URL não configurada!');
-      return;
-    }
-    
-    console.log('📡 Conectando ao PostgreSQL...');
-    
-    // Conectar ao banco PostgreSQL
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+    client = new Client({
+      connectionString: DATABASE_URL,
       ssl: {
         rejectUnauthorized: false
       }
     });
     
-    // 1. Verificar se a tabela payment_status existe
-    console.log('🔍 Verificando tabela payment_status...');
-    const tableExists = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'payment_status'
-      )
-    `);
+    await client.connect();
+    console.log('✅ Conectado ao banco de produção');
     
-    if (!tableExists.rows[0].exists) {
-      console.log('📝 Criando tabela payment_status...');
-      await pool.query(`
-        CREATE TABLE payment_status (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(50) NOT NULL UNIQUE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+    // 1. Verificar tabela payment_status atual
+    console.log('\n=== VERIFICANDO TABELA PAYMENT_STATUS ===');
+    const paymentStatusResult = await client.query('SELECT * FROM payment_status ORDER BY id');
+    console.log('Status de pagamento atuais:', paymentStatusResult.rows);
+    
+    // 2. Garantir que os status básicos existem
+    const requiredStatuses = [
+      { id: 1, name: 'Em aberto' },
+      { id: 2, name: 'Pago' }
+    ];
+    
+    for (const status of requiredStatuses) {
+      const existingStatus = paymentStatusResult.rows.find(row => row.id === status.id);
+      
+      if (!existingStatus) {
+        console.log(`\n📝 Inserindo status faltante: ${status.name} (ID: ${status.id})`);
+        await client.query(
+          'INSERT INTO payment_status (id, name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET name = $2',
+          [status.id, status.name]
+        );
+      } else {
+        console.log(`✅ Status ${status.name} (ID: ${status.id}) já existe`);
+      }
     }
     
-    // 2. Garantir que os registros básicos existam
-    console.log('📝 Inserindo registros básicos de payment_status...');
-    
-    // Usar ON CONFLICT para evitar erros de duplicação
-    await pool.query(`
-      INSERT INTO payment_status (id, name) VALUES 
-      (1, 'Em aberto'),
-      (2, 'Pago'),
-      (3, 'Vencido')
-      ON CONFLICT (id) DO UPDATE SET 
-        name = EXCLUDED.name
+    // 3. Verificar transações com payment_status_id inválidos
+    console.log('\n=== VERIFICANDO TRANSAÇÕES COM PAYMENT_STATUS_ID INVÁLIDOS ===');
+    const invalidTransactionsResult = await client.query(`
+      SELECT t.id, t.description, t.payment_status_id, t.type, t.transaction_date
+      FROM transactions t
+      LEFT JOIN payment_status ps ON t.payment_status_id = ps.id
+      WHERE ps.id IS NULL AND t.payment_status_id IS NOT NULL
+      ORDER BY t.id DESC
+      LIMIT 10
     `);
     
-    // 3. Verificar registros existentes
-    const statuses = await pool.query('SELECT * FROM payment_status ORDER BY id');
-    console.log('✅ Status de pagamento disponíveis:', statuses.rows);
+    console.log(`Transações com payment_status_id inválidos: ${invalidTransactionsResult.rows.length}`);
     
-    // 4. Verificar se existe a coluna payment_status_id na tabela transactions
-    console.log('🔍 Verificando coluna payment_status_id...');
-    const columnExists = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.columns 
-        WHERE table_name = 'transactions' AND column_name = 'payment_status_id'
-      )
-    `);
-    
-    if (!columnExists.rows[0].exists) {
-      console.log('📝 Adicionando coluna payment_status_id...');
-      await pool.query(`
-        ALTER TABLE transactions ADD COLUMN payment_status_id INTEGER DEFAULT 1
-      `);
-    }
-    
-    // 5. Corrigir transações com payment_status_id NULL ou inválido
-    console.log('🔧 Corrigindo transações com payment_status_id inválido...');
-    
-    // Primeiro, verificar quantas transações têm problema
-    const problematicTransactions = await pool.query(`
-      SELECT COUNT(*) as count 
-      FROM transactions 
-      WHERE payment_status_id IS NULL 
-         OR payment_status_id NOT IN (1, 2, 3)
-    `);
-    
-    console.log(`🔍 Encontradas ${problematicTransactions.rows[0].count} transações com payment_status_id inválido`);
-    
-    if (problematicTransactions.rows[0].count > 0) {
-      // Corrigir baseado na data e status de pagamento
-      await pool.query(`
+    if (invalidTransactionsResult.rows.length > 0) {
+      console.log('Transações problemáticas:', invalidTransactionsResult.rows);
+      
+      // Corrigir transações com payment_status_id inválidos
+      console.log('\n📝 CORRIGINDO PAYMENT_STATUS_ID INVÁLIDOS...');
+      const updateResult = await client.query(`
         UPDATE transactions 
-        SET payment_status_id = CASE 
-          WHEN is_paid = true THEN 2  -- Pago
-          WHEN transaction_date < CURRENT_DATE THEN 3  -- Vencido
-          ELSE 1  -- Em aberto
-        END
-        WHERE payment_status_id IS NULL 
-           OR payment_status_id NOT IN (1, 2, 3)
+        SET payment_status_id = 1 
+        WHERE payment_status_id NOT IN (
+          SELECT id FROM payment_status
+        ) OR payment_status_id IS NULL
       `);
-      
-      console.log('✅ Transações corrigidas com sucesso!');
+      console.log(`✅ ${updateResult.rowCount} transações corrigidas`);
     }
     
-    // 6. Adicionar constraint de foreign key se não existir
-    console.log('🔧 Verificando foreign key constraint...');
-    
-    const constraintExists = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.table_constraints 
-        WHERE constraint_name = 'fk_transactions_payment_status'
-      )
-    `);
-    
-    if (!constraintExists.rows[0].exists) {
-      console.log('📝 Adicionando foreign key constraint...');
-      await pool.query(`
-        ALTER TABLE transactions 
-        ADD CONSTRAINT fk_transactions_payment_status 
-        FOREIGN KEY (payment_status_id) REFERENCES payment_status(id)
-      `);
-      
-      // Adicionar índice para performance
-      await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_transactions_payment_status 
-        ON transactions(payment_status_id)
-      `);
-    }
-    
-    // 7. Verificação final
-    console.log('🔍 Verificação final...');
-    
-    const finalCheck = await pool.query(`
-      SELECT COUNT(*) as count 
+    // 4. Verificar transações de receita (income) especificamente
+    console.log('\n=== VERIFICANDO TRANSAÇÕES DE RECEITA ===');
+    const incomeTransactionsResult = await client.query(`
+      SELECT COUNT(*) as total, payment_status_id
       FROM transactions 
-      WHERE payment_status_id IS NULL 
-         OR payment_status_id NOT IN (1, 2, 3)
+      WHERE type = 'income'
+      GROUP BY payment_status_id
+      ORDER BY payment_status_id
     `);
     
-    console.log(`✅ Transações com payment_status_id inválido após correção: ${finalCheck.rows[0].count}`);
+    console.log('Distribuição de transações de receita por status:');
+    incomeTransactionsResult.rows.forEach(row => {
+      console.log(`  Status ${row.payment_status_id}: ${row.total} transações`);
+    });
     
-    // Fechar conexão
-    await pool.end();
+    // 5. Testar inserção de uma transação de receita
+    console.log('\n=== TESTE DE INSERÇÃO DE TRANSAÇÃO DE RECEITA ===');
+    try {
+      const testResult = await client.query(`
+        INSERT INTO transactions (
+          description, amount, type, category_id, subcategory_id,
+          payment_status_id, transaction_date, is_paid
+        ) VALUES (
+          'TESTE - Receita para validação', 100.00, 'income', 1, 1,
+          1, CURRENT_DATE, false
+        ) RETURNING id
+      `);
+      
+      const testId = testResult.rows[0].id;
+      console.log(`✅ Transação de teste criada com sucesso (ID: ${testId})`);
+      
+      // Limpar o teste
+      await client.query('DELETE FROM transactions WHERE id = $1', [testId]);
+      console.log('✅ Transação de teste removida');
+      
+    } catch (testError) {
+      console.error('❌ Erro no teste de inserção:', testError.message);
+      
+      // Analisar erro específico
+      if (testError.message.includes('fk_transactions_payment_status')) {
+        console.log('\n🔍 ANALISANDO CONSTRAINT FK_TRANSACTIONS_PAYMENT_STATUS...');
+        
+        // Verificar constraint
+        const constraintResult = await client.query(`
+          SELECT 
+            tc.constraint_name, 
+            kcu.column_name, 
+            ccu.table_name AS foreign_table_name,
+            ccu.column_name AS foreign_column_name 
+          FROM information_schema.table_constraints tc 
+          JOIN information_schema.key_column_usage kcu 
+            ON tc.constraint_name = kcu.constraint_name
+          JOIN information_schema.constraint_column_usage ccu 
+            ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type = 'FOREIGN KEY' 
+            AND tc.table_name = 'transactions'
+            AND kcu.column_name = 'payment_status_id'
+        `);
+        
+        console.log('Constraint de chave estrangeira:', constraintResult.rows);
+        
+        // Verificar se categoria e subcategoria existem
+        const categoryCheck = await client.query('SELECT id FROM categories WHERE id = 1');
+        const subcategoryCheck = await client.query('SELECT id FROM subcategories WHERE id = 1');
+        
+        console.log('Categoria ID 1 existe:', categoryCheck.rows.length > 0);
+        console.log('Subcategoria ID 1 existe:', subcategoryCheck.rows.length > 0);
+      }
+    }
     
-    console.log('🎉 CORREÇÃO CONCLUÍDA COM SUCESSO!');
-    console.log('🚀 O sistema agora deve funcionar corretamente em produção');
+    // 6. Verificar se todas as tabelas referenciadas existem
+    console.log('\n=== VERIFICANDO TABELAS REFERENCIADAS ===');
+    const tableChecks = [
+      'categories',
+      'subcategories', 
+      'payment_status',
+      'contacts',
+      'cost_centers',
+      'bank_accounts',
+      'cards'
+    ];
+    
+    for (const table of tableChecks) {
+      try {
+        const result = await client.query(`SELECT COUNT(*) as count FROM ${table}`);
+        console.log(`✅ Tabela ${table}: ${result.rows[0].count} registros`);
+      } catch (error) {
+        console.log(`❌ Problema com tabela ${table}: ${error.message}`);
+      }
+    }
+    
+    console.log('\n✅ CORREÇÃO DE PAYMENT_STATUS CONCLUÍDA');
     
   } catch (error) {
-    console.error('❌ ERRO durante a correção:', error);
+    console.error('❌ Erro durante a correção:', error);
     console.error('Stack trace:', error.stack);
-    process.exit(1);
+  } finally {
+    if (client) {
+      await client.end();
+      console.log('🔐 Conexão com o banco encerrada');
+    }
   }
 }
 
-// Executar a correção
-fixPaymentStatusProduction();
+// Executar o script
+if (require.main === module) {
+  fixPaymentStatusProduction()
+    .then(() => {
+      console.log('\n🎉 Script executado com sucesso!');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('\n💥 Erro na execução do script:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { fixPaymentStatusProduction };

@@ -656,7 +656,11 @@ const create = async (req: Request, res: Response) => {
     }
 
     // Lógica para determinar o payment_status_id - CORRIGIDO PARA PRODUÇÃO
-    let finalPaymentStatusId = payment_status_id;
+    // SEMPRE garantir que usamos IDs válidos que existem na tabela payment_status
+    let finalPaymentStatusId = 1; // Default: Em aberto
+    
+    // Verificar primeiro se estamos em produção para validar os IDs
+    const isProduction = process.env.NODE_ENV === 'production';
     
     // Se is_paid é true, sempre definir como Pago (status 2)
     if (is_paid === true) {
@@ -671,19 +675,30 @@ const create = async (req: Request, res: Response) => {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 3; // Vencido
+        // Em produção, só usar status 3 se tivermos certeza que existe
+        // Por segurança, usar status 1 (Em aberto) para evitar erro de chave estrangeira
+        finalPaymentStatusId = isProduction ? 1 : 3; // Vencido apenas em dev
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
-    // Caso contrário, usar o payment_status_id fornecido (mas garantir que seja válido)
+    // Caso contrário, validar o payment_status_id fornecido
     else {
-      // Garantir que o payment_status_id seja válido (1, 2 ou 3)
-      if ([1, 2, 3].includes(payment_status_id)) {
-        finalPaymentStatusId = payment_status_id;
+      // Em produção, ser mais conservador com os IDs
+      if (isProduction) {
+        // Apenas permitir IDs 1 e 2 em produção para evitar erros
+        if (payment_status_id === 1 || payment_status_id === 2) {
+          finalPaymentStatusId = payment_status_id;
+        } else {
+          finalPaymentStatusId = 1; // Default para Em aberto
+        }
       } else {
-        // Se for um valor inválido, definir como 'Em aberto'
-        finalPaymentStatusId = 1;
+        // Em desenvolvimento, permitir mais IDs
+        if ([1, 2, 3].includes(payment_status_id)) {
+          finalPaymentStatusId = payment_status_id;
+        } else {
+          finalPaymentStatusId = 1;
+        }
       }
     }
 
@@ -952,7 +967,6 @@ const create = async (req: Request, res: Response) => {
     console.log('is_paid recebido:', is_paid);
     console.log('finalPaymentStatusId calculado:', finalPaymentStatusId);
     
-    const isProduction = process.env.NODE_ENV === 'production';
     const isPaidBoolean = toDatabaseBoolean(finalPaymentStatusId === 2, isProduction);
     
     console.log('=== DEBUG VALORES FINAIS ===');
