@@ -655,7 +655,7 @@ const create = async (req: Request, res: Response) => {
       console.log('💳 card_id:', card_id, 'type:', typeof card_id);
     }
 
-    // Lógica para determinar o payment_status_id
+    // Lógica para determinar o payment_status_id - CORRIGIDO PARA PRODUÇÃO
     let finalPaymentStatusId = payment_status_id;
     
     // Se is_paid é true, sempre definir como Pago (status 2)
@@ -666,19 +666,25 @@ const create = async (req: Request, res: Response) => {
     else if (payment_status_id === 2) {
       finalPaymentStatusId = 2; // Mantém como Pago
     }
-    // Se payment_status_id não está definido (vazio ou null/undefined)
-    else if (!payment_status_id || payment_status_id === '') {
+    // Se payment_status_id não está definido (vazio, null, undefined ou 0)
+    else if (!payment_status_id || payment_status_id === '' || payment_status_id === null || payment_status_id === undefined) {
       const today = getLocalDateString();
       
       if (transaction_date < today) {
-        finalPaymentStatusId = 3; // Vencido (corrigido)
+        finalPaymentStatusId = 3; // Vencido
       } else {
         finalPaymentStatusId = 1; // Em aberto
       }
     }
-    // Caso contrário, usar o payment_status_id fornecido
+    // Caso contrário, usar o payment_status_id fornecido (mas garantir que seja válido)
     else {
-      finalPaymentStatusId = payment_status_id;
+      // Garantir que o payment_status_id seja válido (1, 2 ou 3)
+      if ([1, 2, 3].includes(payment_status_id)) {
+        finalPaymentStatusId = payment_status_id;
+      } else {
+        // Se for um valor inválido, definir como 'Em aberto'
+        finalPaymentStatusId = 1;
+      }
     }
 
     console.log('Creating transaction with payment status:', {
