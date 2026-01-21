@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS cards (
     due_day INTEGER DEFAULT 10,
     bank_account_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
 );
 

@@ -12,6 +12,15 @@ app.get('/', (req, res) => {
   res.json({ status: 'TrackeOne Finance API is running', version: '1.0.0' });
 });
 
+// Health check endpoint - must be before other API routes
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // API Routes with prefix
 app.use('/api', router);
 
