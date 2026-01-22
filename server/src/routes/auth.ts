@@ -14,6 +14,12 @@ router.get('/validate', authMiddleware, (req, res) => {
 });
 router.post('/refresh', authController.refreshToken);
 
+// Rotas de 2FA
+router.post('/2fa/setup', authMiddleware, authController.setup2FA);
+router.post('/2fa/confirm', authMiddleware, authController.confirm2FA);
+router.delete('/2fa/disable', authMiddleware, authController.disable2FA);
+router.get('/2fa/status', authMiddleware, authController.get2FAStatus);
+
 console.log('Auth routes loaded');
 
 export default router;

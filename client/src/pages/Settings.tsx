@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Paper, Typography, Tabs, Tab, Box } from '@mui/material';
 import { UsersManagement } from '../components/UsersManagement';
 import { SavingsGoalSettings } from '../components/SavingsGoalSettings';
+import SecuritySettings from '../components/SecuritySettings';
 import { ModernHeader } from '../components/modern/ModernComponents';
 import { colors } from '../theme/modernTheme';
 
@@ -73,6 +74,7 @@ export default function Settings() {
           >
             <Tab label="Usuários" />
             <Tab label="Meta de Economia" />
+            <Tab label="Segurança" />
           </Tabs>
 
           <TabPanel value={activeTab} index={0}>
@@ -80,6 +82,9 @@ export default function Settings() {
           </TabPanel>
           <TabPanel value={activeTab} index={1}>
             <SavingsGoalSettings />
+          </TabPanel>
+          <TabPanel value={activeTab} index={2}>
+            <SecuritySettings />
           </TabPanel>
         </Paper>
       </Box>

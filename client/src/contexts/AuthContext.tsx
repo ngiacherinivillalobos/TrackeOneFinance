@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, twoFactorCode?: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -146,10 +146,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, [token]); // Adicionar token como dependência
 
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string, twoFactorCode?: string): Promise<void> => {
     try {
       // Abordagem simplificada que usa a API configurada
-      const response = await api.post('/auth/login', { email, password });
+      const response = await api.post('/auth/login', { 
+        email, 
+        password,
+        ...(twoFactorCode && { twoFactorCode })
+      });
+
+      // Verificar se a resposta requer 2FA
+      if (response.data.requires2FA && response.data.tempToken && !twoFactorCode) {
+        // Lançar um erro que será tratado pela página de login para mostrar a tela de 2FA
+        const error: any = new Error('Código 2FA obrigatório');
+        error.response = { status: 200, data: response.data };
+        throw error;
+      }
+
       const { token: newToken } = response.data;
       
       if (newToken) {
@@ -168,7 +181,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error: any) {
       // Re-lançar o erro para ser tratado pelo componente
-      throw new Error(error?.response?.data?.error || 'Erro ao fazer login');
+      throw error;
     }
   };
 
